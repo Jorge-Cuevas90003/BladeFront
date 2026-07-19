@@ -27,6 +27,8 @@ export class KnightAnimator {
 
     this.phase = Math.random() * Math.PI * 2;      // cada uno pisa distinto
     this.gaitFreq = 7.4 + Math.random() * 1.6;     // ...y a su propio ritmo
+    this._prevSpeed = 0;                            // para el lean de aceleración
+    this._accelSm = 0;
 
     this.tackleVariant = 'hombro';
     this.dodgeStyle = 'giro';
@@ -37,6 +39,7 @@ export class KnightAnimator {
       headYaw: 0, headX: 0,
       swordX: 0,
       rootX: 0, // inclinación de todo el cuerpo (null → no tocar la raíz)
+      rootZ: 0, // banqueo lateral de la raíz (null → no tocar)
     };
 
     this._idle = {
@@ -64,13 +67,16 @@ export class KnightAnimator {
     if (T.rootX !== null) {
       this.root.rotation.x += (T.rootX - this.root.rotation.x) * a;
     }
+    if (T.rootZ !== null) {
+      this.root.rotation.z += (T.rootZ - this.root.rotation.z) * a;
+    }
   }
 
   _resetTargets() {
     const T = this._T;
     T.legR = 0; T.legL = 0;
     T.torsoX = 0; T.torsoZ = 0; T.torsoYaw = 0; T.torsoY = 0;
-    T.headYaw = 0; T.headX = 0; T.swordX = 0; T.rootX = 0;
+    T.headYaw = 0; T.headX = 0; T.swordX = 0; T.rootX = 0; T.rootZ = 0;
   }
 
   // ---------- Locomoción ----------
@@ -82,16 +88,30 @@ export class KnightAnimator {
 
   _walk(dt, t, w, turn) {
     const f = this.gaitFreq * (0.5 + 0.5 * Math.min(w, 1));
-    const s = Math.sin(t * f + this.phase);
+    const th = t * f + this.phase;
+    const s = Math.sin(th);
+    // zancada asimétrica: la pierna se lanza rápido y se recoge lenta
+    const stride = s + 0.22 * Math.sin(2 * th + 1.3);
+    // pisada con peso: el bob cae seco y sube suave
+    const foot = Math.pow(Math.abs(s), 0.7);
+    // lean de aceleración: arranca inclinándose, frena echándose atrás
+    const speed = w * 3.0;
+    const accel = (speed - this._prevSpeed) / Math.max(dt, 0.001);
+    this._prevSpeed = speed;
+    this._accelSm += (THREE.MathUtils.clamp(accel, -6, 6) - this._accelSm) *
+      Math.min(1, dt * 6);
+
     const T = this._T;
     this._resetTargets();
-    T.legR = s * 0.62 * w;
+    T.legR = stride * 0.58 * w;
     T.legL = -T.legR;
-    T.torsoX = 0.14 * w + 0.02 * Math.sin(t * 1.6 + this.phase);
+    T.torsoX = 0.14 * w + 0.02 * Math.sin(t * 1.6 + this.phase) +
+      THREE.MathUtils.clamp(this._accelSm * 0.028, -0.16, 0.16);
     T.torsoZ = s * 0.042 * w - turn * 0.3;
     T.torsoYaw = -s * 0.12 * w;
-    T.torsoY = (Math.abs(s) * 0.042 + Math.sin(t * f * 2 + 0.7) * 0.011) * w;
-    T.headYaw = turn * 0.45;
+    T.torsoY = (foot * 0.045 + Math.sin(t * f * 2 + 0.7) * 0.011) * w;
+    T.rootZ = -turn * 0.09; // el cuerpo banquea hacia la curva
+    T.headYaw = turn * 0.45 + Math.sin(t * f * 0.5 + this.phase) * 0.05;
     T.headX = -0.06 * w;
     T.swordX = -0.5 * w;
     if (this.cape) {
@@ -118,6 +138,8 @@ export class KnightAnimator {
     this._resetTargets();
     T.torsoX = 0.024 * br;
     T.torsoY = 0.008 * br;
+    T.torsoZ = 0.012 * Math.sin(t * 0.4 + this.phase); // micro-vaivén de peso
+    this._prevSpeed = 0; this._accelSm *= 0.9;
 
     switch (I.current) {
       case 'mirar':
@@ -145,9 +167,10 @@ export class KnightAnimator {
   }
 
   // ---------- Placaje en 3 fases con 3 variantes ----------
+  // Anti-repetición: nunca sale la misma variante dos veces seguidas
   startTackle() {
-    this.tackleVariant =
-      TACKLE_VARIANTS[Math.floor(Math.random() * TACKLE_VARIANTS.length)];
+    const otras = TACKLE_VARIANTS.filter((v) => v !== this.tackleVariant);
+    this.tackleVariant = otras[Math.floor(Math.random() * otras.length)];
     return this.tackleVariant;
   }
 
@@ -205,10 +228,10 @@ export class KnightAnimator {
     this._apply(dt, k > 0.75 ? 10 : 26);
   }
 
-  // ---------- Esquiva con 2 estilos ----------
+  // ---------- Esquiva con 2 estilos (alternan siempre) ----------
   startDodge() {
     this.dodgeStyle =
-      DODGE_STYLES[Math.floor(Math.random() * DODGE_STYLES.length)];
+      DODGE_STYLES[(DODGE_STYLES.indexOf(this.dodgeStyle) + 1) % DODGE_STYLES.length];
     return this.dodgeStyle;
   }
 
@@ -218,6 +241,7 @@ export class KnightAnimator {
     if (this.dodgeStyle === 'giro') {
       // voltereta: cuerpo en bola (la raíz gira 360° desde fuera)
       T.rootX = null;
+      T.rootZ = null; // el giro de 360° lo controla la física, no el animador
       T.legR = 1.1; T.legL = 1.1;
       T.torsoX = 0.55; T.torsoY = -0.06;
       T.headX = 0.3;

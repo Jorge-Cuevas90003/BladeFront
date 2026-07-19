@@ -400,11 +400,13 @@ export class JuggernautMode {
     this.bossVisor.emissive.copy(RED);
     this.bossVisor.emissiveIntensity = 45;
 
-    // El estandarte se ancla a la mano de garra (la derecha empuña el hacha)
+    // El estandarte se monta en la ESPALDA (estandarte de guerra samurái):
+    // despeja la garra, el hacha y las púas dorsales — sin clipping con el
+    // cuerpo ni con los cazadores que placan de frente
     this.executor.add(this.flag);
-    this.flag.position.set(-0.62, 0.95, 0.28);
-    this.flag.rotation.set(0.12, 0.4, -0.18);
-    this.flag.scale.setScalar(0.8);
+    this.flag.position.set(-0.14, 1.32, -0.62);
+    this.flag.rotation.set(0.32, 0, 0.14);
+    this.flag.scale.setScalar(0.75);
 
     this.phase = 'ACTIVE';
     this.slam.cd = 2.2; // el primer slam llega pronto: el jefe impone respeto
