@@ -1,0 +1,13 @@
+{
+  "name": "void-net-servidor",
+  "version": "0.1.0",
+  "description": "Servidor autoritativo del Modo Juggernaut (protocolo VOID-NET)",
+  "type": "module",
+  "main": "servidor.js",
+  "scripts": {
+    "start": "node servidor.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

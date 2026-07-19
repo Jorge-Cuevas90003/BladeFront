@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Arena del Vacío — Concept Viewer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Rajdhani:wght@400;500;600&display=swap"
+    rel="stylesheet"
+  />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; background: #050607; }
+    #app canvas { display: block; }
+
+    /* ---------- capas cinematográficas ---------- */
+    .vignette {
+      position: fixed; inset: 0; pointer-events: none; z-index: 1;
+      background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.5) 100%);
+    }
+    .scanlines {
+      position: fixed; inset: 0; pointer-events: none; z-index: 1; opacity: 0.3;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0 2px,
+        rgba(0, 0, 0, 0.14) 2px 3px
+      );
+    }
+    #fade {
+      position: fixed; inset: 0; z-index: 9; pointer-events: none;
+      background: #000;
+      animation: fadeOut 2s ease 0.25s forwards;
+    }
+    @keyframes fadeOut { to { opacity: 0; } }
+
+    /* ---------- brackets de visor (4 esquinas) ---------- */
+    .corner {
+      position: fixed; width: 38px; height: 38px; z-index: 2;
+      pointer-events: none; opacity: 0;
+      animation: cornerIn 0.9s ease 0.9s forwards;
+    }
+    .corner.tl { top: 18px; left: 18px; border-top: 2px solid rgba(207, 214, 220, 0.55); border-left: 2px solid rgba(207, 214, 220, 0.55); }
+    .corner.tr { top: 18px; right: 18px; border-top: 2px solid rgba(207, 214, 220, 0.55); border-right: 2px solid rgba(207, 214, 220, 0.55); }
+    .corner.bl { bottom: 18px; left: 18px; border-bottom: 2px solid rgba(207, 214, 220, 0.55); border-left: 2px solid rgba(207, 214, 220, 0.55); }
+    .corner.br { bottom: 18px; right: 18px; border-bottom: 2px solid rgba(207, 214, 220, 0.55); border-right: 2px solid rgba(207, 214, 220, 0.55); }
+    @keyframes cornerIn { from { opacity: 0; transform: scale(1.18); } to { opacity: 0.9; transform: none; } }
+
+    /* ---------- HUD ---------- */
+    .hud { position: fixed; pointer-events: none; color: #cfd6dc; z-index: 2; }
+    .reveal { opacity: 0; animation: rise 0.9s cubic-bezier(0.2, 0.6, 0.2, 1) forwards; }
+    @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+    .hud.title { top: 34px; left: 40px; }
+    .hud.title h1 {
+      font-family: 'Cinzel', serif; font-weight: 700;
+      font-size: 21px; letter-spacing: 0.38em;
+      text-transform: uppercase; color: #e8edf1;
+      animation-delay: 0.55s;
+    }
+    .hud.title p {
+      margin-top: 7px;
+      font-family: 'Rajdhani', sans-serif; font-weight: 500;
+      font-size: 11px; letter-spacing: 0.3em;
+      text-transform: uppercase; color: #5c6a75;
+      animation-delay: 0.8s;
+    }
+    .hud.title .laser {
+      display: inline-block; width: 46px; height: 2px; margin-top: 12px;
+      background: #ffb638; box-shadow: 0 0 12px rgba(255, 182, 56, 0.85);
+      animation-delay: 1.05s;
+    }
+
+    .hud.hint {
+      bottom: 26px; left: 40px;
+      font-family: 'Rajdhani', sans-serif; font-weight: 500;
+      font-size: 12px; letter-spacing: 0.18em; color: #48545e;
+      animation-delay: 1.25s;
+    }
+
+    #shot {
+      position: fixed; bottom: 24px; right: 40px; z-index: 3;
+      padding: 9px 18px; cursor: pointer;
+      background: rgba(20, 24, 28, 0.8); color: #cfd6dc;
+      border: 1px solid #2c343c; border-radius: 2px;
+      font-family: 'Rajdhani', sans-serif; font-weight: 600;
+      font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase;
+      transition: border-color 0.2s, color 0.2s;
+      opacity: 0; animation: rise 0.9s cubic-bezier(0.2, 0.6, 0.2, 1) 1.4s forwards;
+    }
+    #shot:hover { border-color: #ffb638; color: #ffb638; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div class="vignette"></div>
+  <div class="scanlines"></div>
+
+  <div class="corner tl"></div>
+  <div class="corner tr"></div>
+  <div class="corner bl"></div>
+  <div class="corner br"></div>
+
+  <div class="hud title">
+    <h1 class="reveal">Arena del Vacío</h1>
+    <p class="reveal">Concept Art &middot; three.js &middot; Proyecto 1</p>
+    <span class="laser reveal"></span>
+  </div>
+  <div class="hud hint reveal">arrastrar: orbitar &middot; rueda: zoom &middot; R: rotación auto</div>
+  <button id="shot">Capturar PNG</button>
+
+  <div id="fade"></div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>

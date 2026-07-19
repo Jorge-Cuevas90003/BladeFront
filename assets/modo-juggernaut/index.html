@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Modo Juggernaut — CTF Corrupto</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Rajdhani:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --oro: #ffb638;
+      --rojo: #ff3020;
+      --steel: #cfd6dc;
+      --dim: #5c6a75;
+      --line: #3a332c;
+      --bg: #030405;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; background: var(--bg); }
+    #app canvas { display: block; }
+
+    #fade {
+      position: fixed; inset: 0; z-index: 6; background: var(--bg);
+      transition: opacity 1.6s ease; pointer-events: none;
+    }
+    #fade.out { opacity: 0; }
+
+    .scan {
+      position: fixed; inset: 0; z-index: 3; pointer-events: none; opacity: 0.5;
+      background: repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 3px);
+    }
+
+    .corner {
+      position: fixed; z-index: 4; width: 26px; height: 26px;
+      border: 0 solid var(--line); pointer-events: none;
+      opacity: 0; animation: reveal 0.9s ease 0.4s forwards;
+    }
+    .corner.tl { top: 18px; left: 18px; border-top-width: 1px; border-left-width: 1px; }
+    .corner.tr { top: 18px; right: 18px; border-top-width: 1px; border-right-width: 1px; }
+    .corner.bl { bottom: 18px; left: 18px; border-bottom-width: 1px; border-left-width: 1px; }
+    .corner.br { bottom: 18px; right: 18px; border-bottom-width: 1px; border-right-width: 1px; }
+
+    .hud {
+      position: fixed; z-index: 4; pointer-events: none; color: var(--steel);
+      font-family: 'Rajdhani', sans-serif;
+      opacity: 0; animation: reveal 0.9s ease forwards;
+    }
+
+    .hud.title { top: 34px; left: 40px; animation-delay: 0.55s; }
+    .hud.title h1 {
+      font-family: 'Cinzel', serif; font-weight: 700; font-size: 21px;
+      letter-spacing: 0.32em; color: #f1ede4;
+      text-shadow: 0 2px 18px rgba(0, 0, 0, 0.8);
+    }
+    .hud.title p {
+      margin-top: 7px; font-size: 12px; font-weight: 500;
+      letter-spacing: 0.34em; text-transform: uppercase; color: var(--dim);
+    }
+    .hud.title .laser {
+      display: block; width: 42px; height: 2px; margin-top: 12px;
+      background: var(--oro); animation: pulse 2.6s ease-in-out infinite;
+    }
+
+    .hud.spec {
+      top: 34px; right: 40px; width: 262px; animation-delay: 0.75s;
+      padding: 14px 18px 15px;
+      background: rgba(12, 10, 7, 0.55);
+      border: 1px solid var(--line);
+      backdrop-filter: blur(6px);
+      clip-path: polygon(12px 0, 100% 0, 100% 100%, 0 100%, 0 12px);
+    }
+    .hud.spec h2 {
+      font-size: 10px; font-weight: 600; letter-spacing: 0.3em;
+      color: var(--oro); text-transform: uppercase; margin-bottom: 10px;
+    }
+    .hud.spec dl { display: grid; grid-template-columns: auto 1fr; gap: 5px 14px; margin-bottom: 10px; }
+    .hud.spec dt {
+      font-size: 10px; font-weight: 600; letter-spacing: 0.18em;
+      text-transform: uppercase; color: var(--dim); padding-top: 1px;
+    }
+    .hud.spec dd { font-size: 13px; font-weight: 500; text-align: right; }
+    .hud.spec dd#holder { color: var(--rojo); font-weight: 600; }
+    .hud.spec dd#fps { color: var(--oro); }
+
+    .hud.spec ul { list-style: none; border-top: 1px solid var(--line); padding-top: 8px; }
+    .hud.spec li {
+      font-size: 11px; letter-spacing: 0.06em; color: var(--dim);
+      padding: 1.5px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .hud.spec li:first-child { color: var(--steel); }
+
+    .hud.hint {
+      bottom: 30px; left: 40px; animation-delay: 0.95s;
+      font-size: 11px; font-weight: 500; letter-spacing: 0.22em;
+      text-transform: uppercase; color: #48545e; max-width: 60vw;
+    }
+    .hud.hint b { color: var(--dim); font-weight: 600; }
+
+    #shot {
+      position: fixed; bottom: 26px; right: 40px; z-index: 4;
+      padding: 10px 22px 11px; cursor: pointer;
+      background: rgba(16, 13, 9, 0.8); color: var(--steel);
+      border: 1px solid var(--line);
+      clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+      font-family: 'Rajdhani', sans-serif; font-size: 12px; font-weight: 600;
+      letter-spacing: 0.26em; text-transform: uppercase;
+      transition: color 0.25s, border-color 0.25s;
+      opacity: 0; animation: reveal 0.9s ease 1.1s forwards;
+    }
+    #shot:hover { border-color: var(--oro); color: var(--oro); }
+
+    @media (max-width: 760px) { .hud.spec { display: none; } }
+
+    /* Pantalla de victoria */
+    #win {
+      position: fixed; inset: 0; z-index: 5; display: none;
+      align-items: center; justify-content: center; flex-direction: column;
+      background: radial-gradient(ellipse at center, rgba(3, 4, 5, 0.55), rgba(3, 4, 5, 0.92));
+      text-align: center;
+    }
+    #win.show { display: flex; animation: reveal 1.2s ease; }
+    #win h2 {
+      font-family: 'Cinzel', serif; font-weight: 700; font-size: 15px;
+      letter-spacing: 0.5em; color: var(--oro); text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    #win #winner {
+      font-family: 'Cinzel', serif; font-weight: 700; font-size: 34px;
+      letter-spacing: 0.14em; color: #f1ede4;
+      text-shadow: 0 0 34px rgba(255, 182, 56, 0.5);
+    }
+    #win p {
+      margin-top: 18px; font-family: 'Rajdhani', sans-serif;
+      font-size: 12px; font-weight: 600; letter-spacing: 0.3em;
+      text-transform: uppercase; color: var(--dim);
+    }
+
+    @keyframes reveal { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 6px var(--oro); opacity: 0.85; }
+      50% { box-shadow: 0 0 16px var(--oro); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="fade"></div>
+  <div class="scan"></div>
+
+  <i class="corner tl"></i><i class="corner tr"></i>
+  <i class="corner bl"></i><i class="corner br"></i>
+
+  <div class="hud title">
+    <h1>Modo Juggernaut</h1>
+    <p>CTF corrupto &middot; three.js &middot; Proyecto 1</p>
+    <span class="laser"></span>
+  </div>
+
+  <div class="hud spec">
+    <h2>Estado de partida</h2>
+    <dl>
+      <dt>Portador</dt><dd id="holder">LIBRE</dd>
+      <dt>Dominio</dt><dd id="best">&mdash;</dd>
+      <dt>Cazadores</dt><dd>11 templarios</dd>
+      <dt>FPS</dt><dd id="fps">&mdash;</dd>
+    </dl>
+    <ul id="feed"></ul>
+  </div>
+
+  <div class="hud hint">
+    Controlas a <b>J&#8209;1</b> &middot; <b>WASD</b> mover &middot; <b>Espacio/F</b> placaje / slam &middot; <b>Shift/Q</b> rodada &middot; <b>C</b> ceder a la IA &middot; <b>M</b> sonido &middot; <b>P</b> pausa &middot; <b>Dominio 45s</b> gana
+  </div>
+
+  <div id="win">
+    <h2>Fin de la ronda</h2>
+    <div id="winner"></div>
+    <p>Pulsa <b>R</b> para otra ronda</p>
+  </div>
+  <button id="shot">Capturar PNG</button>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module" src="./js/main.js"></script>
+  <script>
+    requestAnimationFrame(() => document.getElementById('fade').classList.add('out'));
+  </script>
+</body>
+</html>

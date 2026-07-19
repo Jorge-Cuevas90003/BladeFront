@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ejecutor del Vacío — Demo de Enemigo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Rajdhani:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --rojo: #ff3020;
+      --steel: #cfd6dc;
+      --dim: #5c6a75;
+      --line: #3a2c2c;
+      --bg: #030405;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; background: var(--bg); }
+    #app canvas { display: block; }
+
+    #fade {
+      position: fixed; inset: 0; z-index: 6; background: var(--bg);
+      transition: opacity 1.6s ease; pointer-events: none;
+    }
+    #fade.out { opacity: 0; }
+
+    .scan {
+      position: fixed; inset: 0; z-index: 3; pointer-events: none; opacity: 0.5;
+      background: repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 3px);
+    }
+
+    .corner {
+      position: fixed; z-index: 4; width: 26px; height: 26px;
+      border: 0 solid var(--line); pointer-events: none;
+      opacity: 0; animation: reveal 0.9s ease 0.4s forwards;
+    }
+    .corner.tl { top: 18px; left: 18px; border-top-width: 1px; border-left-width: 1px; }
+    .corner.tr { top: 18px; right: 18px; border-top-width: 1px; border-right-width: 1px; }
+    .corner.bl { bottom: 18px; left: 18px; border-bottom-width: 1px; border-left-width: 1px; }
+    .corner.br { bottom: 18px; right: 18px; border-bottom-width: 1px; border-right-width: 1px; }
+
+    .hud {
+      position: fixed; z-index: 4; pointer-events: none; color: var(--steel);
+      font-family: 'Rajdhani', sans-serif;
+      opacity: 0; animation: reveal 0.9s ease forwards;
+    }
+
+    .hud.title { top: 34px; left: 40px; animation-delay: 0.55s; }
+    .hud.title h1 {
+      font-family: 'Cinzel', serif; font-weight: 700; font-size: 21px;
+      letter-spacing: 0.32em; color: #f1e9e8;
+      text-shadow: 0 2px 18px rgba(0, 0, 0, 0.8);
+    }
+    .hud.title p {
+      margin-top: 7px; font-size: 12px; font-weight: 500;
+      letter-spacing: 0.34em; text-transform: uppercase; color: var(--dim);
+    }
+    .hud.title .laser {
+      display: block; width: 42px; height: 2px; margin-top: 12px;
+      background: var(--rojo); animation: pulse 2.1s ease-in-out infinite;
+    }
+
+    .hud.spec {
+      top: 34px; right: 40px; width: 248px; animation-delay: 0.75s;
+      padding: 14px 18px 15px;
+      background: rgba(13, 8, 8, 0.55);
+      border: 1px solid var(--line);
+      backdrop-filter: blur(6px);
+      clip-path: polygon(12px 0, 100% 0, 100% 100%, 0 100%, 0 12px);
+    }
+    .hud.spec h2 {
+      font-size: 10px; font-weight: 600; letter-spacing: 0.3em;
+      color: var(--rojo); text-transform: uppercase; margin-bottom: 10px;
+    }
+    .hud.spec dl { display: grid; grid-template-columns: auto 1fr; gap: 5px 14px; }
+    .hud.spec dt {
+      font-size: 10px; font-weight: 600; letter-spacing: 0.18em;
+      text-transform: uppercase; color: var(--dim); padding-top: 1px;
+    }
+    .hud.spec dd { font-size: 13px; font-weight: 500; letter-spacing: 0.04em; text-align: right; }
+    .hud.spec dd#target { color: var(--rojo); font-weight: 600; }
+
+    .hud.hint {
+      bottom: 30px; left: 40px; animation-delay: 0.95s;
+      font-size: 11px; font-weight: 500; letter-spacing: 0.22em;
+      text-transform: uppercase; color: #48545e; max-width: 60vw;
+    }
+    .hud.hint b { color: var(--dim); font-weight: 600; }
+
+    #shot {
+      position: fixed; bottom: 26px; right: 40px; z-index: 4;
+      padding: 10px 22px 11px; cursor: pointer;
+      background: rgba(18, 12, 12, 0.8); color: var(--steel);
+      border: 1px solid var(--line);
+      clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+      font-family: 'Rajdhani', sans-serif; font-size: 12px; font-weight: 600;
+      letter-spacing: 0.26em; text-transform: uppercase;
+      transition: color 0.25s, border-color 0.25s;
+      opacity: 0; animation: reveal 0.9s ease 1.1s forwards;
+    }
+    #shot:hover { border-color: var(--rojo); color: var(--rojo); }
+
+    @media (max-width: 760px) { .hud.spec { display: none; } }
+
+    @keyframes reveal { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 6px var(--rojo); opacity: 0.85; }
+      50% { box-shadow: 0 0 16px var(--rojo); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="fade"></div>
+  <div class="scan"></div>
+
+  <i class="corner tl"></i><i class="corner tr"></i>
+  <i class="corner bl"></i><i class="corner br"></i>
+
+  <div class="hud title">
+    <h1>Ejecutor del Vac&iacute;o</h1>
+    <p>Demo de enemigo &middot; three.js &middot; Proyecto 1</p>
+    <span class="laser"></span>
+  </div>
+
+  <div class="hud spec">
+    <h2>Amenaza detectada</h2>
+    <dl>
+      <dt>Unidad</dt><dd>EXK&#8209;13 &laquo;Verdugo&raquo;</dd>
+      <dt>Clase</dt><dd>Ejecutor corrupto</dd>
+      <dt>Armadura</dt><dd>Obsidiana quemada</dd>
+      <dt>Arma</dt><dd>Hacha de ejecuci&oacute;n</dd>
+      <dt>IA</dt><dd>Persecuci&oacute;n proximal</dd>
+      <dt>Objetivo</dt><dd id="target">&mdash;</dd>
+    </dl>
+  </div>
+
+  <div class="hud hint">
+    <b>demo en vivo</b>: persigue al templario m&aacute;s cercano &middot; impacto = knockback &middot; borde = ca&iacute;da al abismo &middot; <b>P</b> modo foto
+  </div>
+  <button id="shot">Capturar PNG</button>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module" src="./js/main.js"></script>
+  <script>
+    requestAnimationFrame(() => document.getElementById('fade').classList.add('out'));
+  </script>
+</body>
+</html>
