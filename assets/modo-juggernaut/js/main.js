@@ -11,6 +11,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { createArena, ARENA_RADIUS } from '../../arena-vacio/js/arena.js';
 import { createCosmos } from '../../arena-vacio/js/cosmos.js';
+import { createTitans } from '../../arena-vacio/js/titans.js';
 import { createKnight } from '../../caballero-templario/js/knight.js';
 import { createExecutor } from '../../ejecutor-del-vacio/js/executor.js';
 import { createCyberBanner } from './flag.js';
@@ -63,6 +64,10 @@ const emblemMat = arena.userData.emblemMaterial;
 // y océano de niebla procedural (sustituye la niebla plana y losas antiguas)
 const cosmos = createCosmos();
 scene.add(cosmos.group);
+
+// Guerra de titanes al fondo: dos colosos luchando en la niebla profunda
+const titans = createTitans();
+scene.add(titans.group);
 
 // ---------- Luces ----------
 const key = new THREE.SpotLight(0xe6f0ff, 7000, 170, 0.46, 0.55, 1.8);
@@ -214,6 +219,7 @@ NetworkBus.addEventListener('GROUND_SLAM', (e) => {
 
 // Consola de debug: window.__mode.hunters[0].state, .holder, etc.
 window.__mode = mode;
+window.__dbg = { camera, controls, titans, scene };
 
 // ---------- La Partitura del Vacío (música + SFX procedurales) ----------
 const score = new VoidScore();
@@ -408,6 +414,8 @@ renderer.setAnimationLoop(() => {
   }
   mp.needsUpdate = true;
   cosmos.update(dt, t);
+  titans.update(dt, t);
+  if (arena.userData.update) arena.userData.update(dt, t);
   for (const b of burstPool) b.update(dt);
   beacon.visible = mode.phase === 'FREE';
   if (beacon.visible) {
@@ -449,15 +457,24 @@ renderer.setAnimationLoop(() => {
   grainPass.uniforms.time.value = t;
   controls.update();
 
-  // Camera shake del GROUND_SLAM: micro-offsets aleatorios de alta frecuencia
-  // durante 10 frames; se aplican solo al render y se revierten después
+  // Camera shake combinado: GROUND_SLAM (10 frames) + choque de titanes
+  // (ruido de alta frecuencia que decae en 0.4 s). Se aplica solo al render
+  // y se revierte después para no contaminar OrbitControls.
+  let sx = 0, sy = 0, sz = 0;
   if (mode.shakeFrames > 0) {
     mode.shakeFrames--;
-    shake.set(
-      (Math.random() - 0.5) * 0.22,
-      (Math.random() - 0.5) * 0.16,
-      (Math.random() - 0.5) * 0.22
-    );
+    sx += (Math.random() - 0.5) * 0.22;
+    sy += (Math.random() - 0.5) * 0.16;
+    sz += (Math.random() - 0.5) * 0.22;
+  }
+  if (titans.shake > 0) {
+    const s = titans.shake; // 1 → 0 en 0.4 s: los dioses lejanos se "sienten"
+    sx += Math.sin(t * 60) * 0.03 * s;
+    sy += Math.cos(t * 57) * 0.022 * s;
+    sz += Math.sin(t * 63) * 0.03 * s;
+  }
+  if (sx || sy || sz) {
+    shake.set(sx, sy, sz);
     camera.position.add(shake);
     composer.render();
     camera.position.sub(shake);

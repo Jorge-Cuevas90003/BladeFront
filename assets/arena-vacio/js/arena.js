@@ -298,7 +298,124 @@ export function createArena() {
   cone.position.y = -0.6 - 8.5;
   group.add(cone);
 
+  // ================================================================
+  // Realce épico: braseros, haces de runas, sigilo ritual, escombros
+  // ================================================================
+
+  // --- Braseros flotantes: llamas doradas ritual en el perímetro ---
+  const braziers = [];
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + 0.52;
+    const r = ARENA_RADIUS - 0.5;
+    const b = new THREE.Group();
+    const flame = new THREE.Mesh(
+      new THREE.SphereGeometry(0.32, 16, 12),
+      new THREE.MeshStandardMaterial({ color: 0x1a0e04, emissive: 0xff8a1e, emissiveIntensity: 4, roughness: 0.6 })
+    );
+    flame.scale.y = 1.5;
+    const glow = new THREE.Mesh(
+      new THREE.SphereGeometry(0.72, 16, 12),
+      new THREE.MeshBasicMaterial({ color: 0xff9a2a, transparent: true, opacity: 0.26, blending: THREE.AdditiveBlending, depthWrite: false })
+    );
+    b.add(flame, glow);
+    b.position.set(Math.cos(a) * r, 1.35, Math.sin(a) * r);
+    b.userData = { flame, glow, ph: i * 1.7 };
+    braziers.push(b);
+    group.add(b);
+  }
+
+  // --- Haces de luz dorada ascendiendo desde la banda de runas ---
+  // Degradado por color de vértice: dorado en la base → negro arriba, que con
+  // additive blending se traduce en un desvanecimiento limpio de god-ray.
+  const beamGeo = new THREE.CylinderGeometry(0.06, 0.2, 10, 8, 6, true);
+  const bpos = beamGeo.attributes.position;
+  const bcol = [];
+  const goldC = new THREE.Color(0xffb638);
+  for (let i = 0; i < bpos.count; i++) {
+    const k = 1 - (bpos.getY(i) + 5) / 10; // 1 abajo, 0 arriba
+    const kk = k * k; // caída más agresiva: base concentrada
+    bcol.push(goldC.r * kk, goldC.g * kk, goldC.b * kk);
+  }
+  beamGeo.setAttribute('color', new THREE.Float32BufferAttribute(bcol, 3));
+  const beamMat = new THREE.MeshBasicMaterial({
+    vertexColors: true, transparent: true, opacity: 0.5,
+    blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false,
+  });
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2 + 0.13;
+    const beam = new THREE.Mesh(beamGeo, beamMat);
+    beam.position.set(Math.cos(a) * 10.05, 4.9, Math.sin(a) * 10.05);
+    group.add(beam);
+  }
+
+  // --- Sigilo ritual flotante sobre el centro (rota y late) ---
+  const sigil = new THREE.Group();
+  const sigilMat = new THREE.MeshStandardMaterial({
+    color: 0x050505, emissive: 0xffb638, emissiveIntensity: 2.2, roughness: 0.5, metalness: 0.3,
+  });
+  for (const [ri, ro] of [[2.4, 2.6], [1.5, 1.62]]) {
+    const rr = new THREE.Mesh(new THREE.RingGeometry(ri, ro, 80), sigilMat);
+    rr.rotation.x = -Math.PI / 2;
+    sigil.add(rr);
+  }
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.03, 0.06), sigilMat);
+    spoke.position.set(Math.cos(a) * 2.0, 0, Math.sin(a) * 2.0);
+    spoke.rotation.y = -a;
+    sigil.add(spoke);
+  }
+  sigil.position.y = 7.5;
+  group.add(sigil);
+
+  // --- Escombros orbitando bajo/alrededor de la isla flotante ---
+  const AROCKS = 18;
+  const arockMat = new THREE.MeshStandardMaterial({ color: 0x101318, roughness: 1, metalness: 0, flatShading: true });
+  const arocks = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), arockMat, AROCKS);
+  const arData = [];
+  for (let i = 0; i < AROCKS; i++) {
+    arData.push({
+      a: (i / AROCKS) * Math.PI * 2 + rng(),
+      rad: ARENA_RADIUS + 1.5 + rng() * 4,
+      y: -1.5 - rng() * 5,
+      size: 0.4 + rng() * 1.3,
+      drift: 0.02 + rng() * 0.03,
+      spin: (rng() - 0.5) * 0.4,
+      ex: rng() * Math.PI * 2, ez: rng() * Math.PI * 2,
+      sy: 0.6 + rng() * 0.6,
+    });
+  }
+  arocks.frustumCulled = false;
+  group.add(arocks);
+
+  const _am4 = new THREE.Matrix4(), _aq = new THREE.Quaternion();
+  const _ap = new THREE.Vector3(), _as = new THREE.Vector3(), _ae = new THREE.Euler();
+
   group.userData.runeMaterial = runeMat;
   group.userData.emblemMaterial = emblemMat;
+  group.userData.update = (dt, t) => {
+    // braseros: parpadeo de llama con doble frecuencia
+    for (const b of braziers) {
+      const fl = 1 + Math.sin(t * 9 + b.userData.ph) * 0.18 + Math.sin(t * 23 + b.userData.ph) * 0.09;
+      b.userData.flame.scale.set(1, 1.5 * fl, 1);
+      b.userData.flame.material.emissiveIntensity = 4 * fl;
+      b.userData.glow.material.opacity = 0.22 + (fl - 1) * 0.5;
+    }
+    // sigilo: rotación majestuosa + leve flotación + latido emissivo
+    sigil.rotation.y += dt * 0.15;
+    sigil.position.y = 7.5 + Math.sin(t * 0.6) * 0.25;
+    sigilMat.emissiveIntensity = 2.0 + Math.sin(t * 1.3) * 0.5;
+    // escombros: órbita lenta + tumbo propio
+    for (let i = 0; i < AROCKS; i++) {
+      const d = arData[i];
+      d.a += dt * d.drift; d.ex += dt * d.spin; d.ez += dt * d.spin * 0.6;
+      _ap.set(Math.cos(d.a) * d.rad, d.y + Math.sin(t * 0.3 + d.a) * 0.5, Math.sin(d.a) * d.rad);
+      _ae.set(d.ex, d.a, d.ez);
+      _as.set(d.size, d.size * d.sy, d.size);
+      _am4.compose(_ap, _aq.setFromEuler(_ae), _as);
+      arocks.setMatrixAt(i, _am4);
+    }
+    arocks.instanceMatrix.needsUpdate = true;
+  };
   return group;
 }

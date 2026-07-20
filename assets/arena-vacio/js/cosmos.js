@@ -1,8 +1,11 @@
 // Cosmos del Vacío — telón de fondo cinematográfico reutilizable:
 //   1. Monolitos colosales flotantes (siluetas góticas + brutalistas)
-//   2. Anomalía de Eclipse (toro emisivo + luna negra + luz de contraluz real)
+//   2. Anomalía de Eclipse (toro emisivo + luna negra + corona + contraluz real)
 //   3. Campo de ceniza cósmica (2500 partículas ascendentes)
 //   4. Océano de niebla rugiente (planos con ruido procedural en vertex shader)
+//   5. Cielo profundo: campo de estrellas + nebulosas de gas cósmico
+//   6. Luna quebrada anillada (segundo cuerpo celeste)
+//   7. Escombros flotantes a la deriva + meteoros ardientes
 //
 // createCosmos() → { group, update(dt, t) }. El anfitrión añade group a la
 // escena y llama update en su bucle. Sin dependencias del modo de juego.
@@ -89,6 +92,70 @@ function brutalistTower(rng, mat, H) {
   return g;
 }
 
+// ---------- Texturas de cielo profundo ----------
+function makeStarTexture() {
+  const s = 64;
+  const c = document.createElement('canvas'); c.width = c.height = s;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.35, 'rgba(255,255,255,0.5)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(s / 2, s / 2, s / 2, 0, PI2); ctx.fill();
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+// Nubes de gas: blobs suaves de color frío profundo sobre transparente
+function makeNebulaTexture(seed) {
+  const rng = makeRng(seed);
+  const s = 512;
+  const c = document.createElement('canvas'); c.width = c.height = s;
+  const ctx = c.getContext('2d');
+  const palette = ['86,96,180', '54,120,150', '118,72,158', '40,84,124'];
+  for (let i = 0; i < 30; i++) {
+    const x = rng() * s, y = rng() * s, r = s * (0.09 + rng() * 0.3);
+    const col = palette[Math.floor(rng() * palette.length)];
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, `rgba(${col},${0.045 + rng() * 0.07})`);
+    g.addColorStop(1, `rgba(${col},0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+// Corona solar: rayos radiales irregulares
+function makeRaysTexture() {
+  const s = 512;
+  const c = document.createElement('canvas'); c.width = c.height = s;
+  const ctx = c.getContext('2d');
+  ctx.translate(s / 2, s / 2);
+  const rng = makeRng(77);
+  for (let i = 0; i < 96; i++) {
+    const a = (i / 96) * PI2;
+    const len = (s * 0.5) * (0.45 + rng() * 0.55);
+    const w = 0.008 + rng() * 0.022;
+    ctx.save();
+    ctx.rotate(a);
+    const g = ctx.createLinearGradient(0, 0, len, 0);
+    g.addColorStop(0, 'rgba(255,205,120,0.55)');
+    g.addColorStop(1, 'rgba(255,205,120,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(0, -len * w); ctx.lineTo(len, 0); ctx.lineTo(0, len * w);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 // ---------- 4. Shader del océano de niebla ----------
 const FogOceanShader = {
   uniforms: {
@@ -138,11 +205,69 @@ export function createCosmos({ ashCount = 2500 } = {}) {
   group.name = 'CosmosDelVacio';
   const rng = makeRng(4242);
 
-  // --- 1. Ocho monolitos colosales (50–150 unidades, escala Y titánica) ---
-  // Albedo un pelo por encima del negro puro de la spec: siguen siendo
-  // siluetas, pero el rim cian/dorado dibuja sus aristas contra el vacío
+  // ==================================================================
+  // 5. CIELO PROFUNDO: campo de estrellas (2 capas de brillo)
+  // ==================================================================
+  const starTex = makeStarTexture();
+  const starGroup = new THREE.Group();
+  function starLayer(count, size, opacity, dMin, dMax) {
+    const pos = new Float32Array(count * 3);
+    const colArr = new Float32Array(count * 3);
+    const cc = new THREE.Color();
+    for (let i = 0; i < count; i++) {
+      const u = rng() * 2 - 1, th = rng() * PI2, sr = Math.sqrt(1 - u * u);
+      const rad = dMin + rng() * (dMax - dMin);
+      pos[i * 3 + 0] = Math.cos(th) * sr * rad;
+      pos[i * 3 + 1] = Math.abs(u) * rad * 0.5 + 15; // domo superior
+      pos[i * 3 + 2] = Math.sin(th) * sr * rad;
+      const r = rng();
+      if (r < 0.72) cc.setHSL(0.58, 0.22, 0.82);       // blanco-azulado
+      else if (r < 0.88) cc.setHSL(0.11, 0.6, 0.72);   // dorado
+      else cc.setHSL(0.52, 0.55, 0.72);                // cian
+      colArr[i * 3 + 0] = cc.r; colArr[i * 3 + 1] = cc.g; colArr[i * 3 + 2] = cc.b;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
+    const pts = new THREE.Points(g, new THREE.PointsMaterial({
+      size, map: starTex, vertexColors: true, transparent: true,
+      opacity, depthWrite: false, sizeAttenuation: false,
+      blending: THREE.AdditiveBlending,
+    }));
+    pts.frustumCulled = false;
+    starGroup.add(pts);
+    return pts;
+  }
+  starLayer(2600, 1.7, 0.5, 300, 520);
+  const starsBright = starLayer(430, 3.4, 0.9, 260, 470);
+  group.add(starGroup);
+
+  // ==================================================================
+  // Nebulosas: nubes de gas cósmico en el horizonte lejano
+  // ==================================================================
+  const nebTex = makeNebulaTexture(2025);
+  const nebSpecs = [
+    { pos: [-30, 34, -205], scale: 250, rot: 0.2, op: 0.5 },
+    { pos: [130, 22, -175], scale: 210, rot: -0.6, op: 0.4 },
+    { pos: [-160, 46, -110], scale: 190, rot: 1.1, op: 0.34 },
+  ];
+  for (const n of nebSpecs) {
+    const mat = new THREE.MeshBasicMaterial({
+      map: nebTex, transparent: true, opacity: n.op,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+    });
+    const pl = new THREE.Mesh(new THREE.PlaneGeometry(n.scale, n.scale), mat);
+    pl.position.set(...n.pos);
+    pl.lookAt(0, n.pos[1] * 0.3, 0);
+    pl.rotateZ(n.rot);
+    group.add(pl);
+  }
+
+  // ==================================================================
+  // 1. Ocho monolitos colosales (siluetas titánicas)
+  // ==================================================================
   const monoMat = new THREE.MeshStandardMaterial({
-    color: 0x0a0b0e, roughness: 0.9, metalness: 0.0, // sin especular
+    color: 0x0a0b0e, roughness: 0.9, metalness: 0.0, // silueta, sin especular
   });
   const monoliths = [];
   for (let i = 0; i < 8; i++) {
@@ -166,11 +291,10 @@ export function createCosmos({ ashCount = 2500 } = {}) {
     group.add(m);
   }
 
-  // --- 2. Anomalía de Eclipse: aro solar-dorado + luna negra ---
+  // ==================================================================
+  // 2. Anomalía de Eclipse: aro dorado + luna negra + CORONA
+  // ==================================================================
   const eclipse = new THREE.Group();
-  // Nota: la spec pedía intensidad 30, pero con ACES + bloom eso funde el
-  // abismo en un amanecer dorado; 6 mantiene el aro "al blanco" sin lavar
-  // los negros del fondo (calibrado sobre captura).
   const ringMat = new THREE.MeshStandardMaterial({
     color: 0x000000, emissive: 0xffb638, emissiveIntensity: 6,
     fog: false, side: THREE.DoubleSide,
@@ -183,17 +307,115 @@ export function createCosmos({ ashCount = 2500 } = {}) {
   );
   moon.position.z = 1.2; // el cuerpo que eclipsa, delante del aro
   eclipse.add(ring, moon);
+
+  // corona: rayos radiales que giran + disco de resplandor
+  const corona = new THREE.Mesh(
+    new THREE.PlaneGeometry(165, 165),
+    new THREE.MeshBasicMaterial({
+      map: makeRaysTexture(), transparent: true, opacity: 0.45,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+    })
+  );
+  corona.position.z = -3;
+  const coronaGlow = new THREE.Mesh(
+    new THREE.CircleGeometry(56, 48),
+    new THREE.MeshBasicMaterial({
+      color: 0xffbe52, transparent: true, opacity: 0.14,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+    })
+  );
+  coronaGlow.position.z = -2.4;
+  eclipse.add(corona, coronaGlow);
+
   eclipse.position.set(-58, 24, -158);
   eclipse.lookAt(0, 6, 0);
   group.add(eclipse);
 
-  // Luz REAL del eclipse: proyecta rim dorado sobre monolitos y anillo de combate
+  // Luz REAL del eclipse: rim dorado sobre monolitos y anillo de combate
   const eclipseLight = new THREE.DirectionalLight(0xffcf6a, 1.2);
   eclipseLight.position.copy(eclipse.position);
   eclipseLight.target.position.set(0, 0, 0);
   group.add(eclipseLight, eclipseLight.target);
 
-  // --- 3. Campo de ceniza cósmica (asciende y recicla) ---
+  // ==================================================================
+  // 6. Luna quebrada anillada (segundo cuerpo celeste, lado opuesto)
+  // ==================================================================
+  const moon2 = new THREE.Group();
+  const moonBody = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(9, 1),
+    new THREE.MeshStandardMaterial({
+      color: 0x232a33, roughness: 1, metalness: 0, flatShading: true,
+      emissive: 0x0e141c, emissiveIntensity: 0.6,
+    })
+  );
+  const moonRing = new THREE.Mesh(
+    new THREE.RingGeometry(12, 17.5, 72),
+    new THREE.MeshBasicMaterial({
+      color: 0x647888, transparent: true, opacity: 0.22,
+      side: THREE.DoubleSide, depthWrite: false, fog: false,
+    })
+  );
+  moonRing.rotation.x = -1.15;
+  moonRing.rotation.y = 0.3;
+  const moonHalo = new THREE.Mesh(
+    new THREE.SphereGeometry(10.5, 24, 16),
+    new THREE.MeshBasicMaterial({
+      color: 0x3a5570, transparent: true, opacity: 0.12,
+      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide, fog: false,
+    })
+  );
+  moon2.add(moonBody, moonRing, moonHalo);
+  moon2.position.set(150, 78, -110);
+  group.add(moon2);
+
+  // ==================================================================
+  // 7. Escombros flotantes a la deriva (fragmentos de roca en el vacío)
+  // ==================================================================
+  const DEBRIS = 34;
+  const debrisMat = new THREE.MeshStandardMaterial({
+    color: 0x0c0e12, roughness: 1, metalness: 0, flatShading: true,
+  });
+  const debris = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), debrisMat, DEBRIS);
+  const dData = [];
+  for (let i = 0; i < DEBRIS; i++) {
+    dData.push({
+      a: rng() * PI2,
+      rad: 26 + rng() * 34,
+      y: -8 + rng() * 26,
+      size: 0.5 + rng() * 2.6,
+      drift: 0.015 + rng() * 0.04,
+      spin: (rng() - 0.5) * 0.5,
+      ex: rng() * PI2, ez: rng() * PI2,
+      sy: 0.6 + rng() * 0.7, sz: 0.6 + rng() * 0.7, // formas irregulares
+    });
+  }
+  debris.frustumCulled = false;
+  group.add(debris);
+
+  // ==================================================================
+  // 7b. Meteoros: estelas ardientes cruzando el vacío
+  // ==================================================================
+  const meteors = [];
+  for (let i = 0; i < 4; i++) {
+    const m = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial({
+        color: 0xffd9a0, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+      })
+    );
+    m.visible = false;
+    m.frustumCulled = false;
+    group.add(m);
+    meteors.push({
+      mesh: m, active: false, t: 0, dur: 0, next: 2 + rng() * 9,
+      from: new THREE.Vector3(), to: new THREE.Vector3(),
+    });
+  }
+
+  // ==================================================================
+  // 3. Campo de ceniza cósmica (asciende y recicla)
+  // ==================================================================
   const ashPos = new Float32Array(ashCount * 3);
   const ashSpeed = new Float32Array(ashCount);
   const Y_MIN = -25, Y_MAX = 45;
@@ -203,7 +425,7 @@ export function createCosmos({ ashCount = 2500 } = {}) {
     ashPos[i * 3 + 0] = Math.cos(a) * r;
     ashPos[i * 3 + 1] = Y_MIN + rng() * (Y_MAX - Y_MIN);
     ashPos[i * 3 + 2] = Math.sin(a) * r;
-    ashSpeed[i] = 0.25 + rng() * 0.3; // media ≈ 0.4 (spec)
+    ashSpeed[i] = 0.25 + rng() * 0.3;
   }
   const ashGeo = new THREE.BufferGeometry();
   ashGeo.setAttribute('position', new THREE.BufferAttribute(ashPos, 3));
@@ -214,10 +436,12 @@ export function createCosmos({ ashCount = 2500 } = {}) {
   ash.frustumCulled = false;
   group.add(ash);
 
-  // --- 4. Océano de niebla rugiente (3 planos, ruido en GPU) ---
+  // ==================================================================
+  // 4. Océano de niebla rugiente (3 planos, ruido en GPU)
+  // ==================================================================
   const fogMats = [];
   const fogSpecs = [
-    { size: 190, y: -5.0, op: 0.34, rot: 0.0 },  // spec: directamente bajo la arena
+    { size: 190, y: -5.0, op: 0.34, rot: 0.0 },
     { size: 235, y: -7.4, op: 0.26, rot: 2.1 },
     { size: 280, y: -10.0, op: 0.2, rot: 4.2 },
   ];
@@ -229,23 +453,79 @@ export function createCosmos({ ashCount = 2500 } = {}) {
       depthWrite: false,
     });
     mat.uniforms.uOpacity.value = f.op;
-    mat.uniforms.uTime.value = f.rot * 7; // desfase temporal por capa
+    mat.uniforms.uTime.value = f.rot * 7;
     const plane = new THREE.Mesh(new THREE.PlaneGeometry(f.size, f.size, 96, 96), mat);
     plane.rotation.x = -Math.PI / 2;
     plane.rotation.z = f.rot;
     plane.position.y = f.y;
-    plane.userData.t0 = f.rot * 7;
     fogMats.push(mat);
     group.add(plane);
   }
 
-  // --- Bucle ---
+  // ---------- Bucle ----------
+  const _m4 = new THREE.Matrix4(), _q = new THREE.Quaternion();
+  const _pos = new THREE.Vector3(), _scl = new THREE.Vector3(), _eul = new THREE.Euler();
+  const _dir = new THREE.Vector3(), _UX = new THREE.Vector3(1, 0, 0);
+
   function update(dt, t) {
-    // deriva orgánica de los monolitos: cosenos desfasados (forma integrada
-    // de la spec `+= cos(t*0.3+i)*0.05`, que a 60 fps equivale a esta onda)
+    // monolitos: deriva orgánica con cosenos desfasados
     for (const m of monoliths) {
       m.position.y = m.userData.baseY + Math.sin(t * 0.3 + m.userData.phase) * 2.6;
       m.rotation.y += dt * m.userData.spin;
+    }
+
+    // estrellas: parpadeo sutil + parallax lentísimo
+    starGroup.rotation.y += dt * 0.004;
+    starsBright.material.opacity = 0.75 + Math.sin(t * 2.3) * 0.15;
+
+    // eclipse: corona girando + latido del aro
+    corona.rotation.z += dt * 0.03;
+    ringMat.emissiveIntensity = 6 + Math.sin(t * 0.7) * 0.8;
+
+    // luna quebrada: rotación majestuosa
+    moon2.rotation.y += dt * 0.02;
+
+    // escombros flotantes: órbita lenta + tumbo propio
+    for (let i = 0; i < DEBRIS; i++) {
+      const d = dData[i];
+      d.a += dt * d.drift;
+      d.ex += dt * d.spin;
+      d.ez += dt * d.spin * 0.7;
+      _pos.set(Math.cos(d.a) * d.rad, d.y + Math.sin(t * 0.2 + d.a) * 0.8, Math.sin(d.a) * d.rad);
+      _eul.set(d.ex, d.a, d.ez);
+      _scl.set(d.size, d.size * d.sy, d.size * d.sz);
+      _m4.compose(_pos, _q.setFromEuler(_eul), _scl);
+      debris.setMatrixAt(i, _m4);
+    }
+    debris.instanceMatrix.needsUpdate = true;
+
+    // meteoros: lanzamiento periódico y estela que se estira y desvanece
+    for (const me of meteors) {
+      if (!me.active) {
+        me.next -= dt;
+        if (me.next <= 0) {
+          const a = rng() * PI2;
+          me.from.set(Math.cos(a) * 190, 95 + rng() * 60, Math.sin(a) * 190);
+          const a2 = a + Math.PI * 0.5 + (rng() - 0.5) * 1.0;
+          me.to.set(Math.cos(a2) * 190, 15 + rng() * 45, Math.sin(a2) * 190);
+          me.t = 0; me.dur = 0.7 + rng() * 0.7;
+          me.active = true; me.mesh.visible = true;
+        }
+      } else {
+        me.t += dt;
+        const k = me.t / me.dur;
+        if (k >= 1) {
+          me.active = false; me.mesh.visible = false;
+          me.next = 4 + rng() * 11;
+        } else {
+          me.mesh.position.lerpVectors(me.from, me.to, k);
+          _dir.subVectors(me.to, me.from).normalize();
+          me.mesh.quaternion.setFromUnitVectors(_UX, _dir);
+          const fade = Math.sin(k * Math.PI);
+          me.mesh.scale.set(16 + fade * 22, 0.8, 1);
+          me.mesh.material.opacity = fade * 0.9;
+        }
+      }
     }
 
     // ceniza ascendiendo con reciclado al fondo del abismo
@@ -257,9 +537,8 @@ export function createCosmos({ ashCount = 2500 } = {}) {
     }
     p.needsUpdate = true;
 
-    // océano de niebla + respiración del eclipse
+    // océano de niebla
     for (const mat of fogMats) mat.uniforms.uTime.value += dt;
-    ringMat.emissiveIntensity = 6 + Math.sin(t * 0.7) * 0.8;
   }
 
   return { group, update };

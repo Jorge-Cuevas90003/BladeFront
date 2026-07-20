@@ -208,6 +208,7 @@ renderer.setAnimationLoop(() => {
   runeMat.emissiveIntensity = 3.3 + Math.sin(t * 1.25) * 0.5;
   emblemMat.emissiveIntensity = 1.1 + Math.sin(t * 1.25 + 0.9) * 0.25;
   cosmos.update(dt, t);
+  if (arena.userData.update) arena.userData.update(dt, t);
 
   grainPass.uniforms.time.value = t;
   controls.update();
