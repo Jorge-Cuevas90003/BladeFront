@@ -1,100 +1,141 @@
-// Servidor autoritativo VOID-NET v0.1 — ESQUELETO para desarrollar en equipo.
-// Correr:  cd red && npm install && node servidor.js
+// ============================================================================
+//  Servidor autoritativo "Captura la Bandera" v1.0 — TCP + JSON por línea.
+//  Corre el motor (juego-captura.js) y habla el protocolo oficial (§23–§33).
 //
-// La simulación real puede reutilizar el núcleo del juego tal cual
-// (juggernaut-mode.js es motor-agnóstico): `npm i three` y descomentar los
-// imports marcados. Este esqueleto ya maneja conexiones, registro, inputs
-// y el bucle de snapshots; los TODO son el trabajo del equipo.
+//  Correr:  node red/servidor.js            (puerto 5000 por defecto)
+//           node red/servidor.js --port 5000 --auto
+//
+//  --auto : arranca la partida solo cuando se conecta el primer jugador
+//           (cómodo para testear). Sin --auto, arranca al llegar a `--min`
+//           jugadores. (La spec no define un mensaje START explícito.)
+// ============================================================================
 
-import { WebSocketServer } from 'ws';
-// import * as THREE from 'three';
-// import { JuggernautMode, NetworkBus } from '../assets/modo-juggernaut/js/juggernaut-mode.js';
+import net from 'node:net';
+import process from 'node:process';
+import { JuegoCaptura, ESTADOS, CONFIG_DEFECTO } from '../assets/captura-bandera/js/juego-captura.js';
+import { TIPOS, ERRORES, PROTOCOL_VERSION, enmarcar, LectorLineas } from './protocolo.js';
 
-const PUERTO = 8140;
-const TICK_SIM = 1000 / 60;      // simulación 60 Hz
-const TICK_SNAPSHOT = 1000 / 20; // publicación 20 Hz
-
-const wss = new WebSocketServer({ port: PUERTO });
-const clientes = new Map(); // ws → { id, nombre, input: {mov, acciones, seq} }
-let proximoId = 1;
-let seqServidor = 0;
-
-const enviar = (ws, t, data) =>
-  ws.send(JSON.stringify({ v: 1, t, seq: seqServidor++, ts: Date.now(), data }));
-
-const difundir = (t, data) => {
-  for (const ws of clientes.keys()) {
-    if (ws.readyState === ws.OPEN) enviar(ws, t, data);
-  }
+// --- argumentos KEY VALUE / flags -----------------------------------------
+const args = process.argv.slice(2);
+const flag = (n) => args.includes('--' + n);
+const val = (n, def) => {
+  const i = args.indexOf('--' + n);
+  return i >= 0 && args[i + 1] ? args[i + 1] : def;
 };
 
-wss.on('connection', (ws) => {
-  ws.on('message', (raw) => {
-    let msg;
-    try { msg = JSON.parse(raw); } catch { return; }
-    if (msg.v !== 1) return;
+const PUERTO = Number(val('port', CONFIG_DEFECTO.serverPort));
+const AUTO = flag('auto');
+const MIN_JUGADORES = Number(val('min', 1));
 
-    switch (msg.t) {
-      case 'HELLO': {
-        const id = `J-${proximoId++}`;
-        clientes.set(ws, {
-          id,
-          nombre: String(msg.data?.nombre ?? id).slice(0, 24),
-          input: { mov: [0, 0], acciones: 0, seq: 0 },
-        });
-        enviar(ws, 'WELCOME', {
-          id,
-          config: { arenaRadius: 20.7, winDominio: 45, tickRate: 20 },
-        });
-        // TODO(equipo): crear/asignar el Hunter de este jugador en la sim
-        console.log(`+ ${id} conectado (${clientes.size} jugadores)`);
-        break;
-      }
-      case 'INPUT': {
-        const c = clientes.get(ws);
-        if (!c) return;
-        // TODO(equipo): validar rangos (|mov| ≤ 1, acciones ≤ 7, anti-flood)
-        c.input = msg.data;
-        break;
-      }
-      case 'PING':
-        enviar(ws, 'PONG', { ts: msg.ts });
-        break;
-    }
-  });
+const juego = new JuegoCaptura();
+const conexiones = new Map(); // socket -> { playerId, lector }
+let anfitrionListo = false;
 
-  ws.on('close', () => {
-    const c = clientes.get(ws);
-    if (c) {
-      clientes.delete(ws);
-      difundir('ADIOS', { id: c.id, motivo: 'desconexion' });
-      // TODO(equipo): retirar su Hunter de la sim (¿o dejarlo a la IA?)
-      console.log(`- ${c.id} desconectado`);
+const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
+
+// Envía un mensaje a un socket concreto.
+const enviar = (socket, type, campos) => {
+  if (!socket.destroyed) socket.write(enmarcar(type, campos));
+};
+
+// Difunde a todos los clientes conectados.
+const difundir = (type, campos) => {
+  for (const socket of conexiones.keys()) enviar(socket, type, campos);
+};
+
+// --- servidor TCP ----------------------------------------------------------
+const servidor = net.createServer((socket) => {
+  const host = socket.remoteAddress;
+  log('+ conexión desde', host);
+
+  const lector = new LectorLineas(
+    (msg) => manejarMensaje(socket, msg),
+    (code) => enviar(socket, TIPOS.ERROR, { code, description: 'JSON inválido' })
+  );
+  conexiones.set(socket, { playerId: null, lector });
+
+  socket.on('data', (d) => lector.alimentar(d));
+  socket.on('error', () => {}); // evita que un reset tumbe el proceso
+  socket.on('close', () => {
+    const info = conexiones.get(socket);
+    conexiones.delete(socket);
+    if (info?.playerId) {
+      const { eventos } = juego.quitarJugador(info.playerId);
+      for (const ev of eventos) difundir(ev.type, ev);
+      log('- desconectado', info.playerId);
     }
   });
 });
 
-// ---------- Bucle de simulación (60 Hz) ----------
-setInterval(() => {
-  // TODO(equipo): aplicar cada clientes.get(ws).input a su Hunter
-  //   (hunter.inputDir.set(mov[0], 0, mov[1]); flags → wantsTackle/wantsDodge)
-  // TODO(equipo): mode.update(dt, t)  ← la MISMA clase del cliente, headless
-  // TODO(equipo): suscribirse a NetworkBus y re-difundir como EVENT
-}, TICK_SIM);
+function manejarMensaje(socket, msg) {
+  if (!msg || typeof msg.type !== 'string') {
+    return enviar(socket, TIPOS.ERROR, { code: ERRORES.INVALID_MESSAGE, description: 'Falta type' });
+  }
+  if (msg.protocolVersion && msg.protocolVersion !== PROTOCOL_VERSION) {
+    return enviar(socket, TIPOS.ERROR, { code: ERRORES.UNSUPPORTED_PROTOCOL_VERSION, description: 'Versión no soportada' });
+  }
+  const info = conexiones.get(socket);
 
-// ---------- Bucle de snapshots (20 Hz) ----------
-let tick = 0;
-setInterval(() => {
-  tick++;
-  // TODO(equipo): serializar el estado real de la sim; esto es un stub
-  difundir('SNAPSHOT', {
-    tick,
-    jugadores: [...clientes.values()].map((c) => ({
-      id: c.id, p: [0, 0, 0], ry: 0, estado: 'HUNT', esJefe: false,
-    })),
-    estandarte: { estado: 'LIBRE', pos: [0, 0, 0] },
-    dominio: {},
-  });
-}, TICK_SNAPSHOT);
+  switch (msg.type) {
+    case TIPOS.JOIN: {
+      const { jugador, error } = juego.agregarJugador(msg.name);
+      if (error) return enviar(socket, TIPOS.JOIN_REJECTED, { reason: error });
+      info.playerId = jugador.playerId;
+      enviar(socket, TIPOS.JOIN_ACCEPTED, { playerId: jugador.playerId, gameId: juego.gameId });
+      log('  JOIN', jugador.playerId, jugador.name);
+      // Arranque de la partida.
+      const activos = [...juego.jugadores.values()].filter((j) => j.connected).length;
+      if (juego.estado === ESTADOS.WAITING && (AUTO || activos >= MIN_JUGADORES) && !anfitrionListo) {
+        anfitrionListo = true;
+        setTimeout(arrancarPartida, AUTO ? 300 : 0);
+      }
+      break;
+    }
+    case TIPOS.CHANGE_DIRECTION: {
+      if (!info.playerId) return enviar(socket, TIPOS.ERROR, { code: ERRORES.UNKNOWN_PLAYER, description: 'No has hecho JOIN' });
+      // La spec pide comprobar que el playerId pertenece a ESTA conexión (§28.2).
+      if (msg.playerId && msg.playerId !== info.playerId) {
+        return enviar(socket, TIPOS.ERROR, { code: ERRORES.UNKNOWN_PLAYER, description: 'playerId no coincide con la conexión' });
+      }
+      if (juego.estado !== ESTADOS.RUNNING) return enviar(socket, TIPOS.ERROR, { code: ERRORES.GAME_NOT_STARTED, description: 'La partida no está corriendo' });
+      const r = juego.cambiarDireccion(info.playerId, msg.direction);
+      if (r.error) enviar(socket, TIPOS.ERROR, { code: r.error, description: 'Dirección inválida' });
+      break;
+    }
+    case TIPOS.LEAVE: {
+      if (info.playerId) {
+        const { eventos } = juego.quitarJugador(info.playerId);
+        for (const ev of eventos) difundir(ev.type, ev);
+      }
+      socket.end();
+      break;
+    }
+    default:
+      enviar(socket, TIPOS.ERROR, { code: ERRORES.INVALID_MESSAGE, description: 'Tipo desconocido: ' + msg.type });
+  }
+}
 
-console.log(`VOID-NET v0.1 escuchando en ws://localhost:${PUERTO}`);
+// --- arranque y bucle de ciclos (§9, §30) ---------------------------------
+let bucle = null;
+
+function arrancarPartida() {
+  if (juego.estado !== ESTADOS.WAITING) return;
+  const inicio = juego.iniciar();
+  difundir(TIPOS.GAME_STARTED, inicio);
+  log('== partida iniciada ==', inicio.players.length, 'jugadores');
+
+  bucle = setInterval(() => {
+    const { eventos, estado } = juego.ciclo();
+    for (const ev of eventos) difundir(ev.type, ev);
+    difundir(TIPOS.GAME_STATE, juego.serializarEstado());
+    if (estado === ESTADOS.FINISHED) {
+      clearInterval(bucle);
+      log('== fin de la partida ==', 'ganador:', juego.ganadorId);
+    }
+  }, juego.cfg.movementIntervalMs);
+}
+
+servidor.listen(PUERTO, () => {
+  log(`Servidor "Captura la Bandera" TCP escuchando en el puerto ${PUERTO}`);
+  log(AUTO ? '(modo --auto: arranca al primer JOIN)' : `(arranca con ${MIN_JUGADORES} jugador[es])`);
+});

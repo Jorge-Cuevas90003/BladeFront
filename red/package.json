@@ -1,11 +1,13 @@
 {
-  "name": "void-net-servidor",
-  "version": "0.1.0",
-  "description": "Servidor autoritativo del Modo Juggernaut (protocolo VOID-NET)",
+  "name": "captura-bandera-red",
+  "version": "1.0.0",
+  "description": "Servidor TCP + bridge WebSocket para Captura la Bandera (protocolo oficial v1.0)",
   "type": "module",
   "main": "servidor.js",
   "scripts": {
-    "start": "node servidor.js"
+    "servidor": "node servidor.js --auto",
+    "bridge": "node bridge.js",
+    "test": "node ../test/cliente-cli.js --auto-play"
   },
   "dependencies": {
     "ws": "^8.18.0"

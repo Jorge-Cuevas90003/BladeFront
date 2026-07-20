@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Captura la Bandera — Visor 2D de prueba</title>
+  <style>
+    :root {
+      --bg: #0b0e12; --panel: #131922; --line: #263042; --dim: #63728a;
+      --steel: #cfd8e6; --oro: #ffb638; --rojo: #ff4a3d; --verde: #46d38a; --azul: #4aa8ff;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--bg); color: var(--steel); min-height: 100vh;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 20px;
+    }
+    h1 { font-size: 18px; font-weight: 700; letter-spacing: 0.04em; }
+    h1 small { color: var(--dim); font-weight: 400; font-size: 12px; }
+    .barra {
+      display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px;
+    }
+    .barra label { font-size: 12px; color: var(--dim); display: flex; gap: 6px; align-items: center; }
+    input, select, button {
+      background: #0e131a; color: var(--steel); border: 1px solid var(--line);
+      border-radius: 6px; padding: 6px 10px; font-size: 13px; font-family: inherit;
+    }
+    input { width: 70px; }
+    input.nombre { width: 110px; }
+    button { cursor: pointer; font-weight: 600; }
+    button.primario { background: var(--oro); color: #1a1206; border-color: var(--oro); }
+    button:hover { border-color: var(--oro); }
+    .wrap { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
+    canvas { background: #070a0e; border: 1px solid var(--line); border-radius: 8px; }
+    .info { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; width: 240px; }
+    .info h2 { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--oro); margin-bottom: 10px; }
+    .info dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; font-size: 13px; }
+    .info dt { color: var(--dim); }
+    .info dd { text-align: right; font-weight: 600; }
+    #feed { list-style: none; margin-top: 12px; border-top: 1px solid var(--line); padding-top: 8px; font-size: 12px; color: var(--dim); max-height: 160px; overflow-y: auto; }
+    #feed li { padding: 2px 0; }
+    .hint { font-size: 12px; color: var(--dim); text-align: center; max-width: 640px; }
+    kbd { background: #0e131a; border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; font-size: 11px; }
+  </style>
+</head>
+<body>
+  <h1>Captura la Bandera <small>· visor 2D de prueba (protocolo oficial v1.0)</small></h1>
+
+  <div class="barra">
+    <label>Nombre <input class="nombre" id="nombre" value="Tú" /></label>
+    <label>Modo
+      <select id="modo">
+        <option value="local">Local (motor + bots)</option>
+        <option value="red">Red (bridge WebSocket)</option>
+      </select>
+    </label>
+    <label id="wrapBots">Bots <input id="bots" type="number" value="6" min="0" max="20" /></label>
+    <label id="wrapUrl" style="display:none">Bridge <input id="url" style="width:180px" value="ws://localhost:8140" /></label>
+    <button class="primario" id="jugar">Jugar</button>
+    <button id="reset">Reiniciar</button>
+  </div>
+
+  <div class="wrap">
+    <canvas id="lienzo" width="520" height="520"></canvas>
+    <div class="info">
+      <h2>Estado</h2>
+      <dl>
+        <dt>Modo</dt><dd id="iModo">—</dd>
+        <dt>Tú</dt><dd id="iYo">—</dd>
+        <dt>Tick</dt><dd id="iTick">—</dd>
+        <dt>Bandera</dt><dd id="iBandera">—</dd>
+        <dt>Jugadores</dt><dd id="iJug">—</dd>
+      </dl>
+      <ul id="feed"></ul>
+    </div>
+  </div>
+
+  <p class="hint">
+    Mueve con <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> o las <kbd>flechas</kbd>.
+    Eres el punto <b style="color:var(--azul)">azul</b>. Agarra la <b style="color:var(--oro)">bandera</b> del centro y sal por cualquier borde para ganar.
+    En modo <b>Red</b>, primero levanta el servidor y el bridge (ver <code>red/COMO-CORRER.md</code>).
+  </p>
+
+  <script type="importmap">
+    { "imports": { "captura/": "./js/", "red/": "../../red/" } }
+  </script>
+  <script type="module" src="./js/visor-2d.js"></script>
+</body>
+</html>
