@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Captura la Bandera — Arena 3D (protocolo oficial)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Rajdhani:wght@500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root { --oro:#ffb638; --rojo:#ff4a3d; --steel:#cfd8e6; --dim:#63728a; --line:#2a3446; --bg:#030405; }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html, body { height:100%; overflow:hidden; background:var(--bg); font-family:'Rajdhani',sans-serif; color:var(--steel); }
+    #app canvas { display:block; }
+
+    /* barra de arranque (arriba centrada) */
+    .barra {
+      position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:6;
+      display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:center;
+      background:rgba(12,14,20,.72); border:1px solid var(--line); border-radius:10px;
+      padding:9px 12px; backdrop-filter:blur(6px);
+    }
+    .barra label { font-size:12px; color:var(--dim); display:flex; gap:6px; align-items:center; }
+    input, select, button {
+      background:#0e131a; color:var(--steel); border:1px solid var(--line);
+      border-radius:6px; padding:6px 9px; font-size:13px; font-family:inherit;
+    }
+    input { width:64px; } input.nombre { width:100px; }
+    button { cursor:pointer; font-weight:600; }
+    button.primario { background:var(--oro); color:#1a1206; border-color:var(--oro); }
+    button:hover { border-color:var(--oro); }
+
+    /* HUD estado (arriba derecha) */
+    .hud {
+      position:fixed; top:64px; right:18px; z-index:5; width:230px;
+      background:rgba(12,10,7,.5); border:1px solid var(--line); backdrop-filter:blur(6px);
+      padding:12px 14px; clip-path:polygon(12px 0,100% 0,100% 100%,0 100%,0 12px);
+    }
+    .hud h2 { font-size:10px; letter-spacing:.28em; color:var(--oro); text-transform:uppercase; margin-bottom:9px; }
+    .hud dl { display:grid; grid-template-columns:auto 1fr; gap:5px 12px; }
+    .hud dt { font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--dim); padding-top:1px; }
+    .hud dd { font-size:13px; font-weight:600; text-align:right; }
+    #feed { list-style:none; margin-top:10px; border-top:1px solid var(--line); padding-top:8px; font-size:11px; color:var(--dim); max-height:150px; overflow:hidden; }
+    #feed li { padding:1.5px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+    .hint {
+      position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:5;
+      font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--dim);
+      background:rgba(12,14,20,.6); padding:7px 14px; border-radius:8px; border:1px solid var(--line);
+    }
+    kbd { background:#0e131a; border:1px solid var(--line); border-radius:4px; padding:1px 5px; font-size:10px; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div class="barra">
+    <label>Nombre <input class="nombre" id="nombre" value="Templario" /></label>
+    <label>Modo
+      <select id="modo">
+        <option value="local">Local (motor + bots)</option>
+        <option value="red">Red (bridge)</option>
+      </select>
+    </label>
+    <label id="wrapBots">Bots <input id="bots" type="number" value="7" min="0" max="20" /></label>
+    <label id="wrapUrl" style="display:none">Bridge <input id="url" style="width:170px" value="ws://localhost:8140" /></label>
+    <button class="primario" id="jugar">Entrar a la arena</button>
+    <button id="reset">Reiniciar</button>
+  </div>
+
+  <div class="hud">
+    <h2>Estado de partida</h2>
+    <dl>
+      <dt>Tú</dt><dd id="iYo">—</dd>
+      <dt>Bandera</dt><dd id="iBandera">—</dd>
+      <dt>Portador</dt><dd id="iPortador">LIBRE</dd>
+      <dt>Tick</dt><dd id="iTick">—</dd>
+      <dt>FPS</dt><dd id="iFps">—</dd>
+    </dl>
+    <ul id="feed"></ul>
+  </div>
+
+  <div class="hint">
+    <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / flechas mover &middot; agarra la bandera y sal por un borde &middot; ratón orbita
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+        "red/": "../../red/"
+      }
+    }
+  </script>
+  <script type="module" src="./js/visor-3d.js"></script>
+</body>
+</html>

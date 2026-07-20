@@ -22,11 +22,17 @@ No necesita servidor ni bridge: el motor corre dentro del navegador con bots.
 # desde la raíz del repo, sirve TODO el repo (el visor usa archivos de red/,
 # que está fuera de assets/, por eso se sirve la raíz y no solo assets/)
 npx http-server . -p 8139 -c-1
-# abrir:  http://localhost:8139/assets/captura-bandera/
 ```
 
-En la página: modo **Local**, elige cuántos bots, y pulsa **Jugar**.
-Muévete con WASD/flechas. Ideal para probar cambios del motor sin montar red.
+Hay **dos vistas** del mismo juego (misma lógica y protocolo, distinto render):
+
+- **Arena 3D** (la nuestra, con los assets de BladeFront):
+  `http://localhost:8139/assets/captura-bandera/index-3d.html`
+- **Visor 2D** (depuración rápida, tablero plano):
+  `http://localhost:8139/assets/captura-bandera/`
+
+En la página: modo **Local**, elige cuántos bots, y pulsa **Entrar/Jugar**.
+Muévete con WASD/flechas. Ideal para probar el motor sin montar red.
 
 ---
 
@@ -77,7 +83,8 @@ flujo de GAME_STATE con su posición cambiando cada ciclo.
 |---|---|
 | `assets/captura-bandera/js/juego-captura.js` | Motor autoritativo (rejilla, §30). Corre en navegador y Node |
 | `assets/captura-bandera/js/bots.js` | IA simple para el modo local |
-| `assets/captura-bandera/index.html` + `js/visor-2d.js` | Visor 2D jugable de prueba |
+| `assets/captura-bandera/index-3d.html` + `js/visor-3d.js` | **Arena 3D** — reutiliza los assets de BladeFront (arena, cosmos, caballeros, estandarte) |
+| `assets/captura-bandera/index.html` + `js/visor-2d.js` | Visor 2D jugable de depuración |
 | `red/protocolo.js` | Tipos de mensaje, versión y framing por `\n` (compartido) |
 | `red/servidor.js` | Servidor TCP oficial |
 | `red/bridge.js` | Traductor WebSocket↔TCP para el navegador |
