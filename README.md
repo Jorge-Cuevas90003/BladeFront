@@ -1,20 +1,27 @@
-# ⚔️ Modo Juggernaut — Arena del Vacío
+# ⚔️ BladeFront — Arena del Vacío
 
-Juego de arena 3D **100 % web y 100 % procedural**: cero modelos, cero texturas,
-cero archivos de audio — todo (personajes, escenario, cosmos, animaciones y
-banda sonora) se genera con código sobre **three.js** y **Web Audio API**.
+Un CTF de 12 jugadores construido enteramente sobre **three.js**: sin modelos
+importados, sin texturas, sin pistas de audio. La armadura de cada caballero,
+la isla flotante, las animaciones y hasta la banda sonora salen de código —
+geometría generada en tiempo de ejecución y **Web Audio API** para el sonido.
 
-> **CTF corrupto**: 12 templarios estelares compiten por el Ciber-Estandarte.
-> Quien lo toca se corrompe en el **Ejecutor del Vacío** — un jefe monstruoso —
-> y los otros 11 lo cazan a placajes. El primero en acumular **45 s de Dominio**
-> como Juggernaut gana, sobre una arena flotante rodeada de un abismo del que
-> es muy fácil salir despedido.
+> Alguien agarra el Ciber-Estandarte del centro y se corrompe al instante en
+> el **Ejecutor del Vacío**, un jefe monstruoso. Los otros once tienen que
+> derribarlo a placajes antes de que acumule **45 s de Dominio** — si lo
+> logra, gana la ronda. Todo pasa sobre una isla flotando en un abismo, así
+> que perder el equilibrio también cuenta como perder.
 
-Proyecto para **Computer Science 8 — Proyecto 1 (Juego)**, desarrollado en pair
-programming con IA (Claude Code); todo el proceso está documentado prompt a
-prompt en [`PROMPTS.md`](PROMPTS.md).
+Proyecto para **Computer Science 8 — Proyecto 1 (Juego)**.
 
-## 🎮 Jugar (local)
+<p align="center">
+  <img src="docs/screenshots/executor-frente.jpg" width="90%" alt="El Ejecutor del Vacío de frente, retroiluminado por el Eclipse" />
+</p>
+<p align="center">
+  <img src="docs/screenshots/arena-overview.jpg" width="44%" alt="Vista general de la Arena del Vacío flotando bajo el Eclipse" />
+  <img src="docs/screenshots/caballero-retrato.jpg" width="44%" alt="Retrato del Caballero Templario Estelar" />
+</p>
+
+## Jugarlo
 
 ```bash
 npx http-server "assets" -p 8139 -c-1
@@ -30,59 +37,58 @@ npx http-server "assets" -p 8139 -c-1
 | `M` | Silenciar la música |
 | `P` | Pausa · `R` reinicia tras la victoria |
 
-## 📁 Estructura
+## Cómo está armado
 
 ```
 assets/
-  caballero-templario/   Caballero (personaje) + rig + animador procedural
-    js/knight.js           createKnight() — malla procedural con pivotes
-    js/knight-anim.js      KnightAnimator — marcha, 5 idles, 3 placajes, esquivas…
-  arena-vacio/           Escenario
-    js/arena.js            createArena() — arena flotante con runas
-    js/cosmos.js           createCosmos() — monolitos, Eclipse, ceniza, niebla GPU
-  ejecutor-del-vacio/    Enemigo / jefe
-    js/executor.js         createExecutor() — verdugo corrupto (vértices a mano)
-    js/enemy-system.js     EnemySystem — steering, colisión, knockback
-  modo-juggernaut/       EL JUEGO (integra todo lo anterior)
-    js/juggernaut-mode.js  Reglas, estados, física, bus de eventos
-    js/flag.js             Ciber-Estandarte (onda de vértices)
-    js/audio.js            VoidScore — música y SFX procedurales (Web Audio)
-    js/main.js             Escena, input, cámara, HUD, efectos
-red/                     Multijugador (en desarrollo con el equipo)
-    PROTOCOLO.md           VOID-NET v0.1 — especificación del protocolo propio
-    servidor.js            Esqueleto de servidor autoritativo (Node + ws)
-    cliente-red.js         Adaptador navegador ↔ socket
+  caballero-templario/   El personaje: malla + rig + animador
+    js/knight.js            createKnight() — geometría procedural con pivotes
+    js/knight-anim.js       KnightAnimator — marcha, 5 idles, 3 placajes, esquivas…
+  arena-vacio/            El escenario
+    js/arena.js              createArena() — isla flotante con runas
+    js/cosmos.js             createCosmos() — monolitos, Eclipse, niebla en GPU
+    js/titans.js             Guerra de titanes de fondo (Arconte vs. Behemoth)
+  ejecutor-del-vacio/     El jefe
+    js/executor.js           createExecutor() — verdugo corrupto (vértices a mano)
+    js/enemy-system.js       EnemySystem — steering, colisión, knockback
+  modo-juggernaut/        Donde todo se junta
+    js/juggernaut-mode.js    Reglas, estados, física, bus de eventos
+    js/flag.js               Ciber-Estandarte (onda de vértices)
+    js/audio.js              VoidScore — música y SFX procedurales
+    js/main.js               Escena, input, cámara, HUD, efectos
+red/                      Multijugador (en construcción)
+    PROTOCOLO.md             VOID-NET v0.1 — protocolo propio
+    servidor.js              Esqueleto de servidor autoritativo (Node + ws)
+    cliente-red.js           Adaptador navegador ↔ socket
 ```
 
-Cada asset es también un **visor de concept art** navegable con botón de
+Cada carpeta de `assets/` funciona también sola, como visor con botón de
 captura PNG (`/caballero-templario/`, `/arena-vacio/`, `/ejecutor-del-vacio/`).
 
-## 🏗️ Decisiones de arquitectura
+## Por qué está organizado así
 
-- **Factories reutilizables**: cada pieza exporta `createX()` que devuelve un
-  `THREE.Group` — el concept art *es* el asset del juego.
-- **Núcleo motor-agnóstico**: reglas y física no tocan DOM ni React; hay
-  wrappers R3F (`VoidExecutor.jsx`, `JuggernautMode.jsx`) listos por si el
-  shell final se hace con React Three Fiber, y el servidor podrá correr la
-  misma simulación headless en Node.
-- **`NetworkBus`** (EventTarget): todos los momentos de juego viajan como
-  eventos — la costura exacta donde se enchufa el WebSocket (ver `red/`).
-- Sin build step: importmap + CDN (`three@0.180.0`). Abrir y jugar.
+Cada pieza exporta un `createX()` que devuelve un `THREE.Group` — nada vive
+atado a una escena en particular, así que se pueden mezclar libremente (el
+Ejecutor camina sobre la Arena, el Caballero se reutiliza como los 11
+cazadores, etc). Las reglas del juego tampoco tocan el DOM ni dependen de
+three.js directamente: viven en clases planas que reciben posiciones y
+devuelven física, lo que deja la puerta abierta a correr la misma simulación
+en un servidor Node sin reescribir nada. Los eventos importantes de una
+partida (captura, derribo, slam, caída) pasan por un `EventTarget` compartido
+— ahí es donde se engancha el HUD, el audio, y donde se enganchará la red.
 
-## 🌐 Multijugador (roadmap)
+Sin paso de build: todo carga por `<script type="module">` + importmap
+apuntando a un CDN. Se abre el HTML y ya está corriendo.
 
-Un jugador por computadora vía WebSockets con protocolo propio (**VOID-NET**),
-servidor autoritativo con la misma simulación del cliente. Especificación y
-esqueletos en [`red/`](red/PROTOCOLO.md) — las decisiones abiertas están
-marcadas para resolverse en equipo.
+## Multijugador (en construcción)
 
-## 🤖 Desarrollo asistido por IA
+La idea es un jugador por computadora, comunicados por WebSockets con un
+protocolo propio que estamos definiendo en equipo (**VOID-NET**). El
+servidor sería autoritativo y correría la misma simulación que ya existe en
+el cliente. El borrador del protocolo y los esqueletos de servidor/cliente
+están en [`red/`](red/PROTOCOLO.md), con las decisiones que todavía faltan
+resolver marcadas ahí mismo.
 
-Construido en sesiones con Claude Code (modelos Claude Fable 5 / Sonnet 5).
-Todos los prompts usados están transcritos íntegros y en orden en
-[`PROMPTS.md`](PROMPTS.md) como documentación del proceso, junto con lo que
-produjo cada uno.
-
-## 📄 Licencia
+## Licencia
 
 MIT — ver [`LICENSE`](LICENSE).
