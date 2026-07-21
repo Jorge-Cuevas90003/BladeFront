@@ -29,6 +29,7 @@ const MIN_JUGADORES = Number(val('min', 1));
 
 const juego = new JuegoCaptura();
 const conexiones = new Map(); // socket -> { playerId, lector }
+const desconexionesPendientes = []; // §30 paso 12: se procesan dentro del ciclo
 let anfitrionListo = false;
 
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
@@ -59,11 +60,8 @@ const servidor = net.createServer((socket) => {
   socket.on('close', () => {
     const info = conexiones.get(socket);
     conexiones.delete(socket);
-    if (info?.playerId) {
-      const { eventos } = juego.quitarJugador(info.playerId);
-      for (const ev of eventos) difundir(ev.type, ev);
-      log('- desconectado', info.playerId);
-    }
+    // §30 paso 12: encolar para procesar dentro del ciclo, no de inmediato.
+    if (info?.playerId) desconexionesPendientes.push(info.playerId);
   });
 });
 
@@ -137,6 +135,13 @@ function arrancarPartida() {
   log('== partida iniciada ==', inicio.players.length, 'jugadores');
 
   bucle = setInterval(() => {
+    // §30 paso 12: procesar desconexiones encoladas dentro del ciclo.
+    while (desconexionesPendientes.length) {
+      const pid = desconexionesPendientes.shift();
+      const { eventos: evDisc } = juego.quitarJugador(pid);
+      for (const ev of evDisc) difundir(ev.type, ev);
+      log('- desconectado', pid);
+    }
     const { eventos, estado } = juego.ciclo();
     for (const ev of eventos) difundir(ev.type, ev);
     difundir(TIPOS.GAME_STATE, juego.serializarEstado());

@@ -70,7 +70,9 @@ export class JuegoCaptura {
     if (activos >= this.cfg.maximumPlayers) return { error: 'GAME_FULL' };
     if (!name || !String(name).trim()) return { error: 'INVALID_NAME' };
 
-    const playerId = 'P' + String(this._seq++).padStart(2, '0');
+    // Padding dinámico: que el sort lexicográfico = numérico para tie-break §16.
+    const ancho = Math.max(3, String(this.cfg.maximumPlayers).length);
+    const playerId = 'P' + String(this._seq++).padStart(ancho, '0');
     const jugador = {
       playerId,
       name: String(name).slice(0, 24),
@@ -108,6 +110,10 @@ export class JuegoCaptura {
   }
 
   // Desconexión (§19): si llevaba la bandera, cae en su última posición.
+  // Es SÍNCRONA e inmediata a propósito: el alineamiento con el paso 12 del
+  // ciclo ("verificar desconexiones", §30) es responsabilidad de quien la
+  // llama (servidor.js encola los cierres de socket y solo invoca este método
+  // dentro de su loop, justo antes de `ciclo()`), no de este motor agnóstico.
   quitarJugador(playerId) {
     const j = this.jugadores.get(playerId);
     // Puede llegar LEAVE y después el cierre del socket. La desconexión debe
@@ -128,10 +134,8 @@ export class JuegoCaptura {
   // (captura, robo, victoria) se difunden aparte del GAME_STATE.
   ciclo() {
     if (this.estado !== ESTADOS.RUNNING) return { eventos: [], estado: this.estado };
-    // El tick se incrementa al INICIO del ciclo para que los eventos discretos
-    // (robo, captura, victoria) y el GAME_STATE resultante compartan el mismo
-    // número de tick — así el cliente puede correlacionarlos (§27, §31).
-    this.tick++;
+    // §30: tick++ va al FINAL del ciclo (paso 14). Los eventos discretos
+    // (robo, captura) usan el tick actual; el GAME_STATE sale con tick+1.
     const eventos = [];
     const ahora = Date.now();
 
@@ -204,7 +208,7 @@ export class JuegoCaptura {
 
     // Resolver robos: por cada víctima, gana el atacante de menor playerId (§16).
     for (const [victimId, atacantes] of robosPorVictima) {
-      atacantes.sort();
+      atacantes.sort((a, b) => this._compararId(a, b));
       const attackerId = atacantes[0];
       const victima = this.jugadores.get(victimId);
       const atacante = this.jugadores.get(attackerId);
@@ -213,6 +217,8 @@ export class JuegoCaptura {
       atacante.hasFlag = true;
       atacante.protectedUntil = ahora + this.cfg.protectionTimeMs; // protección al nuevo portador (§15)
       this.bandera.carrierId = attackerId;
+      // §14: "ninguno de los jugadores cambiará de posición" — la víctima tampoco.
+      movimientos.delete(victimId);
       eventos.push({
         type: 'FLAG_STOLEN',
         gameId: this.gameId,
@@ -262,6 +268,9 @@ export class JuegoCaptura {
       break;
     }
 
+    // §30 paso 14: incrementar el tick al final del ciclo.
+    this.tick++;
+
     return { eventos, estado: this.estado };
   }
 
@@ -307,6 +316,16 @@ export class JuegoCaptura {
 
   _protegido(j, ahora = Date.now()) {
     return j.protectedUntil > ahora;
+  }
+
+  // Orden estable de playerId para desempates (§16). Compara la parte numérica
+  // ("P07" -> 7) para que P8 < P10 aunque el padding se quede corto con muchos
+  // jugadores; si el formato no es numérico, cae a comparación lexicográfica.
+  _compararId(a, b) {
+    const na = parseInt(String(a).replace(/\D/g, ''), 10);
+    const nb = parseInt(String(b).replace(/\D/g, ''), 10);
+    if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb;
+    return a < b ? -1 : a > b ? 1 : 0;
   }
 
   _fuera(r, c) {
