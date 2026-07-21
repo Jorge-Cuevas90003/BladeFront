@@ -110,7 +110,9 @@ export class JuegoCaptura {
   // Desconexión (§19): si llevaba la bandera, cae en su última posición.
   quitarJugador(playerId) {
     const j = this.jugadores.get(playerId);
-    if (!j) return { eventos: [] };
+    // Puede llegar LEAVE y después el cierre del socket. La desconexión debe
+    // ser idempotente para no publicar PLAYER_DISCONNECTED dos veces.
+    if (!j || !j.connected) return { eventos: [] };
     j.connected = false;
     const eventos = [{ type: 'PLAYER_DISCONNECTED', playerId }];
     if (j.hasFlag) {
@@ -352,6 +354,9 @@ export class JuegoCaptura {
       const r = this._rnd(rows), c = this._rnd(columns);
       const k = clave(r, c);
       if (this._obstSet.has(k)) continue;
+      // Las casillas del borde son entradas posibles (§7). Si se bloquean,
+      // un jugador que aparezca frente a una de ellas no puede entrar nunca.
+      if (r === 0 || c === 0 || r === rows - 1 || c === columns - 1) continue;
       // No en el centro (donde va la bandera).
       const cr = Math.floor(rows / 2), cc = Math.floor(columns / 2);
       if (Math.abs(r - cr) <= 1 && Math.abs(c - cc) <= 1) continue;

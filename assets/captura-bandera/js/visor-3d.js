@@ -158,7 +158,7 @@ function asegurarKnight(id) {
     const group = createKnight();
     group.traverse((o) => { if (o.isMesh) { o.castShadow = true; } });
     scene.add(group);
-    k = { group, anim: new KnightAnimator(group), target: new THREE.Vector3(), yaw: 0, esYo: id === cliente?.playerId };
+    k = { group, anim: new KnightAnimator(group), target: new THREE.Vector3(), yaw: 0, esYo: id === cliente?.playerId, initialized: false };
     knights.set(id, k);
   }
   return k;
@@ -218,10 +218,20 @@ async function jugar() {
 function sincronizar(estado) {
   const vistos = new Set();
   for (const p of estado.players) {
+    // El protocolo mantiene a los jugadores fuera de la rejilla hasta que
+    // ingresan. Igual que el visor 2D, no deben existir visualmente aún:
+    // de otro modo nacen en (0,0,0) y parecen cruzar la arena desde el centro.
+    if (!p.insideBoard) continue;
     vistos.add(p.playerId);
     const k = asegurarKnight(p.playerId);
     k.esYo = p.playerId === cliente?.playerId;
     celdaAMundo(p.row, p.column, k.target);
+    // La primera instantánea solo establece el punto de partida. A partir de
+    // ella, los GAME_STATE posteriores sí se interpolan para mostrar movimiento.
+    if (!k.initialized) {
+      k.group.position.copy(k.target);
+      k.initialized = true;
+    }
     k.hasFlag = p.hasFlag;
   }
   // quitar caballeros de jugadores que ya no están

@@ -71,7 +71,9 @@ function manejarMensaje(socket, msg) {
   if (!msg || typeof msg.type !== 'string') {
     return enviar(socket, TIPOS.ERROR, { code: ERRORES.INVALID_MESSAGE, description: 'Falta type' });
   }
-  if (msg.protocolVersion && msg.protocolVersion !== PROTOCOL_VERSION) {
+  // protocolVersion es parte obligatoria del sobre oficial (§26). No aceptar
+  // mensajes sin versión evita mezclar accidentalmente clientes incompatibles.
+  if (msg.protocolVersion !== PROTOCOL_VERSION) {
     return enviar(socket, TIPOS.ERROR, { code: ERRORES.UNSUPPORTED_PROTOCOL_VERSION, description: 'Versión no soportada' });
   }
   const info = conexiones.get(socket);
