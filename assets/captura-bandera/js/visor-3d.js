@@ -85,6 +85,8 @@ scene.add(new THREE.HemisphereLight(0x22303c, 0x04050a, 0.26));
 // ---------- Estado del tablero (se llena en GAME_STARTED) ----------
 let cfg = { rows: 20, columns: 20 };
 let CELL = 1.8;                 // tamaño de celda en unidades de mundo (fijo → sync)
+let INTERVALO_S = 0.2;          // seg por ciclo del servidor (movementIntervalMs/1000)
+let ESCALA_KNIGHT = 0.7;        // escala de cada caballero, derivada de CELL
 const boardGroup = new THREE.Group();
 scene.add(boardGroup);
 
@@ -110,8 +112,20 @@ scene.add(beacon);
 
 function construirTablero(inicio) {
   cfg = { rows: inicio.rows, columns: inicio.columns };
-  // Escala para que el tablero llene ~el 92% del diámetro jugable de la arena.
-  CELL = (2 * R * 0.92) / Math.max(cfg.rows, cfg.columns);
+  // El intervalo del ciclo lo dicta el servidor (§9) — NO asumir 200 ms. Con
+  // esto la animación tarda exactamente un ciclo por celda, sea cual sea el
+  // valor configurado (requisito: cambiar la arena no debe alterar el ritmo).
+  INTERVALO_S = Math.max(0.05, (inicio.movementIntervalMs || 200) / 1000);
+
+  // La rejilla es CUADRADA (max×max) pero la arena es CIRCULAR: para que NINGUNA
+  // celda (ni sus esquinas) caiga fuera del disco jugable, la DIAGONAL del
+  // cuadrado debe caber en el diámetro → se divide entre √2. Así el tablero
+  // encaja completo dentro del anillo de runas a cualquier radio de arena.
+  const lado = Math.max(cfg.rows, cfg.columns);
+  CELL = (2 * R * 0.98) / (lado * Math.SQRT2);
+  // Cada caballero se escala a la celda (≈65% de su ancho) para que quepa sin
+  // solaparse con los vecinos, y también acompaña un cambio de tamaño de arena.
+  ESCALA_KNIGHT = Math.min(1, CELL * 0.42);
 
   // limpiar tablero anterior
   boardGroup.clear();
@@ -134,8 +148,10 @@ function construirTablero(inicio) {
     boardGroup.add(b);
   }
 
-  // bandera (estandarte real del juego)
+  // bandera (estandarte real del juego) — un poco más grande que un caballero
+  // para que resalte como objetivo, pero también proporcional al tablero.
   if (!banner) { banner = createCyberBanner(); scene.add(banner); }
+  banner.scale.setScalar(Math.min(1.3, ESCALA_KNIGHT * 1.4));
   colocarBandera(inicio.flag);
 }
 
@@ -156,6 +172,7 @@ function asegurarKnight(id) {
   let k = knights.get(id);
   if (!k) {
     const group = createKnight();
+    group.scale.setScalar(ESCALA_KNIGHT); // encaja en la celda a cualquier tamaño de arena
     group.traverse((o) => { if (o.isMesh) { o.castShadow = true; } });
     scene.add(group);
     k = { group, anim: new KnightAnimator(group), target: new THREE.Vector3(), yaw: 0, esYo: id === cliente?.playerId, initialized: false };
@@ -231,6 +248,11 @@ function sincronizar(estado) {
     if (!k.initialized) {
       k.group.position.copy(k.target);
       k.initialized = true;
+    } else if (k.group.position.distanceTo(k.target) > CELL * 2.5) {
+      // Salto grande (reingreso/reubicación del servidor): teletransporte
+      // instantáneo en vez de "caminar" media arena. Un paso normal es 1 celda,
+      // así que 2.5 celdas no puede confundirse con un movimiento legítimo.
+      k.group.position.copy(k.target);
     }
     k.hasFlag = p.hasFlag;
   }
@@ -286,7 +308,7 @@ function frame(dtOverride) {
     const p = k.group.position;
     _v.subVectors(k.target, p); _v.y = 0;
     const dist = _v.length();
-    const speed = Math.min(dist / Math.max(dt, 0.001), CELL / 0.2); // limitar a 1 celda/ciclo
+    const speed = Math.min(dist / Math.max(dt, 0.001), CELL / INTERVALO_S); // limitar a 1 celda/ciclo real
     if (dist > 0.001) {
       const step = Math.min(dist, speed * dt);
       p.addScaledVector(_v.normalize(), step);

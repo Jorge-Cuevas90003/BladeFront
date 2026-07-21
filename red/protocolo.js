@@ -39,9 +39,15 @@ export const ERRORES = {
 };
 
 // Serializa un mensaje a "JSON + \n" listo para escribir en el socket (§24).
+// El spread va PRIMERO para que type/protocolVersion siempre sean los correctos
+// y ningún campo del evento pueda pisarlos por accidente.
 export function enmarcar(type, campos = {}) {
-  return JSON.stringify({ type, protocolVersion: PROTOCOL_VERSION, ...campos }) + '\n';
+  return JSON.stringify({ ...campos, type, protocolVersion: PROTOCOL_VERSION }) + '\n';
 }
+
+// Tamaño máximo de una línea sin terminar. Un cliente que mande bytes sin \n
+// no debe poder crecer el buffer del servidor sin límite (protección básica).
+const MAX_LINEA = 64 * 1024;
 
 // ---------------------------------------------------------------------------
 //  Lector de líneas para TCP. Un socket NO respeta límites de mensaje: un
@@ -59,6 +65,12 @@ export class LectorLineas {
 
   alimentar(chunk) {
     this._buf += chunk.toString('utf8');
+    // Línea gigante sin \n → cliente roto o malicioso: descartar y avisar.
+    if (this._buf.length > MAX_LINEA && this._buf.indexOf('\n') < 0) {
+      this._buf = '';
+      this._onError(ERRORES.INVALID_MESSAGE, '(línea excede el máximo)');
+      return;
+    }
     let i;
     while ((i = this._buf.indexOf('\n')) >= 0) {
       const linea = this._buf.slice(0, i);

@@ -1,5 +1,15 @@
 # VOID-NET v0.1 — Protocolo de red del Modo Juggernaut
 
+> ⚠️ **OBSOLETO — no describe el sistema actual.** Este era el borrador interno
+> del modo Juggernaut (WebSocket, envelope `{v,t,seq,ts,data}`, 60 Hz). El
+> proyecto migró al **protocolo oficial "Captura la Bandera" v1.0** (TCP + JSON
+> por línea, envelope `{type, protocolVersion}`) para interoperar con otros
+> grupos. La implementación real está en `servidor.js`, `bridge.js`,
+> `cliente-red.js` y `protocolo.js`; el plan y las reglas, en
+> [`MIGRACION-PROTOCOLO-OFICIAL.md`](MIGRACION-PROTOCOLO-OFICIAL.md) y
+> `docs/spec/CapturaLaBandera.docx`. Se conserva este archivo solo como
+> referencia histórica del diseño anterior.
+
 > Borrador de trabajo. Las **decisiones abiertas** del final las define el equipo.
 
 ## Modelo general

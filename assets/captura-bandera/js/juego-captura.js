@@ -114,7 +114,7 @@ export class JuegoCaptura {
     // ser idempotente para no publicar PLAYER_DISCONNECTED dos veces.
     if (!j || !j.connected) return { eventos: [] };
     j.connected = false;
-    const eventos = [{ type: 'PLAYER_DISCONNECTED', playerId }];
+    const eventos = [{ type: 'PLAYER_DISCONNECTED', gameId: this.gameId, playerId }];
     if (j.hasFlag) {
       j.hasFlag = false;
       this.bandera = { row: j.row, column: j.column, status: 'DROPPED', carrierId: null };
@@ -128,6 +128,10 @@ export class JuegoCaptura {
   // (captura, robo, victoria) se difunden aparte del GAME_STATE.
   ciclo() {
     if (this.estado !== ESTADOS.RUNNING) return { eventos: [], estado: this.estado };
+    // El tick se incrementa al INICIO del ciclo para que los eventos discretos
+    // (robo, captura, victoria) y el GAME_STATE resultante compartan el mismo
+    // número de tick — así el cliente puede correlacionarlos (§27, §31).
+    this.tick++;
     const eventos = [];
     const ahora = Date.now();
 
@@ -211,6 +215,8 @@ export class JuegoCaptura {
       this.bandera.carrierId = attackerId;
       eventos.push({
         type: 'FLAG_STOLEN',
+        gameId: this.gameId,
+        tick: this.tick,
         previousCarrierId: victimId,
         newCarrierId: attackerId,
         protectionTimeMs: this.cfg.protectionTimeMs,
@@ -233,7 +239,7 @@ export class JuegoCaptura {
         j.hasFlag = true;
         this.bandera.status = 'CARRIED';
         this.bandera.carrierId = id;
-        eventos.push({ type: 'FLAG_PICKED_UP', playerId: id });
+        eventos.push({ type: 'FLAG_PICKED_UP', gameId: this.gameId, tick: this.tick, playerId: id });
       }
     }
 
@@ -252,12 +258,10 @@ export class JuegoCaptura {
       this.estado = ESTADOS.FINISHED;
       this.ganadorId = id;
       this.bandera.status = 'OUTSIDE';
-      eventos.push({ type: 'GAME_OVER', winnerId: id, winnerName: j.name, reason: 'EXITED_WITH_FLAG' });
+      eventos.push({ type: 'GAME_OVER', gameId: this.gameId, winnerId: id, winnerName: j.name, reason: 'EXITED_WITH_FLAG' });
       break;
     }
 
-    // 12: incrementar el tick.
-    this.tick++;
     return { eventos, estado: this.estado };
   }
 

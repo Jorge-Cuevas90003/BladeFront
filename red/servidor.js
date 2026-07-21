@@ -74,12 +74,18 @@ function manejarMensaje(socket, msg) {
   // protocolVersion es parte obligatoria del sobre oficial (§26). No aceptar
   // mensajes sin versión evita mezclar accidentalmente clientes incompatibles.
   if (msg.protocolVersion !== PROTOCOL_VERSION) {
+    // En un JOIN, la spec espera JOIN_REJECTED con este motivo (§29.2); en
+    // cualquier otro mensaje, un ERROR con el mismo código (§29.9).
+    if (msg.type === TIPOS.JOIN) return enviar(socket, TIPOS.JOIN_REJECTED, { reason: ERRORES.UNSUPPORTED_PROTOCOL_VERSION });
     return enviar(socket, TIPOS.ERROR, { code: ERRORES.UNSUPPORTED_PROTOCOL_VERSION, description: 'Versión no soportada' });
   }
   const info = conexiones.get(socket);
 
   switch (msg.type) {
     case TIPOS.JOIN: {
+      // Un segundo JOIN en la misma conexión crearía un jugador "fantasma"
+      // (el primero quedaría sin dueño y nunca se limpiaría). Se rechaza.
+      if (info.playerId) return enviar(socket, TIPOS.ERROR, { code: ERRORES.INVALID_MESSAGE, description: 'Ya hiciste JOIN en esta conexión' });
       const { jugador, error } = juego.agregarJugador(msg.name);
       if (error) return enviar(socket, TIPOS.JOIN_REJECTED, { reason: error });
       info.playerId = jugador.playerId;
@@ -99,9 +105,13 @@ function manejarMensaje(socket, msg) {
       if (msg.playerId && msg.playerId !== info.playerId) {
         return enviar(socket, TIPOS.ERROR, { code: ERRORES.UNKNOWN_PLAYER, description: 'playerId no coincide con la conexión' });
       }
+      if (juego.estado === ESTADOS.FINISHED) return enviar(socket, TIPOS.ERROR, { code: ERRORES.GAME_FINISHED, description: 'La partida ya terminó' });
       if (juego.estado !== ESTADOS.RUNNING) return enviar(socket, TIPOS.ERROR, { code: ERRORES.GAME_NOT_STARTED, description: 'La partida no está corriendo' });
       const r = juego.cambiarDireccion(info.playerId, msg.direction);
-      if (r.error) enviar(socket, TIPOS.ERROR, { code: r.error, description: 'Dirección inválida' });
+      if (r.error) {
+        const desc = r.error === ERRORES.INVALID_DIRECTION ? 'Dirección inválida' : 'Jugador desconocido';
+        enviar(socket, TIPOS.ERROR, { code: r.error, description: desc });
+      }
       break;
     }
     case TIPOS.LEAVE: {

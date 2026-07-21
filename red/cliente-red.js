@@ -14,7 +14,7 @@
 // ============================================================================
 
 import { JuegoCaptura } from '../assets/captura-bandera/js/juego-captura.js';
-import { decidirDireccion } from '../assets/captura-bandera/js/bots.js';
+import { decidirDireccion, reiniciarBots } from '../assets/captura-bandera/js/bots.js';
 import { TIPOS, PROTOCOL_VERSION } from './protocolo.js';
 
 export class ClienteCaptura extends EventTarget {
@@ -24,6 +24,7 @@ export class ClienteCaptura extends EventTarget {
     this.playerId = null;
     this.config = null;
     this.ultimoEstado = null; // último GAME_STATE recibido (para render)
+    this._ultimoTick = -1;    // §31: ignorar estados con tick menor al último
     // internos de modo local
     this._juego = null;
     this._bots = [];
@@ -33,7 +34,14 @@ export class ClienteCaptura extends EventTarget {
   }
 
   _emitir(type, detail) {
-    this.ultimoEstado = type === TIPOS.GAME_STATE ? detail : this.ultimoEstado;
+    // §31: un estado con tick menor al último recibido es obsoleto → descartar.
+    if (type === TIPOS.GAME_STATE && typeof detail?.tick === 'number') {
+      if (detail.tick < this._ultimoTick) return;
+      this._ultimoTick = detail.tick;
+      this.ultimoEstado = detail;
+    } else if (type === TIPOS.GAME_STARTED) {
+      this._ultimoTick = -1; // nueva partida: reiniciar el contador de tick
+    }
     this.dispatchEvent(new CustomEvent(type, { detail }));
   }
 
@@ -42,6 +50,8 @@ export class ClienteCaptura extends EventTarget {
   // -------------------------------------------------------------------------
   iniciarLocal({ nombre = 'Tú', bots = 5, config = {} } = {}) {
     this.modo = 'local';
+    this._ultimoTick = -1;
+    reiniciarBots();
     this._juego = new JuegoCaptura(config);
 
     // El jugador humano + los bots.
@@ -62,7 +72,7 @@ export class ClienteCaptura extends EventTarget {
       const estado = this._juego.serializarEstado();
       for (const id of this._bots) {
         const jp = estado.players.find((p) => p.playerId === id);
-        if (jp) this._juego.cambiarDireccion(id, decidirDireccion(jp, estado, this._juego.cfg));
+        if (jp) this._juego.cambiarDireccion(id, decidirDireccion(jp, estado, this._juego.cfg, this._juego.obstaculos));
       }
       const { eventos, estado: st } = this._juego.ciclo();
       for (const ev of eventos) this._emitir(ev.type, ev);
@@ -80,6 +90,11 @@ export class ClienteCaptura extends EventTarget {
       this._ws = new WebSocket(urlBridge);
       this._ws.onopen = () => this._enviar(TIPOS.JOIN, { name: nombre });
       this._ws.onerror = (e) => rechazar(e);
+      // Si el bridge/servidor cae DESPUÉS de conectar, avisar al render (si no,
+      // el juego "se congela" sin explicación al dejar de llegar GAME_STATE).
+      this._ws.onclose = () => {
+        if (this.modo === 'red') this._emitir(TIPOS.ERROR, { code: 'CONNECTION_LOST', description: 'Conexión con el servidor perdida' });
+      };
       this._ws.onmessage = (ev) => {
         let msg;
         try { msg = JSON.parse(ev.data); } catch { return; }
@@ -121,6 +136,10 @@ export class ClienteCaptura extends EventTarget {
 
   detener() {
     if (this._bucle) { clearInterval(this._bucle); this._bucle = null; }
-    if (this._ws) { try { this._enviar(TIPOS.LEAVE, { playerId: this.playerId }); this._ws.close(); } catch {} this._ws = null; }
+    if (this._ws) {
+      this._ws.onclose = null; // cierre intencional: no disparar "conexión perdida"
+      try { this._enviar(TIPOS.LEAVE, { playerId: this.playerId }); this._ws.close(); } catch {}
+      this._ws = null;
+    }
   }
 }
