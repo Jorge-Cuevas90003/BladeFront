@@ -194,6 +194,15 @@ function feed(txt) {
 }
 
 const $ = (id) => document.getElementById(id);
+
+// Indicador de conexión: LOCAL / CONECTANDO / CONECTADO / DESCONECTADO / ERROR.
+function estadoConexion(txt, color) {
+  const el = $('iConn');
+  if (!el) return;
+  el.textContent = txt;
+  el.style.color = color;
+}
+
 $('modo').addEventListener('change', () => {
   const red = $('modo').value === 'red';
   $('wrapUrl').style.display = red ? '' : 'none';
@@ -216,17 +225,25 @@ async function jugar() {
   cliente.addEventListener(TIPOS.FLAG_STOLEN, (e) => feed(`🔁 ${e.detail.newCarrierId} robó a ${e.detail.previousCarrierId}`));
   cliente.addEventListener(TIPOS.PLAYER_DISCONNECTED, (e) => feed(`✂ ${e.detail.playerId} salió`));
   cliente.addEventListener(TIPOS.GAME_OVER, (e) => feed(`🏆 ganó ${e.detail.winnerName}`));
-  cliente.addEventListener(TIPOS.ERROR, (e) => feed(`✗ ${e.detail.code}`));
+  cliente.addEventListener(TIPOS.ERROR, (e) => {
+    feed(`✗ ${e.detail.code}`);
+    // Si el servidor/bridge cae en modo red, dejarlo claro en pantalla.
+    if (e.detail.code === 'CONNECTION_LOST') estadoConexion('DESCONECTADO', '#ff4a3d');
+  });
 
   try {
     if ($('modo').value === 'local') {
+      estadoConexion('LOCAL (motor + bots)', '#46d38a');
       cliente.iniciarLocal({ nombre, bots: Number($('bots').value) || 0 });
     } else {
+      estadoConexion('CONECTANDO…', '#ffb638');
       feed('⏳ conectando…');
       await cliente.conectar($('url').value, nombre);
+      estadoConexion('CONECTADO · ' + cliente.playerId, '#46d38a');
       feed('▶ conectado como ' + cliente.playerId);
     }
   } catch (err) {
+    estadoConexion('ERROR de conexión', '#ff4a3d');
     feed('✗ ' + (err.message || err));
   }
 }

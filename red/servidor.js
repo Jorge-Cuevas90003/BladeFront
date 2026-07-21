@@ -24,8 +24,10 @@ const val = (n, def) => {
 };
 
 const PUERTO = Number(val('port', CONFIG_DEFECTO.serverPort));
+const HOST = val('host', '0.0.0.0'); // 0.0.0.0 = todas las interfaces (Radmin/LAN)
 const AUTO = flag('auto');
 const MIN_JUGADORES = Number(val('min', 1));
+const WAIT = flag('wait'); // el anfitrión inicia a mano (Enter en la consola)
 
 const juego = new JuegoCaptura();
 const conexiones = new Map(); // socket -> { playerId, lector }
@@ -89,9 +91,12 @@ function manejarMensaje(socket, msg) {
       info.playerId = jugador.playerId;
       enviar(socket, TIPOS.JOIN_ACCEPTED, { playerId: jugador.playerId, gameId: juego.gameId });
       log('  JOIN', jugador.playerId, jugador.name);
-      // Arranque de la partida.
+      // Arranque de la partida. En modo --wait el anfitrión decide (Enter en la
+      // consola); si no, arranca solo con --auto o al llegar a --min jugadores.
       const activos = [...juego.jugadores.values()].filter((j) => j.connected).length;
-      if (juego.estado === ESTADOS.WAITING && (AUTO || activos >= MIN_JUGADORES) && !anfitrionListo) {
+      if (WAIT) {
+        log(`  (esperando Enter del anfitrión para iniciar — ${activos} jugador[es] en sala)`);
+      } else if (juego.estado === ESTADOS.WAITING && (AUTO || activos >= MIN_JUGADORES) && !anfitrionListo) {
         anfitrionListo = true;
         setTimeout(arrancarPartida, AUTO ? 300 : 0);
       }
@@ -152,7 +157,22 @@ function arrancarPartida() {
   }, juego.cfg.movementIntervalMs);
 }
 
-servidor.listen(PUERTO, () => {
-  log(`Servidor "Captura la Bandera" TCP escuchando en el puerto ${PUERTO}`);
-  log(AUTO ? '(modo --auto: arranca al primer JOIN)' : `(arranca con ${MIN_JUGADORES} jugador[es])`);
+servidor.listen(PUERTO, HOST, () => {
+  log(`Servidor "Captura la Bandera" TCP escuchando en ${HOST}:${PUERTO}`);
+  if (WAIT) log('(modo --wait: pulsa ENTER en esta consola para iniciar la partida)');
+  else log(AUTO ? '(modo --auto: arranca al primer JOIN)' : `(arranca con ${MIN_JUGADORES} jugador[es])`);
+  if (HOST === '0.0.0.0') log('(accesible por LAN/Radmin: usa la IP de esta máquina desde otros equipos)');
 });
+
+// Modo anfitrión: iniciar la partida al pulsar ENTER en la consola del servidor.
+// No es un mensaje del protocolo (el docx no define START) — es control LOCAL
+// del operador, así que no afecta la interoperabilidad con otros grupos.
+if (WAIT) {
+  process.stdin.resume();
+  process.stdin.on('data', () => {
+    if (juego.estado === ESTADOS.WAITING && !anfitrionListo) {
+      anfitrionListo = true;
+      arrancarPartida();
+    }
+  });
+}
