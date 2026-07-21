@@ -3,69 +3,260 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Captura la Bandera — Arena 3D (protocolo oficial)</title>
+  <title>Captura la Bandera — Arena del Vacío</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Rajdhani:wght@500;600&display=swap" rel="stylesheet" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-    :root { --oro:#ffb638; --rojo:#ff4a3d; --steel:#cfd8e6; --dim:#63728a; --line:#2a3446; --bg:#030405; }
+    :root {
+      --oro:#ffb638; --oro-hi:#ffd27a; --rojo:#ff4a3d; --cyan:#49e6ff;
+      --steel:#cfd8e6; --dim:#63728a; --line:#2a3446; --bg:#030405;
+      --panel:rgba(9,11,16,.72);
+    }
     * { margin:0; padding:0; box-sizing:border-box; }
     html, body { height:100%; overflow:hidden; background:var(--bg); font-family:'Rajdhani',sans-serif; color:var(--steel); }
     #app canvas { display:block; }
+    ::selection { background:rgba(255,182,56,.28); }
 
-    /* barra de arranque (arriba centrada) */
-    .barra {
-      position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:6;
-      display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:center;
-      background:rgba(12,14,20,.72); border:1px solid var(--line); border-radius:10px;
-      padding:9px 12px; backdrop-filter:blur(6px);
+    /* ═══════════════ MENÚ DE ENTRADA (overlay sobre la arena viva) ═══════════════ */
+    #menu {
+      position:fixed; inset:0; z-index:20; display:flex; align-items:center; justify-content:center;
+      padding:24px;
+      /* la arena 3D late detrás: viñeta + desenfoque suave para que brille por los bordes */
+      background:radial-gradient(ellipse 120% 90% at 50% 42%, rgba(3,4,5,.30), rgba(3,4,5,.86) 78%);
+      backdrop-filter:blur(3px) saturate(1.05);
+      transition:opacity .7s ease, visibility .7s;
     }
-    .barra label { font-size:12px; color:var(--dim); display:flex; gap:6px; align-items:center; }
-    input, select, button {
-      background:#0e131a; color:var(--steel); border:1px solid var(--line);
-      border-radius:6px; padding:6px 9px; font-size:13px; font-family:inherit;
-    }
-    input { width:64px; } input.nombre { width:100px; }
-    button { cursor:pointer; font-weight:600; }
-    button.primario { background:var(--oro); color:#1a1206; border-color:var(--oro); }
-    button:hover { border-color:var(--oro); }
+    #menu.oculto { opacity:0; visibility:hidden; pointer-events:none; }
 
-    /* HUD estado (arriba derecha) */
+    /* scanlines + grano cinematográfico */
+    #menu::before {
+      content:""; position:absolute; inset:0; pointer-events:none; opacity:.45; z-index:1;
+      background:repeating-linear-gradient(0deg, rgba(255,255,255,.014) 0 1px, transparent 1px 3px);
+    }
+
+    /* corchetes en las esquinas del viewport */
+    .bracket { position:fixed; width:34px; height:34px; border:0 solid var(--oro); z-index:22; opacity:.55;
+      filter:drop-shadow(0 0 6px rgba(255,182,56,.4)); animation:bracketIn 1s ease .2s both; }
+    .bracket.tl { top:22px; left:22px; border-top-width:2px; border-left-width:2px; }
+    .bracket.tr { top:22px; right:22px; border-top-width:2px; border-right-width:2px; }
+    .bracket.bl { bottom:22px; left:22px; border-bottom-width:2px; border-left-width:2px; }
+    .bracket.br { bottom:22px; right:22px; border-bottom-width:2px; border-right-width:2px; }
+    @keyframes bracketIn { from { opacity:0; transform:scale(.6); } to { opacity:.55; transform:none; } }
+
+    .panel {
+      position:relative; z-index:2; width:min(560px, 100%);
+      background:var(--panel); border:1px solid rgba(255,182,56,.16);
+      box-shadow:0 40px 120px rgba(0,0,0,.7), 0 0 60px rgba(255,182,56,.06), inset 0 1px 0 rgba(255,255,255,.04);
+      clip-path:polygon(26px 0, 100% 0, 100% calc(100% - 26px), calc(100% - 26px) 100%, 0 100%, 0 26px);
+      padding:46px 46px 34px;
+      backdrop-filter:blur(10px);
+      animation:panelIn 1s cubic-bezier(.16,.84,.36,1) both;
+    }
+    @keyframes panelIn { from { opacity:0; transform:translateY(26px) scale(.985); } to { opacity:1; transform:none; } }
+    /* filo dorado superior del panel */
+    .panel::before { content:""; position:absolute; top:0; left:26px; right:0; height:2px;
+      background:linear-gradient(90deg, var(--oro), transparent 70%); opacity:.7; }
+
+    .stagger { opacity:0; animation:rise .8s ease forwards; }
+    @keyframes rise { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
+
+    /* ── encabezado ── */
+    .crest { display:flex; align-items:center; gap:16px; margin-bottom:6px; }
+    .sigil { width:46px; height:46px; flex:none; filter:drop-shadow(0 0 10px rgba(255,182,56,.5)); animation:spin 26s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .titleblock h1 {
+      font-family:'Cinzel',serif; font-weight:800; font-size:33px; line-height:1;
+      letter-spacing:.10em; color:#f4efe4;
+      text-shadow:0 2px 30px rgba(0,0,0,.8), 0 0 24px rgba(255,182,56,.22);
+    }
+    .titleblock .sub {
+      margin-top:8px; font-size:11px; font-weight:600; letter-spacing:.34em; text-transform:uppercase; color:var(--dim);
+    }
+    .laser { height:2px; margin:22px 0 24px; border:0;
+      background:linear-gradient(90deg, transparent, var(--oro) 12%, var(--oro-hi) 50%, var(--oro) 88%, transparent);
+      box-shadow:0 0 12px rgba(255,182,56,.4); animation:pulse 3.4s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { opacity:.75; } 50% { opacity:1; } }
+
+    /* ── campos ── */
+    .field { margin-bottom:20px; }
+    .lbl { display:block; font-size:10px; font-weight:600; letter-spacing:.26em; text-transform:uppercase; color:var(--oro); margin-bottom:9px; }
+    .txt {
+      width:100%; background:rgba(6,9,13,.85); color:#eef3fb; border:1px solid var(--line);
+      padding:12px 14px; font-family:'Rajdhani',sans-serif; font-size:16px; font-weight:600; letter-spacing:.02em;
+      clip-path:polygon(8px 0,100% 0,100% 100%,0 100%,0 8px); transition:border-color .2s, box-shadow .2s;
+    }
+    .txt:focus { outline:none; border-color:var(--oro); box-shadow:0 0 0 1px var(--oro), 0 0 18px rgba(255,182,56,.18); }
+    .txt::placeholder { color:#3d4859; }
+
+    /* ── cartas de modo ── */
+    .modos { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .modo-card {
+      position:relative; text-align:left; cursor:pointer;
+      background:rgba(6,9,13,.7); border:1px solid var(--line); color:var(--steel);
+      padding:16px 16px 15px; font-family:inherit;
+      clip-path:polygon(11px 0,100% 0,100% calc(100% - 11px),calc(100% - 11px) 100%,0 100%,0 11px);
+      transition:border-color .22s, background .22s, transform .12s, box-shadow .22s;
+    }
+    .modo-card:hover { border-color:rgba(255,182,56,.5); transform:translateY(-2px); }
+    .modo-card .ic { font-size:22px; line-height:1; margin-bottom:9px; display:block; filter:grayscale(.2); }
+    .modo-card .t { font-family:'Cinzel',serif; font-weight:700; font-size:14px; letter-spacing:.05em; color:#f1ede4; }
+    .modo-card .d { font-size:11px; font-weight:500; letter-spacing:.04em; color:var(--dim); margin-top:4px; line-height:1.35; }
+    .modo-card.on {
+      border-color:var(--oro); background:linear-gradient(160deg, rgba(255,182,56,.12), rgba(6,9,13,.7) 60%);
+      box-shadow:0 0 0 1px var(--oro), 0 10px 30px rgba(255,182,56,.10), inset 0 0 24px rgba(255,182,56,.06);
+    }
+    .modo-card.on .ic { filter:none; }
+    /* punto de selección */
+    .modo-card .dot { position:absolute; top:14px; right:14px; width:8px; height:8px; border-radius:50%;
+      border:1px solid var(--dim); transition:.2s; }
+    .modo-card.on .dot { background:var(--oro); border-color:var(--oro); box-shadow:0 0 10px var(--oro); }
+
+    /* ── grupo condicional (bots / radmin) ── */
+    .cond { margin-top:20px; }
+    .stepper { display:flex; align-items:stretch; gap:0; width:170px; }
+    .stepper button {
+      width:42px; background:rgba(6,9,13,.85); color:var(--oro); border:1px solid var(--line); cursor:pointer;
+      font-size:20px; font-weight:700; font-family:inherit; transition:.15s;
+    }
+    .stepper button:hover { background:rgba(255,182,56,.14); border-color:var(--oro); }
+    .stepper input { width:86px; text-align:center; border-left:0; border-right:0; border-radius:0; clip-path:none;
+      background:rgba(6,9,13,.85); color:#eef3fb; border:1px solid var(--line); font-family:inherit; font-size:17px; font-weight:700; }
+    .stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+    .radmin-hint { margin-top:9px; font-size:11px; letter-spacing:.03em; color:var(--dim); }
+    .radmin-hint b { color:var(--cyan); font-weight:600; }
+
+    /* ── botón entrar ── */
+    .entrar {
+      position:relative; overflow:hidden; width:100%; margin-top:28px; cursor:pointer;
+      background:linear-gradient(150deg, var(--oro-hi), var(--oro) 55%, #e89a1f); color:#1a1206;
+      border:0; padding:16px; font-family:'Cinzel',serif; font-weight:700; font-size:15px;
+      letter-spacing:.22em; text-transform:uppercase;
+      clip-path:polygon(13px 0,100% 0,100% calc(100% - 13px),calc(100% - 13px) 100%,0 100%,0 13px);
+      box-shadow:0 12px 34px rgba(255,182,56,.24); transition:transform .12s, box-shadow .2s, filter .2s;
+    }
+    .entrar:hover { transform:translateY(-2px); box-shadow:0 18px 44px rgba(255,182,56,.36); filter:brightness(1.05); }
+    .entrar:active { transform:translateY(0); }
+    .entrar::after { content:""; position:absolute; top:0; left:-120%; width:60%; height:100%;
+      background:linear-gradient(100deg, transparent, rgba(255,255,255,.55), transparent); transform:skewX(-18deg);
+      animation:sheen 4.5s ease-in-out infinite; }
+    @keyframes sheen { 0%,55% { left:-120%; } 78%,100% { left:130%; } }
+
+    .footline { margin-top:20px; display:flex; align-items:center; justify-content:space-between;
+      font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:#48545e; }
+    .footline .keys kbd { background:rgba(6,9,13,.9); border:1px solid var(--line); border-radius:3px; padding:1px 6px; margin-right:2px; color:var(--dim); font-family:'Rajdhani'; font-size:10px; }
+
+    /* ═══════════════ HUD en juego ═══════════════ */
     .hud {
-      position:fixed; top:64px; right:18px; z-index:5; width:230px;
+      position:fixed; top:22px; right:22px; z-index:5; width:236px;
       background:rgba(12,10,7,.5); border:1px solid var(--line); backdrop-filter:blur(6px);
-      padding:12px 14px; clip-path:polygon(12px 0,100% 0,100% 100%,0 100%,0 12px);
+      padding:14px 16px; clip-path:polygon(12px 0,100% 0,100% 100%,0 100%,0 12px);
     }
-    .hud h2 { font-size:10px; letter-spacing:.28em; color:var(--oro); text-transform:uppercase; margin-bottom:9px; }
-    .hud dl { display:grid; grid-template-columns:auto 1fr; gap:5px 12px; }
-    .hud dt { font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--dim); padding-top:1px; }
+    .hud h2 { font-family:'Cinzel',serif; font-size:11px; letter-spacing:.24em; color:var(--oro); text-transform:uppercase; margin-bottom:11px; }
+    .hud dl { display:grid; grid-template-columns:auto 1fr; gap:6px 12px; }
+    .hud dt { font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--dim); padding-top:2px; }
     .hud dd { font-size:13px; font-weight:600; text-align:right; }
-    #feed { list-style:none; margin-top:10px; border-top:1px solid var(--line); padding-top:8px; font-size:11px; color:var(--dim); max-height:150px; overflow:hidden; }
+    #feed { list-style:none; margin-top:11px; border-top:1px solid var(--line); padding-top:9px; font-size:11px; color:var(--dim); max-height:150px; overflow:hidden; }
     #feed li { padding:1.5px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
-    .hint {
-      position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:5;
-      font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--dim);
-      background:rgba(12,14,20,.6); padding:7px 14px; border-radius:8px; border:1px solid var(--line);
+    /* botón volver al menú (en juego) */
+    #reset {
+      position:fixed; top:22px; left:22px; z-index:5; cursor:pointer;
+      background:rgba(12,14,20,.62); color:var(--dim); border:1px solid var(--line);
+      padding:8px 14px; font-family:'Rajdhani'; font-weight:600; font-size:12px; letter-spacing:.14em; text-transform:uppercase;
+      clip-path:polygon(9px 0,100% 0,100% 100%,0 100%,0 9px); transition:.2s;
     }
-    kbd { background:#0e131a; border:1px solid var(--line); border-radius:4px; padding:1px 5px; font-size:10px; }
+    #reset:hover { border-color:var(--oro); color:var(--oro); }
+
+    .hint {
+      position:fixed; bottom:18px; left:50%; transform:translateX(-50%); z-index:5;
+      font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--dim);
+      background:rgba(12,14,20,.6); padding:7px 16px; border:1px solid var(--line);
+      clip-path:polygon(9px 0,100% 0,100% 100%,0 100%,0 9px);
+    }
+    .hint kbd { background:#0e131a; border:1px solid var(--line); border-radius:3px; padding:1px 5px; font-size:10px; }
+
+    @media (max-width:560px) { .panel { padding:34px 26px 26px; } .titleblock h1 { font-size:26px; } .modos { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
   <div id="app"></div>
 
-  <div class="barra">
-    <label>Nombre <input class="nombre" id="nombre" value="Templario" /></label>
-    <label>Modo
-      <select id="modo">
-        <option value="local">Local (motor + bots)</option>
-        <option value="red">Red (bridge)</option>
+  <i class="bracket tl"></i><i class="bracket tr"></i><i class="bracket bl"></i><i class="bracket br"></i>
+
+  <!-- ════════ MENÚ DE ENTRADA ════════ -->
+  <div id="menu">
+    <div class="panel">
+      <div class="crest stagger" style="animation-delay:.15s">
+        <svg class="sigil" viewBox="0 0 48 48" fill="none">
+          <path d="M24 2 L46 24 L24 46 L2 24 Z" stroke="#ffb638" stroke-width="1.4" opacity=".9"/>
+          <path d="M24 9 L39 24 L24 39 L9 24 Z" stroke="#ffb638" stroke-width="1" opacity=".5"/>
+          <path d="M17 30 L17 17 L31 21 L20 24 L28 26" stroke="#ffd27a" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+          <circle cx="24" cy="24" r="1.6" fill="#ff4a3d"/>
+        </svg>
+        <div class="titleblock">
+          <h1>Captura la Bandera</h1>
+          <div class="sub">Arena del Vacío · Protocolo v1.0</div>
+        </div>
+      </div>
+
+      <hr class="laser stagger" style="animation-delay:.28s" />
+
+      <div class="field stagger" style="animation-delay:.36s">
+        <label class="lbl" for="nombre">Nombre de guerra</label>
+        <input class="txt" id="nombre" value="Templario" maxlength="24" autocomplete="off" />
+      </div>
+
+      <div class="field stagger" style="animation-delay:.44s">
+        <span class="lbl">Modo de batalla</span>
+        <div class="modos">
+          <button type="button" class="modo-card on" data-modo="local">
+            <span class="dot"></span>
+            <span class="ic">⚔️</span>
+            <span class="t">Práctica</span>
+            <span class="d">Motor local + cazadores IA. Sin red.</span>
+          </button>
+          <button type="button" class="modo-card" data-modo="red">
+            <span class="dot"></span>
+            <span class="ic">🛰️</span>
+            <span class="t">Radmin VPN</span>
+            <span class="d">Multijugador real contra otros equipos.</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- select real oculto: fuente de verdad para la lógica -->
+      <select id="modo" style="display:none">
+        <option value="local" selected>local</option>
+        <option value="red">red</option>
       </select>
-    </label>
-    <label id="wrapBots">Bots <input id="bots" type="number" value="7" min="0" max="20" /></label>
-    <label id="wrapUrl" style="display:none">Bridge <input id="url" style="width:170px" value="ws://localhost:8140" /></label>
-    <button class="primario" id="jugar">Entrar a la arena</button>
-    <button id="reset">Reiniciar</button>
+
+      <div class="cond stagger" id="wrapBots" style="animation-delay:.52s">
+        <span class="lbl">Cazadores IA</span>
+        <div class="stepper">
+          <button type="button" id="botsMenos">−</button>
+          <input id="bots" type="number" value="7" min="0" max="20" />
+          <button type="button" id="botsMas">+</button>
+        </div>
+      </div>
+
+      <div class="cond stagger" id="wrapUrl" style="display:none; animation-delay:.52s">
+        <label class="lbl" for="url">IP del anfitrión (Radmin)</label>
+        <input class="txt" id="url" value="ws://localhost:8140" spellcheck="false" autocomplete="off" />
+        <div class="radmin-hint">Escribe la <b>IP de Radmin</b> del anfitrión (ej. <b>25.60.1.4</b>) y se completa sola.</div>
+      </div>
+
+      <button class="entrar stagger" id="jugar" style="animation-delay:.62s">Entrar a la Arena</button>
+
+      <div class="footline stagger" style="animation-delay:.72s">
+        <span>12 caballeros · una bandera</span>
+        <span class="keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> mover</span>
+      </div>
+    </div>
   </div>
+
+  <!-- ════════ HUD en juego ════════ -->
+  <button id="reset">☰ Menú</button>
 
   <div class="hud">
     <h2>Estado de partida</h2>
@@ -83,6 +274,38 @@
   <div class="hint">
     <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / flechas mover &middot; agarra la bandera y sal por un borde &middot; ratón orbita
   </div>
+
+  <!-- ════════ interacciones del menú (no tocan la lógica del juego) ════════ -->
+  <script>
+    (function () {
+      const $ = (id) => document.getElementById(id);
+      const select = $('modo');
+
+      // cartas de modo → sincronizan el <select> oculto (fuente de verdad)
+      const cards = document.querySelectorAll('.modo-card');
+      cards.forEach((card) => card.addEventListener('click', () => {
+        cards.forEach((c) => c.classList.toggle('on', c === card));
+        select.value = card.dataset.modo;
+        select.dispatchEvent(new Event('change')); // dispara el toggle de wrapBots/wrapUrl de visor-3d.js
+      }));
+
+      // stepper de bots
+      const bots = $('bots');
+      const clamp = (v) => Math.max(0, Math.min(20, v));
+      $('botsMenos').addEventListener('click', () => bots.value = clamp((+bots.value || 0) - 1));
+      $('botsMas').addEventListener('click', () => bots.value = clamp((+bots.value || 0) + 1));
+
+      // comodidad Radmin: si escriben solo la IP, la envolvemos en ws://IP:8140
+      const url = $('url');
+      url.addEventListener('blur', () => {
+        let v = url.value.trim();
+        if (!v) return;
+        if (!/^wss?:\/\//i.test(v)) v = 'ws://' + v;
+        if (!/:\d+$/.test(v.replace(/^wss?:\/\//i, ''))) v = v + ':8140';
+        url.value = v;
+      });
+    })();
+  </script>
 
   <script type="importmap">
     {

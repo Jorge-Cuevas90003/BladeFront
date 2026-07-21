@@ -211,6 +211,9 @@ $('modo').addEventListener('change', () => {
 $('reset').addEventListener('click', () => location.reload());
 $('jugar').addEventListener('click', jugar);
 
+// Menú de entrada: se oculta al entrar a la arena, reaparece si algo falla.
+const mostrarMenu = (v) => $('menu')?.classList.toggle('oculto', !v);
+
 async function jugar() {
   if (cliente) cliente.detener();
   for (const k of knights.values()) scene.remove(k.group);
@@ -235,14 +238,17 @@ async function jugar() {
     if ($('modo').value === 'local') {
       estadoConexion('LOCAL (motor + bots)', '#46d38a');
       cliente.iniciarLocal({ nombre, bots: Number($('bots').value) || 0 });
+      mostrarMenu(false); // a la arena
     } else {
       estadoConexion('CONECTANDO…', '#ffb638');
       feed('⏳ conectando…');
       await cliente.conectar($('url').value, nombre);
       estadoConexion('CONECTADO · ' + cliente.playerId, '#46d38a');
       feed('▶ conectado como ' + cliente.playerId);
+      mostrarMenu(false); // conexión OK → entrar
     }
   } catch (err) {
+    // Falló la conexión: se mantiene el menú visible para reintentar.
     estadoConexion('ERROR de conexión', '#ff4a3d');
     feed('✗ ' + (err.message || err));
   }
