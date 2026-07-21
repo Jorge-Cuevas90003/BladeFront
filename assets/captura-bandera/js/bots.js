@@ -92,6 +92,11 @@ export function decidirDireccion(jugador, estado, cfg, obstaculos = []) {
 
   opciones.sort((a, b) => a.score - b.score); // menor distancia = mejor progreso
 
+  // Una salida ganadora (score < 0) SIEMPRE se toma, aunque el bot esté
+  // "explorando": es la condición de victoria del docx (§17-18), nunca conviene
+  // vagar en vez de salir con la bandera por el borde correcto.
+  if (opciones[0].score < 0) return opciones[0].dir;
+
   // Atascado o en ping-pong sin progreso: elegir una LIBRE distinta para salir
   // del mínimo local (evita la dirección actual si hay alternativa).
   if (explorando && opciones.length > 1) {
