@@ -1,5 +1,8 @@
 {
   "name": "bladefront-captura-bandera",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "three": "^0.170.0"
+  }
 }

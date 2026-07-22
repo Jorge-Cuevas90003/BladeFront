@@ -87,6 +87,7 @@ let cfg = { rows: 20, columns: 20 };
 let CELL = 1.8;                 // tamaño de celda en unidades de mundo (fijo → sync)
 let INTERVALO_S = 0.2;          // seg por ciclo del servidor (movementIntervalMs/1000)
 let ESCALA_KNIGHT = 0.7;        // escala de cada caballero, derivada de CELL
+const ARENA_FLOOR_Y = 0.42; // Altura del suelo de la arena para que las botas y piernas reposen sobre las losas
 const boardGroup = new THREE.Group();
 scene.add(boardGroup);
 
@@ -98,7 +99,7 @@ const _v = new THREE.Vector3();
 function celdaAMundo(row, column, out = new THREE.Vector3()) {
   const x = (column - (cfg.columns - 1) / 2) * CELL;
   const z = (row - (cfg.rows - 1) / 2) * CELL;
-  return out.set(x, 0, z);
+  return out.set(x, ARENA_FLOOR_Y, z);
 }
 
 // Construye la rejilla visual, la bandera y los obstáculos sobre la arena.
@@ -107,7 +108,7 @@ const beacon = new THREE.Mesh(
   new THREE.CylinderGeometry(0.4, 0.7, 12, 24, 1, true),
   new THREE.MeshBasicMaterial({ color: 0xffb638, transparent: true, opacity: 0.06, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false })
 );
-beacon.position.y = 6;
+beacon.position.y = ARENA_FLOOR_Y + 6;
 scene.add(beacon);
 
 function construirTablero(inicio) {
@@ -133,7 +134,7 @@ function construirTablero(inicio) {
   // rejilla en el suelo
   const w = CELL * cfg.columns, h = CELL * cfg.rows;
   const grid = new THREE.GridHelper(Math.max(w, h), Math.max(cfg.rows, cfg.columns), 0x2a3446, 0x1a2130);
-  grid.position.y = 0.03;
+  grid.position.y = ARENA_FLOOR_Y + 0.03;
   grid.material.transparent = true; grid.material.opacity = 0.5;
   boardGroup.add(grid);
 
@@ -143,7 +144,7 @@ function construirTablero(inicio) {
   for (const o of inicio.obstacles) {
     const b = new THREE.Mesh(obstGeo, obstMat);
     celdaAMundo(o.row, o.column, _v);
-    b.position.set(_v.x, 0.7, _v.z);
+    b.position.set(_v.x, ARENA_FLOOR_Y + 0.7, _v.z);
     b.castShadow = true; b.receiveShadow = true;
     boardGroup.add(b);
   }
@@ -162,8 +163,8 @@ function colocarBandera(flag) {
   beacon.visible = visible;
   if (flag.row >= 0) {
     celdaAMundo(flag.row, flag.column, _v);
-    banner.position.set(_v.x, 0, _v.z);
-    beacon.position.set(_v.x, 6, _v.z);
+    banner.position.set(_v.x, ARENA_FLOOR_Y, _v.z);
+    beacon.position.set(_v.x, ARENA_FLOOR_Y + 6, _v.z);
   }
 }
 
@@ -344,7 +345,7 @@ function frame(dtOverride) {
   // cámara sigue a mi caballero
   const yo = cliente ? knights.get(cliente.playerId) : null;
   if (yo) {
-    _follow.lerp(_camT.set(yo.group.position.x, 1.2, yo.group.position.z), Math.min(1, dt * 5));
+    _follow.lerp(_camT.set(yo.group.position.x, yo.group.position.y + 1.2, yo.group.position.z), Math.min(1, dt * 5));
     _tmp.subVectors(_follow, controls.target);
     controls.target.add(_tmp);
     camera.position.add(_tmp);
@@ -368,6 +369,24 @@ function frame(dtOverride) {
 }
 
 renderer.setAnimationLoop(() => frame());
+
+// ---------- Precarga de Shaders & Materiales (Optimizador) ----------
+function precargarShaders() {
+  const dummyKnight = createKnight();
+  dummyKnight.position.set(0, ARENA_FLOOR_Y, 0);
+  scene.add(dummyKnight);
+
+  const dummyBanner = createCyberBanner();
+  dummyBanner.position.set(0, ARENA_FLOOR_Y, 0);
+  scene.add(dummyBanner);
+
+  // Compilar la escena y programas de shaders en WebGL de antemano
+  renderer.compile(scene, camera);
+
+  scene.remove(dummyKnight);
+  scene.remove(dummyBanner);
+}
+precargarShaders();
 
 // exponer para depurar / verificación sin rAF
 window.__captura = {

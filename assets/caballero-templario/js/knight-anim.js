@@ -11,7 +11,7 @@
 
 import * as THREE from 'three';
 
-const IDLE_VARIANTS = ['respirar', 'mirar', 'peso', 'pomo', 'guardia'];
+const IDLE_VARIANTS = ['respirar', 'mirar', 'peso', 'pomo', 'guardia', 'floritura', 'revisar_filo', 'desafio', 'alerta'];
 const TACKLE_VARIANTS = ['hombro', 'estocada', 'plancha'];
 const DODGE_STYLES = ['giro', 'deslizamiento'];
 
@@ -45,7 +45,7 @@ export class KnightAnimator {
     this._idle = {
       current: IDLE_VARIANTS[Math.floor(Math.random() * IDLE_VARIANTS.length)],
       t: 0,
-      next: 3 + Math.random() * 5,
+      next: 2.2 + Math.random() * 3.8,
     };
   }
 
@@ -128,7 +128,7 @@ export class KnightAnimator {
     I.t += dt;
     if (I.t > I.next) {
       I.t = 0;
-      I.next = 3.5 + Math.random() * 5;
+      I.next = 2.4 + Math.random() * 3.8;
       const others = IDLE_VARIANTS.filter((v) => v !== I.current);
       I.current = others[Math.floor(Math.random() * others.length)];
     }
@@ -139,6 +139,7 @@ export class KnightAnimator {
     T.torsoX = 0.024 * br;
     T.torsoY = 0.008 * br;
     T.torsoZ = 0.012 * Math.sin(t * 0.4 + this.phase); // micro-vaivén de peso
+    T.swordX = Math.sin(t * 1.8 + this.phase) * 0.04;  // micro-respiración de la espada
     this._prevSpeed = 0; this._accelSm *= 0.9;
 
     switch (I.current) {
@@ -153,12 +154,37 @@ export class KnightAnimator {
       case 'pomo':
         T.torsoX += 0.1;
         T.headX = 0.22;
-        T.swordX = 0.1;
+        T.swordX = 0.1 + Math.sin(t * 2.0) * 0.05;
         break;
       case 'guardia': // alerta: espada un punto alzada, barre con la mirada
-        T.swordX = -0.18;
+        T.swordX = -0.22 + Math.sin(t * 1.4 + this.phase) * 0.06;
         T.torsoX += 0.04;
-        T.headYaw = Math.sign(Math.sin(t * 0.8 + this.phase)) * 0.3;
+        T.headYaw = Math.sign(Math.sin(t * 0.8 + this.phase)) * 0.35;
+        break;
+      case 'floritura': // blandir/rotar espada sutilmente en arco
+        T.swordX = -0.38 + Math.sin(t * 2.2 + this.phase) * 0.25;
+        T.torsoYaw = Math.sin(t * 1.4 + this.phase) * 0.18;
+        T.torsoX += 0.06;
+        T.headYaw = Math.sin(t * 1.4 + this.phase) * 0.22;
+        break;
+      case 'revisar_filo': // eleva la espada e inspecciona el filo
+        T.swordX = 0.32 + Math.sin(t * 1.2 + this.phase) * 0.08;
+        T.headX = 0.28;
+        T.headYaw = -0.25 + Math.sin(t * 0.9) * 0.1;
+        T.torsoX += 0.07;
+        T.legR = 0.05; T.legL = -0.03;
+        break;
+      case 'desafio': // postura erguida de desafío con la mandoble bajada firmemente
+        T.torsoX = -0.10 + Math.sin(t * 0.8) * 0.02;
+        T.headX = -0.12;
+        T.swordX = -0.45;
+        T.torsoYaw = Math.sin(t * 0.6) * 0.08;
+        break;
+      case 'alerta': // guardia alta con escaneo rápido
+        T.swordX = -0.52 + Math.cos(t * 2.5) * 0.08;
+        T.headYaw = Math.sin(t * 1.8 + this.phase) * 0.45;
+        T.torsoX = 0.09;
+        T.legR = 0.12; T.legL = -0.1;
         break;
       // 'respirar': solo la base
     }
