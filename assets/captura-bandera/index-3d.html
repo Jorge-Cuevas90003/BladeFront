@@ -176,7 +176,59 @@
     }
     .hint kbd { background:#0e131a; border:1px solid var(--line); border-radius:3px; padding:1px 5px; font-size:10px; }
 
-    @media (max-width:560px) { .panel { padding:34px 26px 26px; } .titleblock h1 { font-size:26px; } .modos { grid-template-columns:1fr; } }
+    /* ═══════════════ MODAL FIN DE PARTIDA (GAME OVER) ═══════════════ */
+    #modalGameOver {
+      position:fixed; inset:0; z-index:30; display:flex; align-items:center; justify-content:center;
+      padding:24px;
+      background:radial-gradient(ellipse 120% 90% at 50% 42%, rgba(3,4,5,.65), rgba(3,4,5,.94) 80%);
+      backdrop-filter:blur(14px) saturate(1.1);
+      transition:opacity .5s ease, visibility .5s;
+    }
+    #modalGameOver.oculto { opacity:0; visibility:hidden; pointer-events:none; }
+
+    .panel-gameover {
+      position:relative; z-index:2; width:min(520px, 100%);
+      background:var(--panel); border:1px solid rgba(255,182,56,.3);
+      box-shadow:0 40px 140px rgba(0,0,0,.85), 0 0 80px rgba(255,182,56,.12), inset 0 1px 0 rgba(255,255,255,.06);
+      clip-path:polygon(26px 0, 100% 0, 100% calc(100% - 26px), calc(100% - 26px) 100%, 0 100%, 0 26px);
+      padding:42px 42px 34px; text-align:center;
+      backdrop-filter:blur(12px);
+      animation:panelIn .8s cubic-bezier(.16,.84,.36,1) both;
+    }
+
+    .go-header { margin-bottom:12px; }
+    .go-emblem { font-size:48px; line-height:1; margin-bottom:12px; filter:drop-shadow(0 0 16px rgba(255,182,56,.5)); }
+    .go-header h1 {
+      font-family:'Cinzel',serif; font-weight:800; font-size:32px; letter-spacing:.12em;
+      color:var(--oro-hi); text-shadow:0 0 30px rgba(255,182,56,.4); margin-bottom:6px;
+    }
+    .go-header .sub { font-size:11px; font-weight:600; letter-spacing:.26em; text-transform:uppercase; color:var(--steel); }
+
+    .go-stats { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:22px 0 26px; text-align:left; }
+    .go-stat-item {
+      background:rgba(6,9,13,.8); border:1px solid var(--line); padding:12px 14px;
+      clip-path:polygon(8px 0,100% 0,100% 100%,0 100%,0 8px);
+    }
+    .go-stat-item .lbl { font-size:10px; font-weight:600; letter-spacing:.20em; text-transform:uppercase; color:var(--dim); margin-bottom:4px; display:block; }
+    .go-stat-item .val { font-size:15px; font-weight:700; color:#fff; word-break:break-word; }
+
+    .go-actions { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:16px; }
+    .btn-go {
+      padding:14px 16px; font-family:'Cinzel',serif; font-weight:700; font-size:13px;
+      letter-spacing:.16em; text-transform:uppercase; cursor:pointer; transition:.18s, transform .1s;
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
+    }
+    .btn-primary {
+      background:linear-gradient(150deg, var(--oro-hi), var(--oro) 55%, #e89a1f); color:#1a1206; border:0;
+      box-shadow:0 8px 24px rgba(255,182,56,.25);
+    }
+    .btn-primary:hover { transform:translateY(-2px); box-shadow:0 12px 32px rgba(255,182,56,.4); }
+    .btn-secondary {
+      background:rgba(12,14,20,.8); color:var(--steel); border:1px solid var(--line);
+    }
+    .btn-secondary:hover { border-color:var(--oro); color:#fff; transform:translateY(-2px); }
+
+    @media (max-width:560px) { .panel { padding:34px 26px 26px; } .titleblock h1 { font-size:26px; } .modos { grid-template-columns:1fr; } .go-stats, .go-actions { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
@@ -255,6 +307,43 @@
     </div>
   </div>
 
+  <!-- ════════ MODAL FIN DE PARTIDA (VICTORIA / DERROTA) ════════ -->
+  <div id="modalGameOver" class="oculto">
+    <div class="panel-gameover">
+      <div class="go-header">
+        <div class="go-emblem" id="goEmblem">👑</div>
+        <h1 id="goTitle">VICTORIA ÉPICA</h1>
+        <div class="sub" id="goSubtitle">¡HAS EXTRAÍDO EL ESTANDARTE CON ÉXITO!</div>
+      </div>
+
+      <hr class="laser" style="margin: 18px 0;" />
+
+      <div class="go-stats">
+        <div class="go-stat-item">
+          <span class="lbl">Ganador de la Arena</span>
+          <span class="val" id="goWinnerName">—</span>
+        </div>
+        <div class="go-stat-item">
+          <span class="lbl">ID de Combate</span>
+          <span class="val" id="goWinnerId">—</span>
+        </div>
+        <div class="go-stat-item">
+          <span class="lbl">Motivo de Victoria</span>
+          <span class="val" id="goReason">Extracción con Estandarte</span>
+        </div>
+        <div class="go-stat-item">
+          <span class="lbl">Duración de Partida</span>
+          <span class="val" id="goTicks">—</span>
+        </div>
+      </div>
+
+      <div class="go-actions">
+        <button type="button" class="btn-go btn-primary" id="btnRevancha">🎮 Revancha</button>
+        <button type="button" class="btn-go btn-secondary" id="btnMenuPrincipal">☰ Menú</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ════════ HUD en juego ════════ -->
   <button id="reset">☰ Menú</button>
 
@@ -295,13 +384,11 @@
       $('botsMenos').addEventListener('click', () => bots.value = clamp((+bots.value || 0) - 1));
       $('botsMas').addEventListener('click', () => bots.value = clamp((+bots.value || 0) + 1));
 
-      // comodidad Radmin: si escriben solo la IP, la envolvemos en ws://IP:8140
+      // comodidad Radmin: limpia la IP ingresada
       const url = $('url');
       url.addEventListener('blur', () => {
         let v = url.value.trim();
         if (!v) return;
-        if (!/^wss?:\/\//i.test(v)) v = 'ws://' + v;
-        if (!/:\d+$/.test(v.replace(/^wss?:\/\//i, ''))) v = v + ':8140';
         url.value = v;
       });
     })();

@@ -2,6 +2,9 @@
   "name": "bladefront-captura-bandera",
   "private": true,
   "type": "module",
+  "scripts": {
+    "start": "node iniciar.js"
+  },
   "dependencies": {
     "three": "^0.170.0"
   }

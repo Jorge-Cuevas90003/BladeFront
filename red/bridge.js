@@ -32,10 +32,19 @@ const wss = new WebSocketServer({ port: WS_PORT });
 log(`WebSocket para el navegador en ws://localhost:${WS_PORT}`);
 log(`Reenviando a TCP ${TCP_HOST}:${TCP_PORT}`);
 
-wss.on('connection', (ws) => {
-  // Por cada navegador que se conecta, abrimos UNA conexión TCP al servidor.
-  const tcp = net.connect(TCP_PORT, TCP_HOST);
-  log('navegador conectado → abriendo TCP al servidor');
+wss.on('connection', (ws, req) => {
+  let targetHost = TCP_HOST;
+  let targetPort = TCP_PORT;
+
+  try {
+    const u = new URL(req.url, 'http://localhost');
+    if (u.searchParams.has('targetHost')) targetHost = u.searchParams.get('targetHost');
+    if (u.searchParams.has('targetPort')) targetPort = Number(u.searchParams.get('targetPort')) || TCP_PORT;
+  } catch {}
+
+  // Por cada navegador que se conecta, abrimos UNA conexión TCP al servidor objetivo.
+  const tcp = net.connect(targetPort, targetHost);
+  log(`navegador conectado → abriendo TCP al servidor en ${targetHost}:${targetPort}`);
 
   // servidor (TCP, por líneas) → navegador (WS, un JSON por frame)
   const lector = new LectorLineas((obj) => {
@@ -52,5 +61,5 @@ wss.on('connection', (ws) => {
   ws.on('close', cerrar);
   ws.on('error', cerrar);
   tcp.on('close', cerrar);
-  tcp.on('error', (e) => { log('error TCP:', e.message); cerrar(); });
+  tcp.on('error', (e) => { log(`error TCP (${targetHost}:${targetPort}):`, e.message); cerrar(); });
 });

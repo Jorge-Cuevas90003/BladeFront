@@ -111,50 +111,117 @@ const beacon = new THREE.Mesh(
 beacon.position.y = ARENA_FLOOR_Y + 6;
 scene.add(beacon);
 
-function construirTablero(inicio) {
-  cfg = { rows: inicio.rows, columns: inicio.columns };
-  // El intervalo del ciclo lo dicta el servidor (§9) — NO asumir 200 ms. Con
-  // esto la animación tarda exactamente un ciclo por celda, sea cual sea el
-  // valor configurado (requisito: cambiar la arena no debe alterar el ritmo).
-  INTERVALO_S = Math.max(0.05, (inicio.movementIntervalMs || 200) / 1000);
+  // ---------- Monolito del Vacío (Obstáculo Rúnico Procedimental) ----------
+  const MONOLITH_MAT_DARK = new THREE.MeshPhysicalMaterial({
+    color: 0x141820, metalness: 0.88, roughness: 0.35, clearcoat: 0.5, clearcoatRoughness: 0.25,
+  });
+  const MONOLITH_MAT_BRASS = new THREE.MeshStandardMaterial({
+    color: 0x96742f, metalness: 1.0, roughness: 0.38,
+  });
 
-  // La rejilla es CUADRADA (max×max) pero la arena es CIRCULAR: para que NINGUNA
-  // celda (ni sus esquinas) caiga fuera del disco jugable, la DIAGONAL del
-  // cuadrado debe caber en el diámetro → se divide entre √2. Así el tablero
-  // encaja completo dentro del anillo de runas a cualquier radio de arena.
-  const lado = Math.max(cfg.rows, cfg.columns);
-  CELL = (2 * R * 0.98) / (lado * Math.SQRT2);
-  // Cada caballero se escala a la celda (≈65% de su ancho) para que quepa sin
-  // solaparse con los vecinos, y también acompaña un cambio de tamaño de arena.
-  ESCALA_KNIGHT = Math.min(1, CELL * 0.42);
+  function createVoidMonolith(cellWidth, index = 0) {
+    const g = new THREE.Group();
+    g.name = 'void_monolith';
 
-  // limpiar tablero anterior
-  boardGroup.clear();
+    const isGold = index % 2 === 0;
+    const glowColor = isGold ? 0xffb638 : 0x49e6ff;
 
-  // rejilla en el suelo
-  const w = CELL * cfg.columns, h = CELL * cfg.rows;
-  const grid = new THREE.GridHelper(Math.max(w, h), Math.max(cfg.rows, cfg.columns), 0x2a3446, 0x1a2130);
-  grid.position.y = ARENA_FLOOR_Y + 0.03;
-  grid.material.transparent = true; grid.material.opacity = 0.5;
-  boardGroup.add(grid);
+    const glowMat = new THREE.MeshStandardMaterial({
+      color: 0x05080d, emissive: glowColor, emissiveIntensity: 3.2, roughness: 0.2, metalness: 0.9,
+    });
 
-  // obstáculos como bloques oscuros
-  const obstMat = new THREE.MeshStandardMaterial({ color: 0x2b3547, metalness: 0.7, roughness: 0.4, emissive: 0x0a1018, emissiveIntensity: 0.5 });
-  const obstGeo = new THREE.BoxGeometry(CELL * 0.86, 1.4, CELL * 0.86);
-  for (const o of inicio.obstacles) {
-    const b = new THREE.Mesh(obstGeo, obstMat);
-    celdaAMundo(o.row, o.column, _v);
-    b.position.set(_v.x, ARENA_FLOOR_Y + 0.7, _v.z);
-    b.castShadow = true; b.receiveShadow = true;
-    boardGroup.add(b);
+    // 1. Zócalo / Base octogonal de basalto estelar
+    const baseR = cellWidth * 0.38;
+    const baseH = 0.22;
+    const baseMesh = new THREE.Mesh(new THREE.CylinderGeometry(baseR, baseR * 1.08, baseH, 8), MONOLITH_MAT_DARK);
+    baseMesh.position.y = baseH / 2;
+    baseMesh.castShadow = baseMesh.receiveShadow = true;
+    g.add(baseMesh);
+
+    // 2. Columna Monolítica (basalto tallado con bisel)
+    const pillarRTop = cellWidth * 0.28;
+    const pillarRBot = cellWidth * 0.34;
+    const pillarH = 1.15;
+    const pillarMesh = new THREE.Mesh(new THREE.CylinderGeometry(pillarRTop, pillarRBot, pillarH, 8), MONOLITH_MAT_DARK);
+    pillarMesh.position.y = baseH + pillarH / 2;
+    pillarMesh.rotation.y = Math.PI / 8; // bisel cruzado
+    pillarMesh.castShadow = pillarMesh.receiveShadow = true;
+    g.add(pillarMesh);
+
+    // 3. Anillo de latón rúnico (trim central)
+    const ringMesh = new THREE.Mesh(new THREE.TorusGeometry(cellWidth * 0.32, 0.022, 8, 24), MONOLITH_MAT_BRASS);
+    ringMesh.rotation.x = Math.PI / 2;
+    ringMesh.position.y = baseH + pillarH * 0.55;
+    g.add(ringMesh);
+
+    // 4. Franjas verticales de energía rúnica (canales luminosos)
+    const stripeGeo = new THREE.BoxGeometry(0.025, pillarH * 0.85, 0.025);
+    for (let i = 0; i < 4; i++) {
+      const angle = (i / 4) * Math.PI * 2 + Math.PI / 8;
+      const stripe = new THREE.Mesh(stripeGeo, glowMat);
+      const sr = (pillarRTop + pillarRBot) / 2 + 0.005;
+      stripe.position.set(Math.cos(angle) * sr, baseH + pillarH / 2, Math.sin(angle) * sr);
+      g.add(stripe);
+    }
+
+    // 5. Cristal Flotante del Vacío (Octaedro levitante)
+    const crystalGeo = new THREE.OctahedronGeometry(cellWidth * 0.18);
+    const crystalMesh = new THREE.Mesh(crystalGeo, glowMat);
+    const crystalY = baseH + pillarH + 0.25;
+    crystalMesh.position.y = crystalY;
+    crystalMesh.castShadow = true;
+    g.add(crystalMesh);
+
+    // Guardar referencias para animación en el frame loop
+    g.userData = {
+      crystal: crystalMesh,
+      baseY: crystalY,
+      seed: index * 1.37 + Math.random() * 2.0,
+      update: (dt, t) => {
+        crystalMesh.rotation.y += dt * 1.4;
+        crystalMesh.rotation.x += dt * 0.4;
+        crystalMesh.position.y = crystalY + Math.sin(t * 2.2 + g.userData.seed) * 0.06;
+      },
+    };
+
+    return g;
   }
 
-  // bandera (estandarte real del juego) — un poco más grande que un caballero
-  // para que resalte como objetivo, pero también proporcional al tablero.
-  if (!banner) { banner = createCyberBanner(); scene.add(banner); }
-  banner.scale.setScalar(Math.min(1.3, ESCALA_KNIGHT * 1.4));
-  colocarBandera(inicio.flag);
-}
+  let activeMonoliths = [];
+
+  function construirTablero(inicio) {
+    cfg = { rows: inicio.rows, columns: inicio.columns };
+    INTERVALO_S = Math.max(0.05, (inicio.movementIntervalMs || 200) / 1000);
+
+    const lado = Math.max(cfg.rows, cfg.columns);
+    CELL = (2 * R * 0.98) / (lado * Math.SQRT2);
+    ESCALA_KNIGHT = Math.min(1, CELL * 0.42);
+
+    // limpiar tablero anterior
+    boardGroup.clear();
+    activeMonoliths = [];
+
+    // rejilla en el suelo
+    const w = CELL * cfg.columns, h = CELL * cfg.rows;
+    const grid = new THREE.GridHelper(Math.max(w, h), Math.max(cfg.rows, cfg.columns), 0x2a3446, 0x1a2130);
+    grid.position.y = ARENA_FLOOR_Y + 0.03;
+    grid.material.transparent = true; grid.material.opacity = 0.5;
+    boardGroup.add(grid);
+
+    // obstáculos como Monolitos del Vacío Rúnicos
+    for (let i = 0; i < inicio.obstacles.length; i++) {
+      const o = inicio.obstacles[i];
+      const m = createVoidMonolith(CELL, i);
+      celdaAMundo(o.row, o.column, _v);
+      m.position.set(_v.x, ARENA_FLOOR_Y, _v.z);
+      boardGroup.add(m);
+      activeMonoliths.push(m);
+    }
+
+    if (!banner) { banner = createCyberBanner(); scene.add(banner); }
+    banner.scale.setScalar(Math.min(1.3, ESCALA_KNIGHT * 1.4));
+    colocarBandera(inicio.flag);
+  }
 
 function colocarBandera(flag) {
   if (!banner || !flag) return;
@@ -186,19 +253,32 @@ function asegurarKnight(id) {
 let cliente = null;
 let ultimoEstado = null;
 
-function feed(txt) {
-  const ul = document.getElementById('feed');
-  const li = document.createElement('li');
-  li.textContent = txt;
-  ul.prepend(li);
-  while (ul.children.length > 8) ul.lastChild.remove();
+// Cache de elementos del DOM para evitar reflows y bloqueos en el hilo principal
+const domCache = new Map();
+function getEl(id) {
+  let el = domCache.get(id);
+  if (!el) {
+    el = document.getElementById(id);
+    if (el) domCache.set(id, el);
+  }
+  return el;
 }
+const $ = (id) => getEl(id);
 
-const $ = (id) => document.getElementById(id);
+function feed(txt) {
+  requestAnimationFrame(() => {
+    const ul = getEl('feed');
+    if (!ul) return;
+    const li = document.createElement('li');
+    li.textContent = txt;
+    ul.prepend(li);
+    while (ul.children.length > 8) ul.lastChild.remove();
+  });
+}
 
 // Indicador de conexión: LOCAL / CONECTANDO / CONECTADO / DESCONECTADO / ERROR.
 function estadoConexion(txt, color) {
-  const el = $('iConn');
+  const el = getEl('iConn');
   if (!el) return;
   el.textContent = txt;
   el.style.color = color;
@@ -213,9 +293,76 @@ $('reset').addEventListener('click', () => location.reload());
 $('jugar').addEventListener('click', jugar);
 
 // Menú de entrada: se oculta al entrar a la arena, reaparece si algo falla.
-const mostrarMenu = (v) => $('menu')?.classList.toggle('oculto', !v);
+const mostrarMenu = (v) => getEl('menu')?.classList.toggle('oculto', !v);
+const ocultarGameOverModal = () => getEl('modalGameOver')?.classList.add('oculto');
+
+// Modal Fin de Partida (Victoria / Derrota)
+function mostrarGameOverModal(detail) {
+  const yoId = cliente?.playerId;
+  const esGanador = yoId && detail.winnerId === yoId;
+
+  const modal = getEl('modalGameOver');
+  const emblem = getEl('goEmblem');
+  const title = getEl('goTitle');
+  const subtitle = getEl('goSubtitle');
+  const winnerName = getEl('goWinnerName');
+  const winnerId = getEl('goWinnerId');
+  const reason = getEl('goReason');
+  const ticks = getEl('goTicks');
+
+  if (winnerName) winnerName.textContent = detail.winnerName || detail.winnerId || '—';
+  if (winnerId) winnerId.textContent = detail.winnerId || '—';
+  if (reason) reason.textContent = detail.reason === 'EXITED_WITH_FLAG' ? 'Extracción por el Borde' : (detail.reason || 'Victoria');
+  if (ticks) ticks.textContent = (ultimoEstado?.tick || '—') + ' ticks';
+
+  if (esGanador) {
+    if (emblem) emblem.textContent = '👑';
+    if (title) { title.textContent = 'VICTORIA ÉPICA'; title.style.color = '#ffd27a'; title.style.textShadow = '0 0 30px rgba(255,182,56,0.8)'; }
+    if (subtitle) subtitle.textContent = '¡HAS EXTRAÍDO EL ESTANDARTE DEL VACÍO!';
+  } else {
+    if (emblem) emblem.textContent = '⚔️';
+    if (title) { title.textContent = 'MISIÓN CONCLUIDA'; title.style.color = '#ff4a3d'; title.style.textShadow = '0 0 30px rgba(255,74,61,0.8)'; }
+    if (subtitle) subtitle.textContent = `EL ESTANDARTE FUE EXTRAÍDO POR ${detail.winnerName || detail.winnerId}`;
+  }
+
+  if (modal) modal.classList.remove('oculto');
+}
+
+getEl('btnRevancha')?.addEventListener('click', () => {
+  ocultarGameOverModal();
+  jugar();
+});
+
+getEl('btnMenuPrincipal')?.addEventListener('click', () => {
+  ocultarGameOverModal();
+  mostrarMenu(true);
+});
+
+function normalizarUrlWebSocket(raw) {
+  let v = String(raw || '').trim();
+  if (!v) v = 'localhost';
+
+  // Quitar esquema si fue ingresado
+  v = v.replace(/^wss?:\/\//i, '').replace(/\/+$/, '');
+
+  let host = v;
+  let port = 5000;
+
+  if (v.includes(':')) {
+    const parts = v.split(':');
+    host = parts[0] || 'localhost';
+    const p = parseInt(parts[1], 10);
+    if (!isNaN(p)) {
+      port = (p === 8140) ? 5000 : p;
+    }
+  }
+
+  // Siempre pasa por el Bridge local (puerto 8140), el cual reenvía por TCP a la IP/puerto indicados.
+  return `ws://localhost:8140?targetHost=${encodeURIComponent(host)}&targetPort=${port}`;
+}
 
 async function jugar() {
+  ocultarGameOverModal();
   if (cliente) cliente.detener();
   for (const k of knights.values()) scene.remove(k.group);
   knights.clear();
@@ -225,13 +372,27 @@ async function jugar() {
 
   cliente.addEventListener(TIPOS.GAME_STARTED, (e) => { construirTablero(e.detail); feed('▶ arena lista'); });
   cliente.addEventListener(TIPOS.GAME_STATE, (e) => { ultimoEstado = e.detail; sincronizar(e.detail); });
-  cliente.addEventListener(TIPOS.FLAG_PICKED_UP, (e) => feed(`⚑ ${e.detail.playerId} tomó la bandera`));
-  cliente.addEventListener(TIPOS.FLAG_STOLEN, (e) => feed(`🔁 ${e.detail.newCarrierId} robó a ${e.detail.previousCarrierId}`));
+  cliente.addEventListener(TIPOS.FLAG_PICKED_UP, (e) => {
+    feed(`⚑ ${e.detail.playerId} tomó la bandera`);
+    const k = knights.get(e.detail.playerId);
+    if (k) k.actionTime = 0.55; // animar reacción sin tirones
+  });
+  cliente.addEventListener(TIPOS.FLAG_STOLEN, (e) => {
+    feed(`🔁 ${e.detail.newCarrierId} robó a ${e.detail.previousCarrierId}`);
+    const vic = knights.get(e.detail.previousCarrierId);
+    const atk = knights.get(e.detail.newCarrierId);
+    if (vic) { vic.actionTime = 0.60; vic.actionType = 'stagger'; }
+    if (atk) { atk.actionTime = 0.55; atk.actionType = 'grab'; }
+  });
   cliente.addEventListener(TIPOS.PLAYER_DISCONNECTED, (e) => feed(`✂ ${e.detail.playerId} salió`));
-  cliente.addEventListener(TIPOS.GAME_OVER, (e) => feed(`🏆 ganó ${e.detail.winnerName}`));
+  cliente.addEventListener(TIPOS.GAME_OVER, (e) => {
+    feed(`🏆 ganó ${e.detail.winnerName}`);
+    const winner = knights.get(e.detail.winnerId);
+    if (winner) { winner.actionTime = 1.2; winner.actionType = 'grab'; }
+    mostrarGameOverModal(e.detail);
+  });
   cliente.addEventListener(TIPOS.ERROR, (e) => {
     feed(`✗ ${e.detail.code}`);
-    // Si el servidor/bridge cae en modo red, dejarlo claro en pantalla.
     if (e.detail.code === 'CONNECTION_LOST') estadoConexion('DESCONECTADO', '#ff4a3d');
   });
 
@@ -243,7 +404,9 @@ async function jugar() {
     } else {
       estadoConexion('CONECTANDO…', '#ffb638');
       feed('⏳ conectando…');
-      await cliente.conectar($('url').value, nombre);
+      const targetUrl = normalizarUrlWebSocket($('url').value);
+      $('url').value = targetUrl;
+      await cliente.conectar(targetUrl, nombre);
       estadoConexion('CONECTADO · ' + cliente.playerId, '#46d38a');
       feed('▶ conectado como ' + cliente.playerId);
       mostrarMenu(false); // conexión OK → entrar
@@ -288,10 +451,10 @@ function sincronizar(estado) {
 
   // HUD
   const yo = estado.players.find((p) => p.playerId === cliente?.playerId);
-  $('iYo').textContent = yo ? `${cliente.playerId} [${yo.row},${yo.column}]${yo.hasFlag ? ' ⚑' : ''}` : (cliente?.playerId || '—');
-  $('iBandera').textContent = estado.flag.status;
-  $('iPortador').textContent = estado.flag.carrierId || 'LIBRE';
-  $('iTick').textContent = estado.tick;
+  const elYo = getEl('iYo'); if (elYo) elYo.textContent = yo ? `${cliente.playerId} [${yo.row},${yo.column}]${yo.hasFlag ? ' ⚑' : ''}` : (cliente?.playerId || '—');
+  const elB = getEl('iBandera'); if (elB) elB.textContent = estado.flag.status;
+  const elP = getEl('iPortador'); if (elP) elP.textContent = estado.flag.carrierId || 'LIBRE';
+  const elT = getEl('iTick'); if (elT) elT.textContent = estado.tick;
 }
 
 // ---------- Input: teclas → CHANGE_DIRECTION (rejilla) ----------
@@ -339,7 +502,13 @@ function frame(dtOverride) {
       k.yaw = Math.atan2(_v.x, _v.z); // mirar hacia donde camina
     }
     k.group.rotation.y += (k.yaw - k.group.rotation.y) * Math.min(1, dt * 8);
-    k.anim.locomotion(dt, t, dist > 0.05 ? 2.4 : 0);
+    if (k.actionTime > 0) {
+      k.actionTime -= dt;
+      if (k.actionType === 'stagger') k.anim.stagger(dt, t);
+      else k.anim.grab(dt, 1 - Math.max(0, k.actionTime / 0.55));
+    } else {
+      k.anim.locomotion(dt, t, dist > 0.05 ? 2.4 : 0);
+    }
   }
 
   // cámara sigue a mi caballero
@@ -351,9 +520,12 @@ function frame(dtOverride) {
     camera.position.add(_tmp);
   }
 
-  // ambiente vivo
+  // ambiente vivo & monolitos
   cosmos.update(dt, t);
   titans.update(dt, t);
+  for (const m of activeMonoliths) {
+    if (m.userData?.update) m.userData.update(dt, t);
+  }
   if (arena.userData.update) arena.userData.update(dt, t);
   if (banner?.userData?.update) banner.userData.update(dt, t);
   if (beacon.visible) beacon.material.opacity = 0.05 + Math.sin(t * 2.4) * 0.02;
@@ -380,11 +552,16 @@ function precargarShaders() {
   dummyBanner.position.set(0, ARENA_FLOOR_Y, 0);
   scene.add(dummyBanner);
 
+  const dummyMonolith = createVoidMonolith(1.8, 0);
+  dummyMonolith.position.set(0, ARENA_FLOOR_Y, 0);
+  scene.add(dummyMonolith);
+
   // Compilar la escena y programas de shaders en WebGL de antemano
   renderer.compile(scene, camera);
 
   scene.remove(dummyKnight);
   scene.remove(dummyBanner);
+  scene.remove(dummyMonolith);
 }
 precargarShaders();
 
