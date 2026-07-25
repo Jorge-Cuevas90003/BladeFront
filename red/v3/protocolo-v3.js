@@ -81,6 +81,20 @@ export const PARAMS_DEFECTO = {
   maximumPlayers: 100,
   serverPort: 5000,
   discoveryPort: 5001,
+
+  // ── FUERA DE LA SPEC — por defecto en 0, que es el comportamiento oficial ──
+  // §14 dice literalmente "no existe inmunidad, el robo es instantáneo". Con
+  // eso, más "los jugadores no colisionan" (§10) y una velocidad única para
+  // todos (§21), un perseguidor pegado al portador le roba la bandera cada
+  // ciclo y ninguno de los dos puede separarse nunca: la partida no termina.
+  // Está medido en test/verify-bots-v3.mjs — con 5 jugadores salen ~2900 robos
+  // en 3000 ciclos y cero ganadores.
+  //
+  // Este parámetro permite darle al nuevo portador unos milisegundos de
+  // inmunidad. Se deja en 0 para que el servidor sea fiel al PRFC tal como
+  // está escrito hoy; súbelo solo si el equipo enmienda §14, y asegúrate de
+  // que TODOS los grupos usen el mismo valor o las partidas divergirán.
+  protectionTimeMs: 0,
 };
 
 // --- §24 escalado de coordenadas ------------------------------------------

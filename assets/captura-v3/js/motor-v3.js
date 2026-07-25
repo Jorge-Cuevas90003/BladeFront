@@ -40,6 +40,13 @@ export class MotorV3 {
     this.ganadorId = 0;
     this._seq = 1;
 
+    // Inmunidad tras adquirir la bandera. Con el valor oficial (0) no hay
+    // ninguna: es el comportamiento de §14. Se cuenta en TICKS y no en
+    // milisegundos de reloj para que la simulación sea determinista y dos
+    // servidores con el mismo historial de entradas den el mismo resultado.
+    this._ticksProteccion = Math.round((this.p.protectionTimeMs || 0) / this.p.tickIntervalMs);
+    this._protegidaHasta = -1;   // número de tick hasta el que no se puede robar
+
     // Colas de intención. Se vacían en cada ciclo (§30.1, §30.2).
     this._inputs = new Map();       // playerId -> direction (gana el último)
     this._interacts = new Set();    // playerId (una interacción por ciclo)
@@ -127,6 +134,7 @@ export class MotorV3 {
     this.bandera = { x: 0, y: 0, status: ESTADO_BANDERA.AVAILABLE, carrierId: 0 };
     this.tick = 0;
     this.ganadorId = 0;
+    this._protegidaHasta = -1;
     this._inputs.clear();
     this._interacts.clear();
     this._desconexiones.clear();
@@ -195,17 +203,22 @@ export class MotorV3 {
           j.hasFlag = true;
           this.bandera.status = ESTADO_BANDERA.CARRIED;
           this.bandera.carrierId = j.playerId;
+          this._protegidaHasta = this.tick + this._ticksProteccion;
           eventos.push({ type: TIPOS.FLAG_PICKED_UP, playerId: j.playerId });
           cambioDeDueño = true;
         }
-      } else if (this.bandera.status === ESTADO_BANDERA.CARRIED && this.bandera.carrierId !== j.playerId) {
-        // §14: robar. Sin espera y sin inmunidad — el robo es instantáneo.
+      } else if (this.bandera.status === ESTADO_BANDERA.CARRIED && this.bandera.carrierId !== j.playerId
+                 && this.tick >= this._protegidaHasta) {
+        // §14: robar. Con el valor oficial protectionTimeMs=0 la condición de
+        // inmunidad de arriba es siempre cierta, así que el robo es instantáneo
+        // tal como manda la spec.
         const portador = this.jugadores.get(this.bandera.carrierId);
         if (portador && portador.connected &&
             dist(j.x - portador.x, j.y - portador.y) <= this.p.interactionRadius) {
           portador.hasFlag = false;
           j.hasFlag = true;
           this.bandera.carrierId = j.playerId;
+          this._protegidaHasta = this.tick + this._ticksProteccion;
           eventos.push({
             type: TIPOS.FLAG_STOLEN,
             previousCarrierId: portador.playerId,
