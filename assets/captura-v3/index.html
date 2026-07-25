@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Captura la Bandera v3 — Arena del Vacío</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --oro:#ffb638; --oro-hi:#ffd27a; --rojo:#ff4a3d; --cyan:#49e6ff;
+      --steel:#cfd8e6; --dim:#63728a; --line:#2a3446; --bg:#030405;
+      --panel:rgba(9,11,16,.72);
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html, body { height:100%; overflow:hidden; background:var(--bg); font-family:'Rajdhani',sans-serif; color:var(--steel); }
+    #app canvas { display:block; }
+    ::selection { background:rgba(255,182,56,.28); }
+
+    .bracket { position:fixed; width:34px; height:34px; border:0 solid var(--oro); z-index:22; opacity:.5;
+      filter:drop-shadow(0 0 6px rgba(255,182,56,.4)); }
+    .bracket.tl { top:22px; left:22px; border-top-width:2px; border-left-width:2px; }
+    .bracket.tr { top:22px; right:22px; border-top-width:2px; border-right-width:2px; }
+    .bracket.bl { bottom:22px; left:22px; border-bottom-width:2px; border-left-width:2px; }
+    .bracket.br { bottom:22px; right:22px; border-bottom-width:2px; border-right-width:2px; }
+
+    /* ─────────── menú ─────────── */
+    #menu {
+      position:fixed; inset:0; z-index:20; display:flex; align-items:center; justify-content:center; padding:24px;
+      background:radial-gradient(ellipse 120% 90% at 50% 42%, rgba(3,4,5,.30), rgba(3,4,5,.88) 78%);
+      backdrop-filter:blur(3px) saturate(1.05); transition:opacity .6s ease, visibility .6s;
+      overflow-y:auto;
+    }
+    #menu.oculto { opacity:0; visibility:hidden; pointer-events:none; }
+    .panel {
+      position:relative; width:min(580px,100%); background:var(--panel); border:1px solid rgba(255,182,56,.16);
+      box-shadow:0 40px 120px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.04);
+      clip-path:polygon(26px 0,100% 0,100% calc(100% - 26px),calc(100% - 26px) 100%,0 100%,0 26px);
+      padding:40px 42px 30px; backdrop-filter:blur(10px); margin:auto;
+    }
+    .panel::before { content:""; position:absolute; top:0; left:26px; right:0; height:2px;
+      background:linear-gradient(90deg,var(--oro),transparent 70%); opacity:.7; }
+    .crest { display:flex; align-items:center; gap:16px; }
+    .sigil { width:46px; height:46px; flex:none; filter:drop-shadow(0 0 10px rgba(255,182,56,.5)); animation:spin 26s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .titleblock h1 { font-family:'Cinzel',serif; font-weight:800; font-size:30px; line-height:1; letter-spacing:.09em; color:#f4efe4; }
+    .titleblock .sub { margin-top:8px; font-size:11px; font-weight:600; letter-spacing:.30em; text-transform:uppercase; color:var(--dim); }
+    .laser { height:2px; margin:20px 0 22px; border:0;
+      background:linear-gradient(90deg,transparent,var(--oro) 12%,var(--oro-hi) 50%,var(--oro) 88%,transparent);
+      box-shadow:0 0 12px rgba(255,182,56,.4); }
+
+    .field { margin-bottom:18px; }
+    .lbl { display:block; font-size:10px; font-weight:600; letter-spacing:.24em; text-transform:uppercase; color:var(--oro); margin-bottom:8px; }
+    .txt { width:100%; background:rgba(6,9,13,.85); color:#eef3fb; border:1px solid var(--line);
+      padding:11px 13px; font-family:'Rajdhani',sans-serif; font-size:15px; font-weight:600;
+      clip-path:polygon(8px 0,100% 0,100% 100%,0 100%,0 8px); }
+    .txt:focus { outline:none; border-color:var(--oro); box-shadow:0 0 0 1px var(--oro); }
+
+    .modos { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .modo-card { position:relative; text-align:left; cursor:pointer; background:rgba(6,9,13,.7);
+      border:1px solid var(--line); color:var(--steel); padding:15px; font-family:inherit;
+      clip-path:polygon(11px 0,100% 0,100% calc(100% - 11px),calc(100% - 11px) 100%,0 100%,0 11px);
+      transition:border-color .2s, background .2s, transform .12s; }
+    .modo-card:hover { border-color:rgba(255,182,56,.5); transform:translateY(-2px); }
+    .modo-card .ic { font-size:21px; display:block; margin-bottom:8px; }
+    .modo-card .t { font-family:'Cinzel',serif; font-weight:700; font-size:13px; color:#f1ede4; }
+    .modo-card .d { font-size:11px; color:var(--dim); margin-top:4px; line-height:1.35; }
+    .modo-card.on { border-color:var(--oro); background:linear-gradient(160deg,rgba(255,182,56,.12),rgba(6,9,13,.7) 60%); }
+    .modo-card .dot { position:absolute; top:13px; right:13px; width:8px; height:8px; border-radius:50%; border:1px solid var(--dim); }
+    .modo-card.on .dot { background:var(--oro); border-color:var(--oro); box-shadow:0 0 10px var(--oro); }
+
+    .fila { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .stepper { display:flex; }
+    .stepper button { width:38px; background:rgba(6,9,13,.85); color:var(--oro); border:1px solid var(--line);
+      cursor:pointer; font-size:19px; font-weight:700; font-family:inherit; }
+    .stepper button:hover { background:rgba(255,182,56,.14); border-color:var(--oro); }
+    .stepper input { flex:1; text-align:center; background:rgba(6,9,13,.85); color:#eef3fb;
+      border:1px solid var(--line); border-left:0; border-right:0; font-family:inherit; font-size:16px; font-weight:700; }
+    .stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+    select.txt { appearance:none; cursor:pointer; }
+
+    .nota { margin-top:8px; font-size:11px; line-height:1.45; color:var(--dim); }
+    .nota b { color:var(--oro); font-weight:600; }
+
+    #listaServidores { list-style:none; margin-top:10px; max-height:132px; overflow-y:auto;
+      border:1px solid var(--line); background:rgba(6,9,13,.6); }
+    #listaServidores li { padding:9px 12px; font-size:12px; cursor:pointer; border-bottom:1px solid rgba(42,52,70,.5);
+      display:flex; justify-content:space-between; gap:10px; align-items:center; }
+    #listaServidores li:hover { background:rgba(255,182,56,.09); }
+    #listaServidores li.on { background:rgba(255,182,56,.16); border-left:2px solid var(--oro); }
+    #listaServidores li span { color:var(--dim); font-size:11px; }
+    #listaServidores li.vacio { color:var(--dim); cursor:default; justify-content:center; font-style:italic; }
+    .btn-sec { width:100%; margin-top:10px; cursor:pointer; background:rgba(12,14,20,.8); color:var(--steel);
+      border:1px solid var(--line); padding:10px; font-family:'Rajdhani'; font-weight:600; font-size:12px;
+      letter-spacing:.14em; text-transform:uppercase; }
+    .btn-sec:hover { border-color:var(--oro); color:var(--oro); }
+
+    .entrar { position:relative; overflow:hidden; width:100%; margin-top:24px; cursor:pointer;
+      background:linear-gradient(150deg,var(--oro-hi),var(--oro) 55%,#e89a1f); color:#1a1206; border:0; padding:15px;
+      font-family:'Cinzel',serif; font-weight:700; font-size:14px; letter-spacing:.2em; text-transform:uppercase;
+      clip-path:polygon(13px 0,100% 0,100% calc(100% - 13px),calc(100% - 13px) 100%,0 100%,0 13px);
+      box-shadow:0 12px 34px rgba(255,182,56,.24); transition:transform .12s, box-shadow .2s; }
+    .entrar:hover { transform:translateY(-2px); box-shadow:0 18px 44px rgba(255,182,56,.36); }
+    .footline { margin-top:18px; display:flex; justify-content:space-between; font-size:10px;
+      letter-spacing:.16em; text-transform:uppercase; color:#48545e; }
+    .footline kbd { background:rgba(6,9,13,.9); border:1px solid var(--line); border-radius:3px; padding:1px 5px; color:var(--dim); font-size:10px; }
+
+    /* ─────────── HUD ─────────── */
+    .hud { position:fixed; top:22px; right:22px; z-index:5; width:236px; background:rgba(12,10,7,.5);
+      border:1px solid var(--line); backdrop-filter:blur(6px); padding:14px 16px;
+      clip-path:polygon(12px 0,100% 0,100% 100%,0 100%,0 12px); }
+    .hud h2 { font-family:'Cinzel',serif; font-size:11px; letter-spacing:.22em; color:var(--oro); text-transform:uppercase; margin-bottom:10px; }
+    .hud dl { display:grid; grid-template-columns:auto 1fr; gap:5px 12px; }
+    .hud dt { font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim); padding-top:2px; }
+    .hud dd { font-size:13px; font-weight:600; text-align:right; }
+    #feed { list-style:none; margin-top:10px; border-top:1px solid var(--line); padding-top:8px;
+      font-size:11px; color:var(--dim); max-height:140px; overflow:hidden; }
+    #feed li { padding:1.5px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+    #reset { position:fixed; top:22px; left:22px; z-index:5; cursor:pointer; background:rgba(12,14,20,.62);
+      color:var(--dim); border:1px solid var(--line); padding:8px 14px; font-family:'Rajdhani'; font-weight:600;
+      font-size:12px; letter-spacing:.13em; text-transform:uppercase;
+      clip-path:polygon(9px 0,100% 0,100% 100%,0 100%,0 9px); }
+    #reset:hover { border-color:var(--oro); color:var(--oro); }
+
+    .hint { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); z-index:5; font-size:11px;
+      letter-spacing:.14em; text-transform:uppercase; color:var(--dim); background:rgba(12,14,20,.6);
+      padding:7px 16px; border:1px solid var(--line);
+      clip-path:polygon(9px 0,100% 0,100% 100%,0 100%,0 9px); }
+    .hint kbd { background:#0e131a; border:1px solid var(--line); border-radius:3px; padding:1px 5px; font-size:10px; }
+
+    #banda { position:fixed; top:14%; left:50%; transform:translateX(-50%); z-index:8;
+      font-family:'Cinzel',serif; font-weight:700; font-size:26px; letter-spacing:.12em; color:var(--oro-hi);
+      text-shadow:0 0 28px rgba(255,182,56,.6), 0 2px 20px rgba(0,0,0,.9); pointer-events:none;
+      transition:opacity .4s, transform .4s; white-space:nowrap; }
+    #banda.oculto { opacity:0; transform:translateX(-50%) translateY(-10px); }
+
+    /* ─────────── fin de partida ─────────── */
+    #modalFin { position:fixed; inset:0; z-index:30; display:flex; align-items:center; justify-content:center; padding:24px;
+      background:radial-gradient(ellipse 120% 90% at 50% 42%, rgba(3,4,5,.65), rgba(3,4,5,.94) 80%);
+      backdrop-filter:blur(12px); transition:opacity .5s, visibility .5s; }
+    #modalFin.oculto { opacity:0; visibility:hidden; pointer-events:none; }
+    .panel-fin { width:min(500px,100%); background:var(--panel); border:1px solid rgba(255,182,56,.3);
+      box-shadow:0 40px 140px rgba(0,0,0,.85); padding:40px 40px 32px; text-align:center; backdrop-filter:blur(12px);
+      clip-path:polygon(26px 0,100% 0,100% calc(100% - 26px),calc(100% - 26px) 100%,0 100%,0 26px); }
+    .panel-fin .emblema { font-size:46px; margin-bottom:10px; filter:drop-shadow(0 0 16px rgba(255,182,56,.5)); }
+    .panel-fin h1 { font-family:'Cinzel',serif; font-weight:800; font-size:30px; letter-spacing:.12em;
+      color:var(--oro-hi); text-shadow:0 0 30px rgba(255,182,56,.4); }
+    .fin-stats { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:22px 0; text-align:left; }
+    .fin-stats div { background:rgba(6,9,13,.8); border:1px solid var(--line); padding:11px 13px;
+      clip-path:polygon(8px 0,100% 0,100% 100%,0 100%,0 8px); }
+    .fin-stats .lbl { margin-bottom:3px; color:var(--dim); }
+    .fin-stats .val { font-size:14px; font-weight:700; color:#fff; word-break:break-word; }
+    .fin-acciones { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .btn-fin { padding:13px; font-family:'Cinzel',serif; font-weight:700; font-size:12px; letter-spacing:.15em;
+      text-transform:uppercase; cursor:pointer;
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px); }
+    .btn-fin.p { background:linear-gradient(150deg,var(--oro-hi),var(--oro) 55%,#e89a1f); color:#1a1206; border:0; }
+    .btn-fin.s { background:rgba(12,14,20,.8); color:var(--steel); border:1px solid var(--line); }
+    .btn-fin:hover { transform:translateY(-2px); }
+
+    @media (max-width:600px) { .panel { padding:30px 24px 24px; } .modos, .fila, .fin-stats, .fin-acciones { grid-template-columns:1fr; } .hud { display:none; } }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <i class="bracket tl"></i><i class="bracket tr"></i><i class="bracket bl"></i><i class="bracket br"></i>
+
+  <div id="banda" class="oculto"></div>
+
+  <!-- ═══════════ MENÚ ═══════════ -->
+  <div id="menu">
+    <div class="panel">
+      <div class="crest">
+        <svg class="sigil" viewBox="0 0 48 48" fill="none">
+          <path d="M24 2 L46 24 L24 46 L2 24 Z" stroke="#ffb638" stroke-width="1.4" opacity=".9"/>
+          <path d="M24 9 L39 24 L24 39 L9 24 Z" stroke="#ffb638" stroke-width="1" opacity=".5"/>
+          <circle cx="24" cy="24" r="6" stroke="#ffd27a" stroke-width="1.6"/>
+          <circle cx="24" cy="24" r="1.8" fill="#ff4a3d"/>
+        </svg>
+        <div class="titleblock">
+          <h1>Captura la Bandera</h1>
+          <div class="sub">Arena del Vacío · PRFC v3</div>
+        </div>
+      </div>
+
+      <hr class="laser" />
+
+      <div class="field">
+        <label class="lbl" for="nombre">Nombre de guerra</label>
+        <input class="txt" id="nombre" value="Templario" maxlength="20" autocomplete="off" />
+      </div>
+
+      <div class="field">
+        <span class="lbl">Modo</span>
+        <div class="modos">
+          <button type="button" class="modo-card on" data-modo="local">
+            <span class="dot"></span><span class="ic">⚔️</span>
+            <span class="t">Práctica</span>
+            <span class="d">Motor local + bots. Sin red ni bridge.</span>
+          </button>
+          <button type="button" class="modo-card" data-modo="red">
+            <span class="dot"></span><span class="ic">🛰️</span>
+            <span class="t">Red</span>
+            <span class="d">Servidor TCP oficial a través del bridge.</span>
+          </button>
+        </div>
+      </div>
+      <select id="modo" style="display:none">
+        <option value="local" selected>local</option>
+        <option value="red">red</option>
+      </select>
+
+      <!-- ── opciones de práctica ── -->
+      <div id="wrapLocal">
+        <div class="fila">
+          <div class="field">
+            <span class="lbl">Bots</span>
+            <div class="stepper">
+              <button type="button" id="botsMenos">−</button>
+              <input id="bots" type="number" value="5" min="0" max="20" />
+              <button type="button" id="botsMas">+</button>
+            </div>
+          </div>
+          <div class="field">
+            <label class="lbl" for="inmunidad">Inmunidad tras robo</label>
+            <select class="txt" id="inmunidad">
+              <option value="0">0 ms — según el PRFC</option>
+              <option value="300" selected>300 ms — jugable</option>
+              <option value="600">600 ms — permisiva</option>
+            </select>
+          </div>
+        </div>
+        <p class="nota">
+          §14 dice que <b>no existe inmunidad</b>. Con 0 ms y dos o más jugadores
+          disputando, la bandera cambia de dueño cada ciclo y la partida
+          <b>no termina nunca</b>. Está medido en <code>test/verify-bots-v3.mjs</code>.
+          Para jugar de verdad hace falta subirlo; el servidor de red sigue en 0.
+        </p>
+      </div>
+
+      <!-- ── opciones de red ── -->
+      <div id="wrapRed" style="display:none">
+        <div class="field">
+          <label class="lbl" for="url">Bridge WebSocket</label>
+          <input class="txt" id="url" value="ws://localhost:8146" spellcheck="false" autocomplete="off" />
+        </div>
+        <div class="fila">
+          <div class="field">
+            <label class="lbl" for="host">Servidor (IP)</label>
+            <input class="txt" id="host" value="127.0.0.1" spellcheck="false" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label class="lbl" for="puerto">Puerto TCP</label>
+            <input class="txt" id="puerto" type="number" value="5000" />
+          </div>
+        </div>
+        <button type="button" class="btn-sec" id="buscar">🔍 Buscar servidores en la red</button>
+        <ul id="listaServidores"><li class="vacio">Sin buscar</li></ul>
+        <p class="nota">
+          El navegador no puede abrir TCP ni mandar UDP, así que el bridge lo hace
+          por él. Arranca antes:
+          <b>node red/v3/servidor-v3.js --auto</b> y <b>node red/v3/bridge-v3.js</b>.
+        </p>
+      </div>
+
+      <button class="entrar" id="jugar">Entrar a la Arena</button>
+
+      <div class="footline">
+        <span>una bandera · sal del círculo</span>
+        <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> mover · <kbd>E</kbd> tomar</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ FIN DE PARTIDA ═══════════ -->
+  <div id="modalFin" class="oculto">
+    <div class="panel-fin">
+      <div class="emblema" id="finEmblema">👑</div>
+      <h1 id="finTitulo">VICTORIA</h1>
+      <hr class="laser" style="margin:18px 0" />
+      <div class="fin-stats">
+        <div><span class="lbl">Ganador</span><span class="val" id="finGanador">—</span></div>
+        <div><span class="lbl">Identificador</span><span class="val" id="finId">—</span></div>
+        <div><span class="lbl">Motivo</span><span class="val">Extracción del círculo</span></div>
+        <div><span class="lbl">Ticks</span><span class="val" id="finTick">—</span></div>
+      </div>
+      <div class="fin-acciones">
+        <button type="button" class="btn-fin p" id="finOtra">🎮 Otra</button>
+        <button type="button" class="btn-fin s" id="finMenu">☰ Menú</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ HUD ═══════════ -->
+  <button id="reset">☰ Menú</button>
+  <div class="hud">
+    <h2>Estado de partida</h2>
+    <dl>
+      <dt>Conexión</dt><dd id="iConn">—</dd>
+      <dt>Tú</dt><dd id="iYo">—</dd>
+      <dt>Jugadores</dt><dd id="iJugadores">—</dd>
+      <dt>Bandera</dt><dd id="iBandera">—</dd>
+      <dt>Portador</dt><dd id="iPortador">—</dd>
+      <dt>Tick</dt><dd id="iTick">—</dd>
+      <dt>FPS</dt><dd id="iFps">—</dd>
+    </dl>
+    <ul id="feed"></ul>
+  </div>
+
+  <div class="hint">
+    <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> mover ·
+    <kbd>E</kbd> tomar o robar · toma la bandera del centro y sal del círculo dorado
+  </div>
+
+  <script>
+    (function () {
+      const $ = (id) => document.getElementById(id);
+      const select = $('modo');
+      const cards = document.querySelectorAll('.modo-card');
+      cards.forEach((card) => card.addEventListener('click', () => {
+        cards.forEach((c) => c.classList.toggle('on', c === card));
+        select.value = card.dataset.modo;
+        $('wrapLocal').style.display = card.dataset.modo === 'local' ? '' : 'none';
+        $('wrapRed').style.display = card.dataset.modo === 'red' ? '' : 'none';
+      }));
+      const bots = $('bots');
+      const clamp = (v) => Math.max(0, Math.min(20, v));
+      $('botsMenos').addEventListener('click', () => bots.value = clamp((+bots.value || 0) - 1));
+      $('botsMas').addEventListener('click', () => bots.value = clamp((+bots.value || 0) + 1));
+    })();
+  </script>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module" src="./js/visor-v3.js"></script>
+</body>
+</html>
