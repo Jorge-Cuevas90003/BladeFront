@@ -35,6 +35,9 @@ export function crearBridge({
   tcpHost = '127.0.0.1',
   tcpPort = PARAMS_DEFECTO.serverPort,
   puertoUdp = PARAMS_DEFECTO.discoveryPort,
+  // Puertos EXTRA en los que preguntar al buscar partidas. Ver la nota larga
+  // en la ruta /servidores: preguntar no es lo mismo que anunciarse.
+  puertosExtra = [],
   log = () => {},
 } = {}) {
   // La página se sirve desde otro puerto (8145), así que sin CORS el navegador
@@ -71,11 +74,25 @@ export function crearBridge({
     // pide el barrido de verdad.
     if (url.pathname === '/servidores') {
       const espera = Math.min(3000, Number(url.searchParams.get('espera')) || 800);
-      const puerto = Number(url.searchParams.get('puerto')) || puertoUdp;
       const avisos = [];
+
+      // EN QUÉ PUERTOS SE PREGUNTA. No es lo mismo que el puerto en el que se
+      // anuncia el servidor propio, y confundirlos costó no ver a nadie: si el
+      // 5001 local está ocupado, el servidor de esta máquina se mueve al 5101,
+      // pero los compañeros siguen escuchando en el 5001 que fija la spec.
+      // Preguntando solo en el 5101 se grita donde no hay nadie.
+      //
+      // Por eso se pregunta SIEMPRE en el estándar, más el propio por si algún
+      // compañero tuvo que moverse igual. Cuesta lo mismo: los datagramas salen
+      // del mismo socket y la espera es una sola.
+      const puertoPedido = Number(url.searchParams.get('puerto'));
+      const puertos = puertoPedido
+        ? [puertoPedido]
+        : [...new Set([PARAMS_DEFECTO.discoveryPort, puertoUdp, ...puertosExtra])];
+
       // Qué se miró DE VERDAD. Va en la respuesta porque el usuario tiene que
       // poder distinguir "no hay nadie" de "no miré ahí".
-      const exploracion = { vias: [], difusiones: [], sondeadas: 0 };
+      const exploracion = { vias: [], difusiones: [], sondeadas: 0, puertos };
 
       // Cada vía se resuelve por su cuenta y con su propio catch: que una falle
       // (interfaz caída, broadcast sin permisos) no puede dejar sin respuesta a
@@ -95,18 +112,30 @@ export function crearBridge({
         if (dirFija) {
           exploracion.vias.push('difusion-dirigida-manual');
           exploracion.difusiones.push({ nombre: '(manual)', difusion: dirFija, destinos: [dirFija] });
-          porDifusion = aparte('broadcast', buscarServidores({
-            puerto, direccion: dirFija, esperaMs: espera,
-          }));
+          // Un puerto por consulta, pero todos en paralelo: la espera es una.
+          porDifusion = aparte('broadcast', Promise.all(
+            puertos.map((pt) => buscarServidores({ puerto: pt, direccion: dirFija, esperaMs: espera }))
+          ).then((listas) => listas.flat()));
         } else {
           exploracion.vias.push('difusion-por-interfaz');
-          porDifusion = aparte('difusión por interfaz', difundirPorInterfaces({
-            puerto, esperaMs: espera, log,
-          }).then(({ servidores, difusiones, avisos: avs }) => {
-            // Las difusiones usadas se reportan pasen o fallen: son la prueba de
-            // por dónde se miró.
-            exploracion.difusiones.push(...difusiones);
-            avisos.push(...avs);
+          porDifusion = aparte('difusión por interfaz', Promise.all(
+            puertos.map((pt) => difundirPorInterfaces({ puerto: pt, esperaMs: espera, log }))
+          ).then((rondas) => {
+            const servidores = [];
+            // Las difusiones se reportan una vez por interfaz, con los puertos
+            // preguntados: repetir la misma interfaz por cada puerto solo haría
+            // ruido en la interfaz de usuario.
+            const porNombre = new Map();
+            for (const r of rondas) {
+              servidores.push(...r.servidores);
+              avisos.push(...r.avisos);
+              for (const d of r.difusiones) {
+                const previa = porNombre.get(d.nombre);
+                if (previa) { previa.ok = previa.ok && d.ok; if (d.error) previa.error = d.error; }
+                else porNombre.set(d.nombre, { ...d, puertos });
+              }
+            }
+            exploracion.difusiones.push(...porNombre.values());
             return servidores;
           }));
         }
@@ -148,9 +177,11 @@ export function crearBridge({
         // aquí no hace falta validar nada más.
         exploracion.sondeadas = Math.min(new Set(candidatas).size, LIMITE_SONDEO);
         const porSondeo = candidatas.length
-          ? aparte('sondeo dirigido', sondearDirecciones({
-              direcciones: candidatas, puerto, esperaMs: espera, limite: LIMITE_SONDEO, log,
-            }))
+          ? aparte('sondeo dirigido', Promise.all(
+              puertos.map((pt) => sondearDirecciones({
+                direcciones: candidatas, puerto: pt, esperaMs: espera, limite: LIMITE_SONDEO, log,
+              }))
+            ).then((listas) => listas.flat()))
           : Promise.resolve([]);
 
         // En paralelo: las esperas son la misma, no se suman — da igual que sean
@@ -273,6 +304,9 @@ if (esPrincipal) {
     tcpHost: val('tcp-host', '127.0.0.1'),
     tcpPort: Number(val('tcp-port', PARAMS_DEFECTO.serverPort)),
     puertoUdp: Number(val('discovery-port', PARAMS_DEFECTO.discoveryPort)),
+    // Puertos adicionales en los que buscar, separados por comas. Sirve si el
+    // grupo acordó uno distinto del estándar.
+    puertosExtra: (val('puertos-busqueda', '') || '').split(',').map(Number).filter(Boolean),
     log: marca,
   });
 

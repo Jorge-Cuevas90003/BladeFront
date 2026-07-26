@@ -11,70 +11,85 @@ Las pruebas que producen estos números están en `test/verify-bots-v3.mjs`.
 
 ---
 
-## A — El ganador lo decide la paridad del ciclo, no el juego
+## A — En un duelo, el ganador lo decide la paridad del ciclo
 
 **Secciones implicadas:** §14 (robo), §10 (sin colisión), §21 (una sola velocidad)
+
+**Antes de nada: sí se puede jugar y sí se puede ganar.** Una versión anterior
+de este documento decía que la partida "no termina", y eso era una exageración
+nacida de mirar solo el comportamiento de nuestros bots. Corregido abajo con
+las mediciones.
 
 §14 dice literalmente:
 
 > No existe tiempo de espera. No existe inmunidad. El robo es instantáneo.
 
 §10 añade que *"los jugadores no colisionan entre sí"*, y §21 fija una única
-`playerSpeed` para todos. Las tres reglas juntas producen esto:
+`playerSpeed`. Las tres juntas hacen que dos jugadores pegados puedan robarse
+la bandera **en todos y cada uno de los ciclos**, sin que ninguno logre
+separarse del otro.
 
-- Dos jugadores pueden ocupar **el mismo punto** (no colisionan).
-- Van **a la misma velocidad**, así que el portador no puede alejarse nunca.
-- El robo es **instantáneo y sin inmunidad**, así que basta pulsar interactuar.
+### Lo que eso rompe de verdad
 
-Resultado: la bandera cambia de dueño **en todos y cada uno de los ciclos**.
+No es que no se pueda ganar: es que **cuando dos jugadores llegan juntos al
+borde, quién gana no depende de cómo hayan jugado**. Como la posesión alterna
+cada ciclo, gana quien la tenga en el ciclo exacto del cruce, y eso lo decide
+la paridad.
 
-### Medición
+Medido en un duelo determinista, dos jugadores en el mismo punto corriendo
+hacia el mismo lado, ambos pulsando interactuar:
 
-Escenario determinista, sin azar: dos jugadores en el mismo punto, corriendo
-hacia el mismo lado, ambos interactuando cada ciclo.
+| Separación inicial | Ciclos | Robos | Gana |
+|---|---|---|---|
+| 0 unidades | 47 | 47 | **jugador 2** |
+| 11 unidades (un paso) | 48 | 48 | **jugador 1** |
+| 22 unidades | 48 | 48 | jugador 1 |
 
-| Medida | Resultado |
+**Un solo paso de diferencia al empezar cambia el ganador**, sin que ninguno
+de los dos haya jugado distinto. Y el robo ocurre literalmente en cada ciclo:
+47 robos en 47 ciclos.
+
+### El bloqueo, y por qué es secundario
+
+Hay un caso en el que la partida sí se queda colgada, pero conviene explicarlo
+bien porque **depende de la estrategia**, no solo de la regla:
+
+| Cómo juegan los dos | Resultado |
 |---|---|
-| Robos | **47 en 47 ciclos** (uno por ciclo, sin excepción) |
-| Separación final | **0.00 unidades** — nunca logran separarse |
+| Ambos corren hacia fuera | termina en 47 ciclos |
+| El portador huye y el otro **le persigue** | **no termina** (600+ ciclos) |
+| Persecución, pero empezando a ≥100 de distancia | termina en 47 ciclos |
 
-Y lo más grave: como la posesión alterna cada ciclo, **arrancar un solo paso
-más atrás (11 unidades) cambia el ganador**, sin que ninguno de los dos haya
-jugado distinto. La victoria depende de la paridad del ciclo en que se cruza
-el borde.
+El bloqueo aparece cuando el perseguidor va *hacia* el portador estando ya
+encima: como la posesión alterna cada ciclo, cada jugador cambia de objetivo
+—huir / perseguir— en ciclos alternos y el movimiento neto es cero.
 
-En partidas completas con bots, además, muchas simplemente no terminan:
-
-| Jugadores | Partidas que no terminan | Robos |
-|---|---|---|
-| 2 | 3–6 de cada 20 | ~3400 en 5400 ciclos |
-| 5 | **15–18 de cada 20** | ~20000 en 21800 ciclos |
-
-Que sea intermitente **lo empeora**: depende del ángulo de aparición aleatorio
-de §9, así que una partida oficial puede colgarse o no según la suerte del
-reparto inicial.
+Un jugador que se dé cuenta lo evita corriendo siempre hacia fuera, tenga o no
+la bandera. Nuestros bots usan la estrategia ingenua y por eso se cuelgan (con
+5 jugadores, 15-18 partidas de cada 20). **Eso es tanto una limitación de
+nuestros bots como del protocolo**, y así hay que contarlo.
 
 ### Propuesta
 
-Añadir un `protectionTimeMs` a §21 y una frase a §14: el jugador que **acaba
-de adquirir** la bandera (por recogida o por robo) es inmune durante ese
-tiempo.
+Añadir un `protectionTimeMs` a §21 y una frase a §14: quien **acaba de
+adquirir** la bandera es inmune durante ese tiempo. No es para que el juego
+"funcione" —funciona—, sino para que el resultado de un duelo dependa de jugar
+mejor y no de la paridad del ciclo.
 
 Valores medidos, con 5 jugadores:
 
 | Inmunidad | Resultado |
 |---|---|
-| 0 ms (actual) | no termina |
+| 0 ms (actual) | el duelo lo decide la paridad |
 | **200 ms** | termina en 101 ciclos, 13 robos |
 | **400 ms** | termina en 92 ciclos, 4 robos |
-| 1000 ms | termina en 91 ciclos, **0 robos** — elimina el robo del juego |
+| 1000 ms | 91 ciclos, **0 robos** — elimina el robo del juego |
 
-**Recomendación: entre 200 y 400 ms.** Por debajo no arregla nada; por encima
-de 600 el robo deja de existir como mecánica.
+**Recomendación: entre 200 y 400 ms.** Por encima de 600 el robo deja de
+existir como mecánica.
 
-> Sea cual sea el valor, tiene que ser **el mismo en todos los grupos**. Es un
-> parámetro que cambia el resultado de la partida, no un detalle de
-> presentación.
+> Sea cual sea el valor, tiene que ser **el mismo en todos los grupos**. Cambia
+> el resultado de la partida, no es un detalle de presentación.
 
 ---
 

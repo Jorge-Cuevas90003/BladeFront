@@ -70,8 +70,14 @@ for (let i = 0; i < 5; i++) {
 //
 // Juntas, las tres hacen que un perseguidor pegado al portador le robe la
 // bandera cada ciclo, y como van a la misma velocidad y pueden ocupar el mismo
-// punto, ninguno logra separarse nunca. Esto NO es un defecto de los bots: es
-// consecuencia directa de la especificación, y le pasaría igual a dos humanos.
+// punto, ninguno logra separarse nunca.
+//
+// MATIZ IMPORTANTE: que la partida se CUELGUE depende de la estrategia. Estos
+// bots persiguen al portador, y como la posesión alterna cada ciclo acaban
+// cambiando de objetivo —huir / perseguir— en ciclos alternos, con movimiento
+// neto cero. Dos jugadores que corran siempre hacia fuera sí terminan, en 47
+// ciclos. Lo que sí es culpa de la regla, y no de los bots, es que en ese
+// duelo gane quien tenga la bandera en el ciclo exacto del cruce.
 //
 // Se mide sobre varios intentos porque el spawn usa un ángulo aleatorio (§9):
 // que dos jugadores acaben bloqueados depende de si aparecen cerca o en lados

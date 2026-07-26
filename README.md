@@ -160,12 +160,11 @@ node test/verify-bots-v3.mjs         # y el hallazgo de abajo
 
 **Un problema del protocolo que encontramos midiendo.** Tal como está escrito,
 robar la bandera es instantáneo, los jugadores no colisionan y todos van a la
-misma velocidad. Las tres reglas juntas hacen que quien persigue al portador
-le quite la bandera *en cada ciclo* sin que ninguno pueda separarse: en el
-duelo de prueba salen 47 robos en 47 ciclos. Lo grave no es que la partida se
-atasque, sino que cuando termina, **gana quien tenga la bandera en el ciclo
-exacto en que se cruza el borde** — arrancar un solo paso más atrás le da la
-victoria al otro. El detalle, con las mediciones, está en
+misma velocidad. Se puede jugar y se puede ganar, pero cuando dos llegan juntos
+al borde la bandera les cambia de manos *en cada ciclo* —47 robos en 47 ciclos
+en el duelo de prueba— y acaba ganando quien la tenga en el ciclo exacto del
+cruce. Arrancar un solo paso más atrás le da la victoria al otro sin que
+ninguno juegue distinto. El detalle, con las mediciones, está en
 [`docs/observaciones-prfc-v3.md`](docs/observaciones-prfc-v3.md).
 
 Nuestro servidor se mantiene fiel a la especificación mientras el equipo no la
