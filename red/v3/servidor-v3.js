@@ -133,6 +133,15 @@ export function crearServidor({
         if (info.playerId) {
           return enviar(socket, TIPOS.ERROR, { code: ERRORES.INVALID_MESSAGE, description: 'ya hiciste JOIN en esta conexión' });
         }
+
+        // Desconectar cualquier entrada anterior activa con el mismo nombre exacto
+        const limpio = String(msg.name ?? '').trim();
+        for (const j of juego.jugadores.values()) {
+          if (j.connected && j.name === limpio) {
+            j.connected = false;
+          }
+        }
+
         const { jugador, error } = juego.agregarJugador(msg.name);
         if (error) return enviar(socket, TIPOS.JOIN_REJECTED, { reason: error });
 
@@ -363,10 +372,11 @@ export function crearServidor({
         juego.ganadorId = 0;
       }
 
+      const j = juego.jugadores.get(info.playerId);
+      if (j) j.connected = false;
+      if (juego.jugadoresActivos().length === 0) anfitrionId = 0;
+
       if (juego.estado === ESTADO_PARTIDA.WAITING || juego.estado === ESTADO_PARTIDA.STARTING) {
-        const j = juego.jugadores.get(info.playerId);
-        if (j) j.connected = false;
-        if (juego.jugadoresActivos().length === 0) anfitrionId = 0;
         difundir(TIPOS.LOBBY_STATE, juego.serializarLobby());
       }
     });
