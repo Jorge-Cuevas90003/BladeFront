@@ -30,6 +30,7 @@ import { createCyberBanner } from '../../modo-juggernaut/js/flag.js';
 import { crearMonumentos } from '../../arena-vacio/js/monumentos.js';
 
 import { ClienteV3 } from './cliente-v3.js';
+import { crearVisor2D } from './visor-2d.js';
 import { TIPOS, DIRECCIONES, ESTADO_BANDERA, PARAMS_DEFECTO } from '../../../red/v3/protocolo-v3.js';
 
 // ---------------------------------------------------------------------------
@@ -282,6 +283,11 @@ function bandera(txt) {
 //  Cliente y suscripciones
 // ---------------------------------------------------------------------------
 const cliente = new ClienteV3();
+
+// Vista 2D cruda sobre el mismo cliente: dibuja el GAME_STATE sin interpolar,
+// así que sirve para ver qué está mandando de verdad el servidor cuando el 3D
+// y el servidor de otro equipo no coinciden.
+const visor2D = crearVisor2D(document.getElementById('mapa2d'), cliente);
 let miId = 0;
 let terminada = false;
 
@@ -433,6 +439,12 @@ function recalcularDireccion() {
 
 window.addEventListener('keydown', (e) => {
   if (e.repeat) return;
+  if (e.code === 'KeyM') {
+    const p = document.getElementById('panel2d');
+    p.classList.toggle('oculto');
+    if (!p.classList.contains('oculto')) visor2D.ajustar();
+    return;
+  }
   if (e.code === 'KeyE' || e.code === 'Space') {
     e.preventDefault();
     cliente.interactuar();

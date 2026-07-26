@@ -130,6 +130,23 @@
       clip-path:polygon(9px 0,100% 0,100% 100%,0 100%,0 9px); }
     .hint kbd { background:#0e131a; border:1px solid var(--line); border-radius:3px; padding:1px 5px; font-size:10px; }
 
+    /* ─── panel 2D de diagnóstico ─── */
+    #panel2d {
+      position:fixed; bottom:22px; left:22px; z-index:6; width:340px; height:340px;
+      background:rgba(6,8,12,.86); border:1px solid var(--line); backdrop-filter:blur(6px);
+      clip-path:polygon(12px 0,100% 0,100% 100%,0 100%,0 12px);
+      transition:opacity .25s, transform .25s; display:flex; flex-direction:column;
+    }
+    #panel2d.oculto { opacity:0; transform:translateY(12px); pointer-events:none; }
+    #panel2d header {
+      display:flex; justify-content:space-between; align-items:center; padding:8px 12px;
+      border-bottom:1px solid var(--line); font-size:10px; letter-spacing:.2em;
+      text-transform:uppercase; color:var(--oro); font-weight:600;
+    }
+    #panel2d header span:last-child { color:var(--dim); letter-spacing:.1em; }
+    #mapa2d { flex:1; width:100%; display:block; }
+    @media (max-width:700px) { #panel2d { display:none; } }
+
     #banda { position:fixed; top:14%; left:50%; transform:translateX(-50%); z-index:8;
       font-family:'Cinzel',serif; font-weight:700; font-size:26px; letter-spacing:.12em; color:var(--oro-hi);
       text-shadow:0 0 28px rgba(255,182,56,.6), 0 2px 20px rgba(0,0,0,.9); pointer-events:none;
@@ -309,9 +326,16 @@
     <ul id="feed"></ul>
   </div>
 
+  <!-- ═══════════ VISTA 2D DE DIAGNÓSTICO ═══════════ -->
+  <div id="panel2d" class="oculto">
+    <header><span>Vista cruda</span><span>M</span></header>
+    <canvas id="mapa2d"></canvas>
+  </div>
+
   <div class="hint">
     <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> mover ·
-    <kbd>E</kbd> tomar o robar · toma la bandera del centro y sal del círculo dorado
+    <kbd>E</kbd> tomar o robar · <kbd>M</kbd> vista 2D ·
+    toma la bandera del centro y sal del círculo dorado
   </div>
 
   <script>

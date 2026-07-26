@@ -20,6 +20,7 @@
 //    --no-udp        no publicarse por descubrimiento UDP
 //    --countdown N   segundos de cuenta atrás (5)
 //    --tick N        milisegundos por ciclo (50)
+//    --keepalive N   sondeo TCP para detectar clientes muertos (10000 ms)
 //    --verbose       registra cada mensaje que entra y sale
 // ============================================================================
 
@@ -42,6 +43,7 @@ export function crearServidor({
   minJugadores = 2,
   udp = true,
   puertoUdp = PARAMS_DEFECTO.discoveryPort,
+  keepAliveMs = 10000,
   verboso = false,
   log = () => {},
 } = {}) {
@@ -210,6 +212,17 @@ export function crearServidor({
   const servidor = net.createServer((socket) => {
     socket.setNoDelay(true); // con un tick de 50 ms, Nagle solo añadiría retardo
 
+    // A quien le desenchufan el cable o suspende el equipo NO le llega ningún
+    // FIN, así que el socket queda "abierto" y el jugador nunca se desconecta.
+    // Si llevaba la bandera, la partida se queda esperándolo indefinidamente.
+    //
+    // Se resuelve con keepalive de TCP, no con un tiempo de inactividad de la
+    // aplicación: un jugador quieto es perfectamente legítimo (§10 permite la
+    // dirección NONE) y echarlo por no mandar mensajes rompería la partida a
+    // quien simplemente no se está moviendo. El keepalive vive por debajo del
+    // protocolo, así que no cambia nada de lo que se ve en el cable.
+    socket.setKeepAlive(true, keepAliveMs);
+
     const acc = new AcumuladorTCP(
       (msg) => manejar(socket, msg),
       (code, detalle) => {
@@ -312,6 +325,7 @@ if (esPrincipal) {
     puerto: Number(val('port', PARAMS_DEFECTO.serverPort)),
     puertoUdp: Number(val('discovery-port', PARAMS_DEFECTO.discoveryPort)),
     params, nombre, auto, minJugadores,
+    keepAliveMs: Number(val('keepalive', 10000)),
     udp: !flag('no-udp'),
     verboso: flag('verbose'),
     log: marca,

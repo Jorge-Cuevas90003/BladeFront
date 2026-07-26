@@ -88,6 +88,10 @@ export function crearBridge({
 
     const tcp = net.connect(port, host);
     tcp.setNoDelay(true);
+    // Mismo motivo que en el servidor: si el equipo que aloja la partida se
+    // cae de golpe, sin keepalive este socket quedaría abierto y el navegador
+    // esperaría estados que ya no van a llegar, sin enterarse de nada.
+    tcp.setKeepAlive(true, 10000);
     log(`navegador conectado → abriendo TCP a ${host}:${port}`);
 
     // Lo que llega del navegador puede encolarse antes de que el TCP esté
