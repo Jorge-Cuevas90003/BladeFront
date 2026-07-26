@@ -25,8 +25,8 @@ import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 import { WebSocketServer } from 'ws';
 import {
-  buscarServidores, sondearDirecciones, direccionesRadminLocales,
-  combinarHallazgos, LIMITE_SONDEO,
+  buscarServidores, difundirPorInterfaces, sondearDirecciones,
+  direccionesRadminLocales, combinarHallazgos, colapsarPropias, LIMITE_SONDEO,
 } from './descubrimiento.js';
 import { PARAMS_DEFECTO } from './protocolo-v3.js';
 
@@ -53,17 +53,29 @@ export function crearBridge({
     // Descubrimiento por delegación: el navegador no puede hacer broadcast UDP,
     // así que lo hace el bridge y devuelve la lista ya resuelta.
     //
-    //   /servidores                       → solo broadcast (como siempre)
-    //   /servidores?escanear=1            → + sondeo de las subredes Radmin locales
-    //   /servidores?ips=26.11.206.5,...   → + sondeo de esas IPs concretas
+    //   /servidores                       → difusión dirigida por CADA interfaz
+    //   /servidores?ips=26.43.87.248,...  → + sondeo directo de esas IPs
+    //   /servidores?escanear=subred       → + barrido del /24 propio (ver abajo)
+    //   /servidores?direccion=X           → en vez de la difusión por interfaz,
+    //                                       difunde solo a X (pruebas y manual)
     //
-    // El sondeo dirigido SUMA al broadcast, no lo sustituye: sobre Radmin VPN el
-    // broadcast suele no atravesar el adaptador virtual, pero cuando sí pasa es
-    // más barato que barrer 254 direcciones.
+    // La vía por defecto es la difusión dirigida POR INTERFAZ, no un broadcast a
+    // 255.255.255.255 desde un socket suelto: ese salía por la Wi-Fi y nunca
+    // entraba en la VPN. Atando un socket a cada interfaz, la de Radmin difunde
+    // a 26.255.255.255 y alcanza a todo el 26.0.0.0/8 de una vez.
+    //
+    // `escanear=1` (lo que manda la interfaz vieja) YA NO barre el /24: los
+    // compañeros están repartidos por todo el /8, así que ese barrido no
+    // encontraba a nadie y encima daba a entender que ya se había buscado. Se
+    // acepta el parámetro para no romper a nadie, pero solo `escanear=subred`
+    // pide el barrido de verdad.
     if (url.pathname === '/servidores') {
       const espera = Math.min(3000, Number(url.searchParams.get('espera')) || 800);
       const puerto = Number(url.searchParams.get('puerto')) || puertoUdp;
       const avisos = [];
+      // Qué se miró DE VERDAD. Va en la respuesta porque el usuario tiene que
+      // poder distinguir "no hay nadie" de "no miré ahí".
+      const exploracion = { vias: [], difusiones: [], sondeadas: 0 };
 
       // Cada vía se resuelve por su cuenta y con su propio catch: que una falle
       // (interfaz caída, broadcast sin permisos) no puede dejar sin respuesta a
@@ -75,41 +87,84 @@ export function crearBridge({
       });
 
       try {
-        const porBroadcast = aparte('broadcast', buscarServidores({
-          puerto,
-          direccion: url.searchParams.get('direccion') || '255.255.255.255',
-          esperaMs: espera,
-        }));
+        // Una `direccion` explícita significa "pregunta ahí y solo ahí": es el
+        // modo manual y el de las pruebas, que apuntan a 127.0.0.1 para no
+        // depender de la LAN de quien las corra.
+        const dirFija = url.searchParams.get('direccion');
+        let porDifusion;
+        if (dirFija) {
+          exploracion.vias.push('difusion-dirigida-manual');
+          exploracion.difusiones.push({ nombre: '(manual)', difusion: dirFija, destinos: [dirFija] });
+          porDifusion = aparte('broadcast', buscarServidores({
+            puerto, direccion: dirFija, esperaMs: espera,
+          }));
+        } else {
+          exploracion.vias.push('difusion-por-interfaz');
+          porDifusion = aparte('difusión por interfaz', difundirPorInterfaces({
+            puerto, esperaMs: espera, log,
+          }).then(({ servidores, difusiones, avisos: avs }) => {
+            // Las difusiones usadas se reportan pasen o fallen: son la prueba de
+            // por dónde se miró.
+            exploracion.difusiones.push(...difusiones);
+            avisos.push(...avs);
+            return servidores;
+          }));
+        }
 
         // Las candidatas de ambos parámetros se juntan en UNA sola lista para
         // que el recorte a LIMITE_SONDEO valga por petición, no por parámetro.
+        // Las IPs pegadas por el usuario van PRIMERO: son las que él eligió a
+        // mano, y si el barrido de subred llenara el cupo antes, se quedarían
+        // fuera sin que nadie se lo dijera.
         const candidatas = [];
-        if (url.searchParams.get('escanear') === '1') {
+        const ips = url.searchParams.get('ips');
+        if (ips) {
+          // Se acepta lo que salga de pegar una lista de Radmin: comas, saltos
+          // de línea, espacios y punto y coma.
+          const pegadas = ips.split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean);
+          candidatas.push(...pegadas);
+          exploracion.vias.push('sondeo-ips');
+        }
+
+        const escanear = url.searchParams.get('escanear');
+        if (escanear === 'subred') {
           try {
             const auto = direccionesRadminLocales({ limite: LIMITE_SONDEO });
             if (auto.length === 0) avisos.push('no hay ninguna interfaz local en el rango 26.x.x.x (Radmin)');
             candidatas.push(...auto);
+            exploracion.vias.push('sondeo-subred-propia');
           } catch (e) {
-            avisos.push(`escaneo automático: ${e.message}`);
+            avisos.push(`escaneo de subred: ${e.message}`);
           }
+        } else if (escanear) {
+          // Honestidad: la UI vieja manda escanear=1 y antes eso barría un /24
+          // que nunca contuvo a nadie. Se dice que no se hizo, en vez de fingir.
+          // Corto a propósito: la interfaz vieja muestra avisos[0] tal cual, y
+          // esta rama se da en TODAS sus consultas. El detalle va en `exploracion`.
+          avisos.push('se difundió por cada interfaz (26.0.0.0/8 incluido); el barrido del /24 propio ya no se hace solo');
         }
-        const ips = url.searchParams.get('ips');
-        if (ips) candidatas.push(...ips.split(',').map((s) => s.trim()).filter(Boolean));
 
         // sondearDirecciones ya filtra las no-IPv4 y recorta al tope, así que
         // aquí no hace falta validar nada más.
+        exploracion.sondeadas = Math.min(new Set(candidatas).size, LIMITE_SONDEO);
         const porSondeo = candidatas.length
           ? aparte('sondeo dirigido', sondearDirecciones({
               direcciones: candidatas, puerto, esperaMs: espera, limite: LIMITE_SONDEO, log,
             }))
           : Promise.resolve([]);
 
-        // En paralelo: las dos esperas son la misma, no se suman.
-        const [b, d] = await Promise.all([porBroadcast, porSondeo]);
-        const servidores = combinarHallazgos(b, d); // broadcast primero: gana su `via`
+        // En paralelo: las esperas son la misma, no se suman — da igual que sean
+        // 5 interfaces y 30 IPs pegadas.
+        const [b, d] = await Promise.all([porDifusion, porSondeo]);
+        // Difusión primero: gana su `via`. Y colapsando al final, porque una
+        // partida alojada aquí mismo responde por cada interfaz y por cada vía:
+        // el jugador vería su propio servidor repetido cuatro veces.
+        const servidores = colapsarPropias(combinarHallazgos(b, d));
 
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
-        return res.end(JSON.stringify(avisos.length ? { servidores, avisos } : { servidores }));
+        return res.end(JSON.stringify(
+          avisos.length ? { servidores, avisos, exploracion } : { servidores, exploracion }
+        ));
       } catch (e) {
         res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' });
         return res.end(JSON.stringify({ error: e.message }));

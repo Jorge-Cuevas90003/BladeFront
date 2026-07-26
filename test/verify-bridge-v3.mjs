@@ -245,6 +245,108 @@ try {
       `explicando el fallo en 'avisos' ("${roto.avisos?.[0]}")`);
   }
 
+  // ── 4c. Difusión dirigida POR INTERFAZ (la vía por defecto) ───────────────
+  // Sin `direccion`, el bridge ya no manda un broadcast suelto a 255.255.255.255
+  // (que salía por la Wi-Fi y nunca entraba en la VPN): ata un socket a CADA
+  // interfaz y difunde a la dirigida de cada una. Aquí se comprueba de verdad,
+  // contra las interfaces reales de esta máquina.
+  console.log('\n== 4c. /servidores sin `direccion`: difusión por interfaz ==');
+  {
+    const t0 = Date.now();
+    const r = await (await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=800`)).json();
+    const ms = Date.now() - t0;
+
+    check(r.servidores?.some((s) => s.tcpPort === PUERTO_TCP),
+      `la difusión por interfaz encuentra el servidor (${r.servidores?.length})`);
+    check(r.servidores?.every((s) => s.via === 'broadcast'), "y lo etiqueta 'broadcast', como la interfaz espera");
+
+    // Lo importante para el usuario: qué se miró DE VERDAD.
+    check(Array.isArray(r.exploracion?.vias) && r.exploracion.vias.includes('difusion-por-interfaz'),
+      `la respuesta declara la vía empleada (${r.exploracion?.vias?.join(', ')})`);
+    const difs = r.exploracion?.difusiones || [];
+    check(difs.length > 0, `y las difusiones usadas (${difs.length})`);
+    for (const d of difs) console.log(`  · ${d.nombre}: ${d.local} → ${d.difusion} ${d.ok ? 'ok' : 'FALLÓ ' + d.error}`);
+
+    // Esta máquina tiene Radmin en 26.11.206.94/8. Si está, la difusión tiene
+    // que ser la de la VPN entera, y el servidor tiene que aparecer por ahí.
+    const radmin = difs.find((d) => d.difusion === '26.255.255.255');
+    if (radmin) {
+      check(radmin.ok === true, `la interfaz Radmin difundió a 26.255.255.255 (${radmin.local})`);
+      check(r.servidores?.some((s) => s.difusion === '26.255.255.255' || s.host === radmin.local),
+        'y el servidor se ve a través de la interfaz de Radmin');
+    } else {
+      console.log('  · (sin interfaz Radmin en esta máquina: 26.255.255.255 no se pudo comprobar aquí)');
+    }
+
+    // Cada servidor dice por qué interfaz llegó, sin quitar ningún campo viejo.
+    const s = r.servidores?.find((x) => x.tcpPort === PUERTO_TCP);
+    for (const campo of ['host', 'tcpPort', 'gameId', 'serverName', 'state', 'playerCount', 'maximumPlayers', 'via']) {
+      check(campo in s, `el servidor conserva el campo '${campo}'`);
+    }
+    check(typeof s.interfaz === 'string' && typeof s.difusion === 'string',
+      `y añade por dónde llegó (${s.interfaz} → ${s.difusion})`);
+
+    // Varias interfaces se difunden a la vez: la espera no se multiplica.
+    console.log(`  · /servidores (difusión por ${difs.length} interfaces) tardó ${ms} ms`);
+    check(ms < 2000, `las interfaces van en paralelo (${ms} ms < 2000)`);
+  }
+
+  // ── 4d. El /24 automático ya no engaña ────────────────────────────────────
+  // Antes `escanear=1` barría el /24 de esta máquina, que está vacío: no
+  // encontraba a nadie Y hacía creer que ya se había buscado en la VPN.
+  console.log('\n== 4d. escanear=1 ya no finge un barrido inútil ==');
+  {
+    const r = await (await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&escanear=1`)).json();
+    check(!r.exploracion?.vias?.includes('sondeo-subred-propia'), 'escanear=1 no barre la subred propia');
+    check(r.exploracion?.sondeadas === 0, `no se sondea ninguna dirección a ciegas (${r.exploracion?.sondeadas})`);
+    check(r.avisos?.some((a) => a.includes('26.0.0.0/8')),
+      `y se dice por qué, en vez de callarlo ("${r.avisos?.find((a) => a.includes('26.0.0.0/8'))?.slice(0, 60)}…")`);
+    check(r.servidores?.some((s) => s.tcpPort === PUERTO_TCP), 'sin dejar de encontrar lo que sí se puede encontrar');
+
+    // Quien lo quiera de verdad lo pide explícito, y entonces sí se declara.
+    const sub = await (await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&escanear=subred`)).json();
+    check(sub.exploracion?.vias?.includes('sondeo-subred-propia'),
+      'escanear=subred sí lo hace, y lo declara');
+    check(sub.exploracion?.sondeadas === 254,
+      `barriendo las 254 del /24 propio (${sub.exploracion?.sondeadas})`);
+  }
+
+  // ── 4e. Lista pegada de Radmin: 30 IPs sin sumar esperas ──────────────────
+  console.log('\n== 4e. ?ips= con una lista pegada de Radmin ==');
+  {
+    // Las 20 IPs reales del grupo (repartidas por todo el /8) + 10 de relleno.
+    const delGrupo = [
+      '26.11.206.94', '26.202.164.209', '26.10.214.186', '26.149.22.221',
+      '26.78.151.72', '26.135.3.121', '26.230.5.15', '26.169.238.102',
+      '26.43.87.248', '26.94.87.242', '26.221.47.165', '26.106.185.242',
+      '26.138.165.249', '26.52.44.2', '26.204.234.64', '26.192.234.52',
+      '26.99.36.148', '26.63.72.136', '26.98.33.110', '26.157.21.141',
+    ];
+    const relleno = Array.from({ length: 10 }, (_, i) => `26.200.${i}.7`);
+    const lista = [...delGrupo, ...relleno, '127.0.0.1'];
+
+    const t0 = Date.now();
+    const r = await (await fetch(
+      `http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=800&direccion=169.254.240.7&ips=${lista.join(',')}`
+    )).json();
+    const ms = Date.now() - t0;
+
+    check(r.exploracion?.sondeadas === lista.length,
+      `se sondean las ${lista.length} IPs pegadas, ninguna se cae por el camino (${r.exploracion?.sondeadas})`);
+    check(r.exploracion?.vias?.includes('sondeo-ips'), 'y la respuesta lo declara');
+    check(r.servidores?.some((s) => s.tcpPort === PUERTO_TCP && s.via === 'directo'),
+      'el servidor aparece por sondeo directo, con el broadcast apuntando a la nada');
+    console.log(`  · ${lista.length} IPs pegadas: ${ms} ms`);
+    check(ms < 2000, `31 IPs cuestan UNA espera, no 31 (${ms} ms < 2000)`);
+
+    // Pegar de Radmin arrastra saltos de línea y espacios, no solo comas.
+    const sucia = await (await fetch(
+      `http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&direccion=169.254.240.7&ips=${encodeURIComponent('26.43.87.248\n 127.0.0.1 ;26.94.87.242')}`
+    )).json();
+    check(sucia.exploracion?.sondeadas === 3, `saltos de línea y ';' también separan (${sucia.exploracion?.sondeadas})`);
+    check(sucia.servidores?.some((s) => s.tcpPort === PUERTO_TCP), 'y la IP buena de la lista sucia se sondea igual');
+  }
+
   // ── 5. Destino elegible por query ─────────────────────────────────────────
   console.log('\n== 5. Elegir servidor destino desde la URL ==');
   {

@@ -99,9 +99,17 @@
     #listaServidores li b { flex:none; }
     #listaServidores li span:nth-child(3) { flex:1; }
     .nota.aviso { color:#d8a04a; border-left:2px solid rgba(216,160,74,.45); padding-left:8px; margin-top:8px; }
+    /* por dónde se buscó: sin esto una lista vacía es ambigua */
+    .exploracion { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
+    .exploracion span {
+      font-size:9px; letter-spacing:.1em; padding:3px 7px; border:1px solid var(--line);
+      color:var(--dim); cursor:help; white-space:nowrap;
+    }
+    .exploracion .via-radmin { color:#6ee7a0; border-color:rgba(110,231,160,.45); }
+    .exploracion .via-mal { color:var(--rojo); border-color:rgba(255,74,61,.4); }
     /* añadir la IP de un compañero cuando el broadcast no lo alcanza */
-    .agregar { display:flex; gap:0; margin-top:10px; }
-    .agregar .txt { flex:1; font-size:13px; padding:9px 12px; }
+    .agregar { display:flex; gap:0; margin-top:10px; align-items:stretch; }
+    .agregar .txt { flex:1; font-size:13px; padding:9px 12px; resize:vertical; min-height:44px; max-height:140px; line-height:1.4; }
     .agregar .txt.malo { border-color:var(--rojo); box-shadow:0 0 0 1px var(--rojo); }
     .agregar button {
       width:44px; background:rgba(6,9,13,.85); color:var(--oro); border:1px solid var(--line);
@@ -306,10 +314,15 @@
           <span id="estadoBusqueda" class="buscando">buscando…</span>
         </div>
         <ul id="listaServidores"><li class="vacio">Buscando en la red local…</li></ul>
+        <div id="exploracion" class="exploracion" style="display:none"></div>
         <p id="avisoBusqueda" class="nota aviso" style="display:none"></p>
         <div class="agregar">
-          <input class="txt" id="ipManual" placeholder="26.x.x.x — IP de un compañero" spellcheck="false" autocomplete="off" />
-          <button type="button" id="anadirIp" title="Preguntar a esa IP directamente">＋</button>
+          <!-- textarea y no input: un <input> BORRA los saltos de línea, y al
+               pegar una columna de Radmin las IPs quedan pegadas entre sí y se
+               interpretan mal, generando direcciones que no existen. -->
+          <textarea class="txt" id="ipManual" rows="2" spellcheck="false" autocomplete="off"
+            placeholder="Pega aquí las IPs de Radmin (una por línea)"></textarea>
+          <button type="button" id="anadirIp" title="Preguntar directamente a esas direcciones">＋</button>
         </div>
         <p class="nota">
           El navegador no puede abrir TCP ni mandar UDP, así que el bridge lo hace

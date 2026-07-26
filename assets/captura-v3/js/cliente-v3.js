@@ -207,24 +207,31 @@ export class ClienteV3 extends EventTarget {
   // Pregunta al bridge por las partidas de la red. El navegador no puede hacer
   // broadcast UDP ni sondear direcciones, así que lo hace el bridge.
   //
-  //   escanear : además del broadcast, barre las subredes Radmin locales. Hace
-  //              falta porque sobre la VPN el broadcast suele no atravesar el
-  //              adaptador virtual y los compañeros quedan invisibles.
-  //   ips      : direcciones concretas a preguntar, para las que el usuario
-  //              escribe a mano.
+  // Por defecto el bridge difunde por CADA interfaz local a su dirección de
+  // difusión dirigida. Eso es lo que alcanza a los compañeros de Radmin VPN:
+  // la red virtual reparte direcciones por todo el 26.0.0.0/8, así que barrer
+  // la subred propia no sirve de nada y difundir a 255.255.255.255 sin atar el
+  // socket sale por la interfaz por defecto, que no es la de la VPN.
   //
-  // Devuelve { servidores, avisos } — los avisos explican qué vía falló, que es
-  // la diferencia entre "no hay nadie" y "no pude mirar".
+  //   ips : direcciones concretas a preguntar. La red de seguridad para cuando
+  //         la difusión tampoco atraviesa el adaptador virtual.
+  //
+  // Devuelve { servidores, avisos, exploracion }. `exploracion.difusiones` dice
+  // por qué interfaces se preguntó y si cada una funcionó: es la diferencia
+  // entre "no hay nadie" y "no miré ahí".
   static async buscarServidores(urlBridge = 'http://localhost:8146', {
-    esperaMs = 800, escanear = false, ips = [],
+    esperaMs = 800, ips = [],
   } = {}) {
     const q = new URLSearchParams({ espera: String(esperaMs) });
-    if (escanear) q.set('escanear', '1');
     if (ips.length) q.set('ips', ips.join(','));
     const r = await fetch(`${urlBridge}/servidores?${q}`);
     if (!r.ok) throw new Error('el bridge respondió ' + r.status);
     const datos = await r.json();
-    return { servidores: datos.servidores ?? [], avisos: datos.avisos ?? [] };
+    return {
+      servidores: datos.servidores ?? [],
+      avisos: datos.avisos ?? [],
+      exploracion: datos.exploracion ?? null,
+    };
   }
 
   // ==========================================================================

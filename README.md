@@ -148,7 +148,7 @@ el cable viaja exactamente lo que espera cualquier otro equipo.
 
 **Verificación.** El protocolo trae una prueba de compatibilidad —un `INPUT`
 concreto que debe dar los bytes `11 03 00 07 01`— y sobre eso montamos el
-resto. Son 320 comprobaciones que van desde esos bytes sueltos hasta partidas
+resto. Son 390 comprobaciones que van desde esos bytes sueltos hasta partidas
 completas jugadas por sockets reales:
 
 ```bash

@@ -11,6 +11,7 @@ import {
   publicarServidor, buscarServidores, sondearDirecciones,
   direccionesDeSubred, interfacesLocales, direccionesRadminLocales,
   combinarHallazgos, esRangoRadmin, LIMITE_SONDEO,
+  direccionDeDifusion, difusionesLocales, difundirPorInterfaces, colapsarPropias,
 } from '../red/v3/descubrimiento.js';
 import { TIPOS, VERSION, ESTADO_PARTIDA, codificar, decodificar } from '../red/v3/protocolo-v3.js';
 
@@ -264,6 +265,186 @@ try {
       direcciones: [...relleno, '127.0.0.1'], puerto: PUERTO, esperaMs: 700,
     });
     check(recortado.length === 0, `lo que pasa de ${LIMITE_SONDEO} direcciones no se sondea (${recortado.length})`);
+  }
+
+  // ── 11. Dirección de difusión dirigida de una interfaz ────────────────────
+  // Es el cálculo del que depende todo lo demás: `ip | ~mascara`.
+  console.log('\n== 11. Cálculo de la difusión dirigida ==');
+  {
+    check(direccionDeDifusion('26.11.206.94', '255.0.0.0') === '26.255.255.255',
+      `Radmin /8 difunde a 26.255.255.255 (${direccionDeDifusion('26.11.206.94', '255.0.0.0')})`);
+    // Ese /8 es justo el punto: los compañeros están en 26.43.87.248,
+    // 26.202.164.209, 26.94.87.242… ninguno cae en el /24 de esta máquina, pero
+    // los 20 comparten la misma difusión.
+    for (const ip of ['26.43.87.248', '26.202.164.209', '26.94.87.242', '26.157.21.141']) {
+      check(direccionDeDifusion(ip, '255.0.0.0') === '26.255.255.255',
+        `${ip} comparte esa misma difusión`);
+    }
+    check(direccionDeDifusion('192.168.1.20', '255.255.255.0') === '192.168.1.255',
+      'una Wi-Fi /24 difunde a su .255');
+    check(direccionDeDifusion('192.168.5.6', '255.255.255.252') === '192.168.5.7',
+      `y un /30 a su última (${direccionDeDifusion('192.168.5.6', '255.255.255.252')})`);
+
+    let lanzo = false;
+    try { direccionDeDifusion('carro', '255.0.0.0'); } catch { lanzo = true; }
+    check(lanzo, 'una IP inválida se rechaza en vez de devolver basura');
+  }
+
+  // ── 12. Difusiones derivadas de las interfaces de ESTA máquina ────────────
+  console.log('\n== 12. Difusiones de las interfaces locales ==');
+  {
+    const difs = difusionesLocales();
+    check(Array.isArray(difs) && difs.length > 0, `se derivan difusiones reales (${difs.length})`);
+    for (const d of difs) console.log(`  · ${d.nombre}: ${d.local}/${d.mascara} → ${d.difusion}`);
+    check(difs.every((d) => d.difusion.split('.').length === 4), 'todas son IPv4 con sus 4 octetos');
+    // El loopback solo encontraría servidores de esta misma máquina: fuera del
+    // camino normal, dentro cuando se pide (las pruebas lo necesitan).
+    check(difs.every((d) => !d.interna), 'el loopback no entra por defecto');
+    check(difusionesLocales({ incluirInternas: true }).some((d) => d.local === '127.0.0.1'),
+      'pero sí cuando se pide incluir las internas');
+
+    const radmin = difs.filter((d) => d.radmin);
+    if (radmin.length) {
+      check(radmin.every((d) => d.difusion === '26.255.255.255'),
+        `la interfaz Radmin difunde a toda la VPN, no a su /24 (${radmin.map((d) => d.difusion).join(', ')})`);
+    } else {
+      console.log('  · (sin interfaz Radmin en esta máquina: 26.255.255.255 no se pudo comprobar aquí)');
+    }
+  }
+
+  // ── 13. Difusión dirigida POR INTERFAZ ────────────────────────────────────
+  // La vía principal: un socket atado a CADA interfaz. Aquí se inyecta la lista
+  // de interfaces para que la prueba no dependa de la red de quien la corra.
+  console.log('\n== 13. Difusión dirigida por interfaz ==');
+  {
+    const loopback = { nombre: 'loopback-prueba', local: '127.0.0.1', mascara: '255.0.0.0', difusion: '127.255.255.255' };
+
+    const r = await difundirPorInterfaces({ puerto: PUERTO, esperaMs: 800, interfaces: [loopback] });
+    check(r.servidores?.length === 1, `difundiendo a 127.255.255.255 aparece el servidor (${r.servidores?.length})`);
+    check(r.servidores[0]?.serverName === 'Arena BladeFront', 'con los mismos datos que por las otras vías');
+    check(r.servidores[0]?.host === '127.0.0.1', 'la IP sigue saliendo del origen del datagrama (§27)');
+
+    // `via` no cambia de valores: la interfaz ya sabe leer 'broadcast'/'directo'.
+    check(r.servidores[0]?.via === 'broadcast', `sigue etiquetado 'broadcast' (${r.servidores[0]?.via})`);
+    // Lo nuevo se AÑADE: por dónde salió exactamente.
+    check(r.servidores[0]?.interfaz === 'loopback-prueba', `y se añade la interfaz (${r.servidores[0]?.interfaz})`);
+    check(r.servidores[0]?.difusion === '127.255.255.255', `y la difusión usada (${r.servidores[0]?.difusion})`);
+
+    // Sin esto la interfaz no puede distinguir "no hay nadie" de "no miré ahí".
+    check(r.difusiones?.length === 1, `se informa por dónde se difundió (${r.difusiones?.length})`);
+    check(r.difusiones[0]?.destinos?.includes('127.255.255.255'), 'con la dirección de difusión dirigida');
+    check(r.difusiones[0]?.ok === true, 'y marcada como cursada');
+  }
+
+  // ── 14. Una interfaz caída no tumba a las demás ───────────────────────────
+  // El caso real: VMware desaparece o la Wi-Fi no admite difusión, y la de
+  // Radmin — la única que importa — tiene que seguir preguntando igual.
+  console.log('\n== 14. Aislamiento de fallos entre interfaces ==');
+  {
+    const loopback = { nombre: 'loopback-prueba', local: '127.0.0.1', mascara: '255.0.0.0', difusion: '127.255.255.255' };
+    // 10.99.99.99 no existe en esta máquina: atar ahí da EADDRNOTAVAIL.
+    const fantasma = { nombre: 'adaptador-fantasma', local: '10.99.99.99', mascara: '255.255.255.0', difusion: '10.99.99.255' };
+
+    const t0 = performance.now();
+    const r = await difundirPorInterfaces({ puerto: PUERTO, esperaMs: 800, interfaces: [fantasma, loopback] });
+    const ms = performance.now() - t0;
+
+    check(r.servidores?.length === 1, `con una interfaz rota delante, la buena sigue encontrando (${r.servidores?.length})`);
+    check(r.avisos?.length >= 1, `y el fallo se anota en vez de perderse ("${r.avisos?.[0]}")`);
+    check(r.avisos?.some((a) => a.includes('adaptador-fantasma')), 'diciendo qué interfaz falló');
+    check(r.difusiones?.find((d) => d.nombre === 'adaptador-fantasma')?.ok === false,
+      'la interfaz rota queda marcada como NO cursada');
+    check(r.difusiones?.find((d) => d.nombre === 'loopback-prueba')?.ok === true,
+      'y la buena como cursada');
+
+    // Todas las interfaces se preguntan a la vez: 5 interfaces cuestan una espera.
+    console.log(`  · 2 interfaces difundidas en ${ms.toFixed(0)} ms (espera configurada: 800 ms)`);
+    check(ms < 1300, `las interfaces se preguntan en paralelo, no en fila (${ms.toFixed(0)} ms < 1300)`);
+
+    // Sin interfaces no se inventa nada, pero tampoco se calla el motivo.
+    const vacio = await difundirPorInterfaces({ puerto: PUERTO, esperaMs: 200, interfaces: [] });
+    check(vacio.servidores.length === 0 && vacio.avisos.length > 0,
+      'sin ninguna interfaz devuelve lista vacía y explica por qué');
+  }
+
+  // ── 15. Una lista pegada de Radmin, como la del grupo real ────────────────
+  // 20 IPs repartidas por todo el /8 (captura real) + la que sí responde. Es la
+  // red de seguridad si la difusión tampoco atraviesa el adaptador.
+  console.log('\n== 15. Lista pegada de ~20 IPs de Radmin ==');
+  {
+    const delGrupo = [
+      '26.11.206.94', '26.202.164.209', '26.10.214.186', '26.149.22.221',
+      '26.78.151.72', '26.135.3.121', '26.230.5.15', '26.169.238.102',
+      '26.43.87.248', '26.94.87.242', '26.221.47.165', '26.106.185.242',
+      '26.138.165.249', '26.52.44.2', '26.204.234.64', '26.192.234.52',
+      '26.99.36.148', '26.63.72.136', '26.98.33.110', '26.157.21.141',
+    ];
+    check(delGrupo.length === 20 && delGrupo.every(esRangoRadmin), 'las 20 IPs reales son del rango Radmin');
+    // Ninguna cae en el /24 de esta máquina: por eso el barrido del /24 no las
+    // encontraba nunca.
+    const enMi24 = delGrupo.filter((d) => d.startsWith('26.11.206.') && d !== '26.11.206.94');
+    check(enMi24.length === 0, 'y ninguna comparte el /24 de esta máquina — el barrido /24 no podía verlas');
+
+    const t0 = performance.now();
+    const hallados = await sondearDirecciones({
+      direcciones: [...delGrupo, '127.0.0.1'], puerto: PUERTO, esperaMs: 900,
+    });
+    const ms = performance.now() - t0;
+    console.log(`  · 21 IPs sondeadas en ${ms.toFixed(0)} ms (espera configurada: 900 ms)`);
+    check(ms < 1300, `21 IPs cuestan UNA espera, no 21 (${ms.toFixed(0)} ms < 1300)`);
+
+    // Solo responde quien existe. En esta máquina eso son DOS direcciones del
+    // mismo servidor: el loopback y su propia IP de Radmin, porque el publicador
+    // escucha en 0.0.0.0 y el sondeo a 26.11.206.94 le llega igual. Las otras 19
+    // no existen aquí y no aparecen. Que la propia IP de Radmin conteste prueba
+    // que el sondeo unicast SÍ atraviesa el adaptador virtual.
+    const locales = new Set(interfacesLocales().map((i) => i.address));
+    console.log(`  · respondieron: ${hallados.map((s) => s.host).join(', ')}`);
+    check(hallados.every((s) => locales.has(s.host)),
+      `solo responden direcciones de esta máquina (${hallados.length}), las 19 ajenas no`);
+    check(hallados.some((s) => s.host === '127.0.0.1'), 'el loopback entre ellas');
+    check(hallados.every((s) => s.tcpPort === 5000 && s.via === 'directo'),
+      'todas con los datos del servidor y marcadas como halladas por sondeo');
+    check(21 <= LIMITE_SONDEO, `una lista pegada de 20-30 IPs cabe de sobra en el tope (${LIMITE_SONDEO})`);
+  }
+
+  // ── 16. El servidor propio no se ve cuatro veces ──────────────────────────
+  // Efecto secundario de difundir por CADA interfaz: una partida alojada en
+  // esta misma máquina contesta por todas, y como la IP sale del origen del
+  // datagrama (§27) aparece una vez por interfaz. Son la misma partida.
+  console.log('\n== 16. Colapso del servidor propio (multi-interfaz) ==');
+  {
+    const locales = ['127.0.0.1', '26.11.206.94', '192.168.1.20', '192.168.223.1'];
+    const base = { tcpPort: 5000, gameId: 1, serverName: 'Arena BladeFront', via: 'broadcast' };
+    const repetido = locales.map((host) => ({ ...base, host }));
+
+    const uno = colapsarPropias(repetido, locales);
+    check(uno.length === 1, `4 direcciones propias son 1 sola partida (${uno.length})`);
+    check(uno[0].host === '26.11.206.94',
+      `y se queda la de Radmin, que es la que sirve a los demás (${uno[0].host})`);
+
+    // Lo que NO puede pasar: fundir a dos compañeros distintos.
+    const ajenos = [
+      { ...base, host: '26.43.87.248' },
+      { ...base, host: '26.202.164.209' },
+      { ...base, host: '127.0.0.1' },
+    ];
+    const mezcla = colapsarPropias(ajenos, locales);
+    check(mezcla.length === 3, `dos compañeros con el mismo puerto siguen siendo dos (${mezcla.length})`);
+    check(mezcla.some((s) => s.host === '26.43.87.248') && mezcla.some((s) => s.host === '26.202.164.209'),
+      'ninguno de los dos desaparece');
+
+    // Dos partidas propias en puertos distintos tampoco se funden.
+    const dosPuertos = colapsarPropias(
+      [{ ...base, host: '127.0.0.1' }, { ...base, host: '26.11.206.94', tcpPort: 5055 }], locales,
+    );
+    check(dosPuertos.length === 2, `dos puertos TCP propios son dos partidas (${dosPuertos.length})`);
+
+    // Y contra la máquina de verdad, difundiendo por TODAS sus interfaces.
+    const r = await difundirPorInterfaces({ puerto: PUERTO, esperaMs: 800, incluirInternas: true });
+    console.log(`  · difundiendo por ${r.difusiones.length} interfaces reales → ${r.servidores.length} servidor(es): ${r.servidores.map((s) => `${s.host} (${s.interfaz})`).join(', ')}`);
+    check(r.servidores.length === 1,
+      `el servidor propio sale UNA vez pese a ${r.difusiones.length} interfaces (${r.servidores.length})`);
   }
 
   terminar(fail ? 1 : 0);

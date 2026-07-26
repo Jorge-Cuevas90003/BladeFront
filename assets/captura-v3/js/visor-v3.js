@@ -737,10 +737,9 @@ async function sondearServidores() {
   const estado = $('estadoBusqueda');
   const base = ($('url').value || 'ws://localhost:8146').replace(/^ws/, 'http').split('?')[0];
   try {
-    // escanear:true barre las subredes Radmin locales además del broadcast.
-    // Cuesta unos 800 ms y es lo que hace que se vean los compañeros de la VPN.
-    const { servidores, avisos } = await ClienteV3.buscarServidores(base, {
-      escanear: true,
+    // El bridge difunde por cada interfaz a su difusión dirigida; para Radmin
+    // eso es 26.255.255.255, que alcanza toda la red virtual de una vez.
+    const { servidores, avisos, exploracion } = await ClienteV3.buscarServidores(base, {
       ips: [...ipsManuales],
       esperaMs: 800,
     });
@@ -750,11 +749,7 @@ async function sondearServidores() {
       ? `${servidores.length} encontrada${servidores.length > 1 ? 's' : ''}`
       : 'buscando…';
     pintarServidores();
-    // Los avisos distinguen "no hay nadie" de "no pude mirar", que para quien
-    // está intentando jugar no es lo mismo en absoluto.
-    const nota = $('avisoBusqueda');
-    if (avisos.length) { nota.textContent = avisos[0]; nota.style.display = ''; }
-    else nota.style.display = 'none';
+    pintarExploracion(exploracion, avisos);
   } catch {
     servidoresVistos.clear();
     estado.className = 'sinbridge';
@@ -762,29 +757,82 @@ async function sondearServidores() {
     $('listaServidores').innerHTML =
       '<li class="vacio">Arranca el bridge: node red/v3/bridge-v3.js</li>';
     $('avisoBusqueda').style.display = 'none';
+    $('exploracion').style.display = 'none';
   } finally {
     buscando = false;
   }
 }
 
-// Añadir la IP de un compañero a mano, para cuando ni el broadcast ni el
-// escaneo automático lo alcanzan (otra subred, o Radmin repartiendo un rango
-// distinto del que tiene esta máquina).
+// Enseña POR DÓNDE se buscó. Sin esto, una lista vacía es ambigua: puede que
+// no haya nadie jugando o puede que la difusión no esté saliendo por la
+// interfaz de la VPN, y son problemas muy distintos.
+function pintarExploracion(exploracion, avisos) {
+  const caja = $('exploracion');
+  const nota = $('avisoBusqueda');
+
+  const difusiones = exploracion?.difusiones ?? [];
+  if (!difusiones.length) { caja.style.display = 'none'; }
+  else {
+    // La de Radmin primero: es la que importa para jugar contra los compañeros.
+    const orden = [...difusiones].sort((a, b) => (b.radmin ? 1 : 0) - (a.radmin ? 1 : 0));
+    caja.innerHTML = orden.map((d) => {
+      const marca = d.ok ? '✓' : '✕';
+      const clase = d.ok ? (d.radmin ? 'via-radmin' : 'via-ok') : 'via-mal';
+      const etiqueta = d.radmin ? 'Radmin VPN' : d.nombre;
+      return `<span class="${clase}" title="${d.local} → ${d.difusion}${d.error ? ' · ' + d.error : ''}">${marca} ${etiqueta}</span>`;
+    }).join('');
+    caja.style.display = '';
+  }
+
+  const relevantes = (avisos ?? []).filter((a) => !/barrido del \/24/.test(a));
+  if (relevantes.length) { nota.textContent = relevantes[0]; nota.style.display = ''; }
+  else nota.style.display = 'none';
+}
+
+// Una IP completa y bien formada, anclada por los dos extremos.
+const IP_EXACTA = /^\d{1,3}(?:\.\d{1,3}){3}$/;
+
+// Añadir compañeros a mano, pegando la columna entera de Radmin VPN.
+//
+// Se PARTE por separadores y se valida cada trozo completo, en vez de buscar
+// patrones de IP dentro del texto. La diferencia importa: si dos direcciones
+// llegan pegadas ("26.230.5.1526.169.238.102", que es lo que pasa al pegar en
+// un campo que borra los saltos de línea), una búsqueda por patrón saca de ahí
+// "26.230.5.152" y "6.169.238.102" — dos direcciones que nadie escribió y que
+// además pasan cualquier validación por rango. Partiendo y anclando, ese caso
+// se rechaza en vez de inventar destinos.
 function anadirIpManual() {
   const campo = $('ipManual');
-  const ip = campo.value.trim();
-  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) {
+  const trozos = campo.value.split(/[\s,;]+/).filter(Boolean);
+  const validas = [], rechazadas = [];
+  for (const t of trozos) {
+    if (IP_EXACTA.test(t) && t.split('.').every((o) => Number(o) <= 255)) validas.push(t);
+    else rechazadas.push(t);
+  }
+
+  if (!validas.length) {
     campo.classList.add('malo');
     setTimeout(() => campo.classList.remove('malo'), 900);
     return;
   }
-  ipsManuales.add(ip);
+  for (const ip of validas) ipsManuales.add(ip);
   campo.value = '';
-  $('estadoBusqueda').textContent = 'preguntando a ' + ip + '…';
+
+  // Se dice cuántas se descartaron: si alguien pega mal la lista tiene que
+  // enterarse, no quedarse esperando a compañeros que nunca se preguntaron.
+  const sufijo = rechazadas.length ? ` (${rechazadas.length} descartada${rechazadas.length > 1 ? 's' : ''})` : '';
+  $('estadoBusqueda').textContent = validas.length === 1
+    ? `preguntando a ${validas[0]}…${sufijo}`
+    : `preguntando a ${validas.length} direcciones…${sufijo}`;
   sondearServidores();
 }
 $('anadirIp')?.addEventListener('click', anadirIpManual);
-$('ipManual')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); anadirIpManual(); } });
+$('ipManual')?.addEventListener('keydown', (e) => {
+  // En un textarea Enter sirve para pegar varias líneas, así que se envía con
+  // Ctrl+Enter y se deja Enter para lo que se espera que haga.
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); anadirIpManual(); }
+  e.stopPropagation(); // que WASD no mueva al caballero mientras se escribe
+});
 
 setInterval(sondearServidores, INTERVALO_BUSQUEDA);
 // Al cambiar a modo red se sondea ya, sin esperar al siguiente ciclo.
