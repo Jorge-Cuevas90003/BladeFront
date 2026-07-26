@@ -25,6 +25,7 @@
 // ============================================================================
 
 import net from 'node:net';
+import os from 'node:os';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 import {
@@ -35,13 +36,17 @@ import { MotorV3 } from '../../assets/captura-v3/js/motor-v3.js';
 import { publicarServidor } from './descubrimiento.js';
 import { crearReloj } from './reloj.js';
 
-// Loopback en cualquiera de sus formas. Node entrega las IPv4 por un socket
-// dual-stack como "::ffff:127.0.0.1", así que no basta con comparar con
-// "127.0.0.1".
+// Loopback o cualquier interfaz local de esta máquina (incluida la IP de Radmin VPN).
 function esDeEstaMaquina(dir) {
   if (!dir) return false;
   const limpia = String(dir).replace(/^::ffff:/i, '');
-  return limpia === '::1' || limpia === '127.0.0.1' || limpia.startsWith('127.');
+  if (limpia === '::1' || limpia === '127.0.0.1' || limpia.startsWith('127.')) return true;
+  for (const list of Object.values(os.networkInterfaces())) {
+    for (const iface of list ?? []) {
+      if (iface.address === limpia) return true;
+    }
+  }
+  return false;
 }
 
 export function crearServidor({
