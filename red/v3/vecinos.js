@@ -33,6 +33,34 @@ const IPV4 = /(\d{1,3}(?:\.\d{1,3}){3})/;
 // la .0.1 de su rango como nodo de servicio: preguntarle es ruido garantizado.
 const INFRAESTRUCTURA = new Set(['26.0.0.1']);
 
+// Mapeo de nombres oficiales del canal de Radmin VPN (CC8_ProyectoCTF).
+export const NOMBRES_RADMIN = {
+  '26.202.164.209': 'C4RL',
+  '26.10.214.186': 'DAVIDSG6',
+  '26.149.22.221': 'DESKTOP-8C1TEUH',
+  '26.78.151.72': 'Edgar',
+  '26.135.3.121': 'Emmanuel',
+  '26.230.5.15': 'Espana-PC',
+  '26.169.238.102': 'FEDORA',
+  '26.43.87.248': 'Gab_Laptop',
+  '26.94.87.242': 'Gab_PC',
+  '26.221.47.165': 'HERBERTPC',
+  '26.106.185.242': 'JAVIERRODAS8B25',
+  '26.138.165.249': 'Lester',
+  '26.52.44.2': 'LITOS',
+  '26.204.234.64': 'MARTIAN',
+  '26.192.234.52': 'PC-EMY',
+  '26.99.36.148': 'SALCHIPAPA-ARCH',
+  '26.63.72.136': 'SAMANTHAR',
+  '26.98.33.110': 'Vicco-Lap',
+  '26.157.21.141': 'Victor_PC',
+  '26.11.206.94': 'J (Tú)',
+};
+
+export function nombreDeRadmin(ip) {
+  return NOMBRES_RADMIN[ip] || `Compañero Radmin (${ip})`;
+}
+
 const ejecutar = (cmd, args) => new Promise((resolve) => {
   execFile(cmd, args, { encoding: 'latin1', timeout: 4000, windowsHide: true }, (err, stdout) => {
     resolve(err ? '' : stdout);

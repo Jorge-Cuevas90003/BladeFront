@@ -29,7 +29,7 @@ import {
   direccionesRadminLocales, combinarHallazgos, colapsarPropias, LIMITE_SONDEO,
 } from './descubrimiento.js';
 import { PARAMS_DEFECTO } from './protocolo-v3.js';
-import { vecinosVivos, prefijosRadminLocales, conServidorEscuchando } from './vecinos.js';
+import { vecinosVivos, prefijosRadminLocales, conServidorEscuchando, nombreDeRadmin } from './vecinos.js';
 
 export function crearBridge({
   puertoWs = 8146,
@@ -243,7 +243,7 @@ export function crearBridge({
               const setAbiertos = new Set(abiertos);
               for (const host of abiertos) {
                 servidores.push({
-                  host, tcpPort, gameId: 0, serverName: '(no se anuncia)',
+                  host, tcpPort, gameId: 0, serverName: nombreDeRadmin(host),
                   state: 0, playerCount: 0, maximumPlayers: 0,
                   via: 'tcp', anuncia: false,
                 });
@@ -251,7 +251,7 @@ export function crearBridge({
               const cerrados = mudos.filter((h) => !setAbiertos.has(h));
               for (const host of cerrados) {
                 servidores.push({
-                  host, tcpPort, gameId: 0, serverName: `Compañero Radmin`,
+                  host, tcpPort, gameId: 0, serverName: nombreDeRadmin(host),
                   state: 'SIN_SERVICIO', playerCount: 0, maximumPlayers: 0,
                   via: 'sin-servicio', anuncia: false, sinServicio: true,
                 });
