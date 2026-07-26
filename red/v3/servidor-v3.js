@@ -256,12 +256,27 @@ export function crearServidor({
       const info = conexiones.get(socket);
       conexiones.delete(socket);
       if (!info?.playerId) return;
+
       // La baja se ENCOLA: el motor la aplica en el paso 8 de su ciclo (§30.8),
       // así que el evento cae en un tick definido y no en un instante suelto.
       juego.desconectar(info.playerId);
-      log('- se fue', info.playerId);
-      // Antes de arrancar no hay ciclo que procese la cola: se aplica aquí para
-      // que el lobby refleje la baja de inmediato.
+      log('- se fue el jugador', info.playerId);
+
+      // Si el Host (Jugador 1) se desconecta, se cancela la partida activa y se resetea el lobby
+      if (info.playerId === 1) {
+        log('== El Host (Jugador 1) se ha desconectado: cancelando partida activa ==');
+        if (bucle) { bucle.detener(); bucle = null; }
+        if (cuenta) { cuenta.detener(); cuenta = null; }
+        difundir(TIPOS.ERROR, {
+          code: ERRORES.GAME_FINISHED,
+          description: 'El Host abandonó la partida. La sesión ha finalizado.',
+        });
+        juego.estado = ESTADO_PARTIDA.WAITING;
+        juego.tick = 0;
+        juego.bandera = { x: 0, y: 0, status: ESTADO_BANDERA.AVAILABLE, carrierId: 0 };
+        juego.ganadorId = 0;
+      }
+
       if (juego.estado === ESTADO_PARTIDA.WAITING || juego.estado === ESTADO_PARTIDA.STARTING) {
         const j = juego.jugadores.get(info.playerId);
         if (j) j.connected = false;
