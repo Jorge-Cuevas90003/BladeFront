@@ -431,18 +431,26 @@ try {
 log(`web sirviendo la raíz del proyecto en http://localhost:${PUERTO_WEB}`);
 
 if (V1) {
-  lanzar('servidor', C.verde, MODO.servidor, ['--port', String(puertoTcpFinal), '--auto']);
+  // SIN --auto a propósito: con él la cuenta atrás arranca en cuanto entra el
+  // primer jugador, y a partir de ahí el servidor rechaza a todos los demás con
+  // GAME_ALREADY_STARTED. El anfitrión acababa jugando solo. Ahora la partida
+  // espera y es él quien la empieza desde el navegador.
+  lanzar('servidor', C.verde, MODO.servidor, ['--port', String(puertoTcpFinal)]);
   lanzar('bridge', C.magenta, MODO.bridge, [
     '--ws', String(PUERTO_BRIDGE),
     '--tcp-host', '127.0.0.1',
     '--tcp-port', String(puertoTcpFinal),
   ]);
 } else {
+  // SIN --auto a propósito: con él la cuenta atrás arranca en cuanto entra el
+  // primer jugador, y desde ese momento el servidor rechaza a todos los demás
+  // con GAME_ALREADY_STARTED. El anfitrión acababa jugando solo y nadie podía
+  // unirse. Ahora la partida espera en el lobby y la empieza él desde el
+  // navegador, cuando ya están todos dentro.
   lanzar('servidor', C.verde, MODO.servidor, [
     '--port', String(puertoTcpFinal),
     '--discovery-port', String(udp.puerto),
     '--name', NOMBRE,
-    '--auto',
   ]);
   // El bridge tiene que usar EL MISMO puerto de descubrimiento que el servidor:
   // es el que consulta la página para listar partidas.

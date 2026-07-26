@@ -246,6 +246,27 @@ export class ClienteV3 extends EventTarget {
     }
   }
 
+  // El anfitrión pide empezar. Solo tiene efecto en red: en local la partida
+  // arranca sola porque no hay nadie a quien esperar.
+  //
+  // Si el servidor es de otro equipo y no conoce este mensaje, responderá con
+  // ERROR e INVALID_MESSAGE. No pasa nada: significa que esa partida la empieza
+  // su anfitrión desde su propio cliente.
+  pedirInicio() {
+    if (this.modo !== 'red' || !this.playerId) return;
+    if (this._ws?.readyState === WebSocket.OPEN) {
+      this._ws.send(enmarcar(TIPOS.HOST_START, { playerId: this.playerId }));
+    }
+  }
+
+  // ¿Soy quien decide cuándo empieza? Es el jugador con el id más bajo de los
+  // que siguen conectados: el primero que entró.
+  get soyAnfitrion() {
+    const lista = this._lobby?.players ?? this.inicio?.players ?? [];
+    if (!lista.length || !this.playerId) return false;
+    return this.playerId === Math.min(...lista.map((p) => p.playerId));
+  }
+
   interactuar() {
     if (!this.playerId) return;
     if (this.modo === 'local') {

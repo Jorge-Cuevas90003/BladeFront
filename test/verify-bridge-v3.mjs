@@ -180,7 +180,7 @@ try {
   // ── 4. Descubrimiento delegado por HTTP ───────────────────────────────────
   console.log('\n== 4. Descubrimiento delegado (el navegador no puede UDP) ==');
   {
-    const r = await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?direccion=127.0.0.1&puerto=${PUERTO_UDP}&espera=700`);
+    const r = await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?direccion=127.0.0.1&puerto=${PUERTO_UDP}&espera=700&vecinos=0`);
     check(r.ok, 'responde /servidores');
     check(r.headers.get('access-control-allow-origin') === '*', 'con CORS, para que la página en otro puerto pueda leerlo');
     const { servidores } = await r.json();
@@ -200,7 +200,7 @@ try {
   console.log('\n== 4b. /servidores con sondeo dirigido ==');
   {
     const pide = async (query) =>
-      (await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&${query}`)).json();
+      (await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&vecinos=0&${query}`)).json();
 
     // ?ips= sin broadcast útil: se apunta el broadcast a una dirección donde no
     // hay nadie, así que todo lo que aparezca vino del sondeo dirigido.
@@ -216,7 +216,10 @@ try {
 
     // Una IP muda no añade ruido a la lista.
     const muda = await pide('direccion=169.254.240.7&ips=169.254.240.8');
-    check(muda.servidores?.length === 0, `una IP que no responde no aparece (${muda.servidores?.length})`);
+    // Los vecinos de Radmin salen aunque no tengan servidor, marcados como
+    // sin-servicio; lo que no debe aparecer es una PARTIDA donde no la hay.
+    const conPartida = (r) => (r.servidores ?? []).filter((s) => !s.sinServicio);
+    check(conPartida(muda).length === 0, `una IP que no responde no ofrece partida (${conPartida(muda).length})`);
 
     // ?escanear=1 barre las subredes Radmin locales. En una máquina sin Radmin
     // no hay nada que barrer, pero la ruta debe contestar igual.
@@ -237,12 +240,20 @@ try {
     // Si una vía se cae (aquí el broadcast, con un destino irresoluble), la
     // otra tiene que entregar igual lo que encontró: media lista es infinitamente
     // mejor que un 500 y una pantalla vacía.
-    const r = await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&direccion=destino.que.no.existe.invalido&ips=127.0.0.1`);
+    const r = await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&vecinos=0&direccion=destino.que.no.existe.invalido&ips=127.0.0.1`);
     check(r.ok, `con el broadcast roto la ruta sigue devolviendo 200 (${r.status})`);
     const roto = await r.json();
     check(roto.servidores?.length === 1, 'y entrega lo que sí encontró el sondeo dirigido');
-    check(Array.isArray(roto.avisos) && roto.avisos.length > 0,
-      `explicando el fallo en 'avisos' ("${roto.avisos?.[0]}")`);
+    // Si el broadcast llega a fallar, tiene que decirse. Pero que un nombre
+    // inventado falle depende del DNS de cada máquina: muchos proveedores
+    // resuelven cualquier cosa, y entonces el envío sale bien y simplemente
+    // no contesta nadie. Exigir el aviso siempre haría que esta prueba
+    // dependiera de la conexión de quien la corre.
+    if (Array.isArray(roto.avisos) && roto.avisos.length) {
+      check(true, `el fallo del broadcast se explica en 'avisos' ("${roto.avisos[0]}")`);
+    } else {
+      console.log('  · (el DNS de esta máquina resolvió el nombre inventado: no hubo fallo que avisar)');
+    }
   }
 
   // ── 4c. Difusión dirigida POR INTERFAZ (la vía por defecto) ───────────────
@@ -253,7 +264,7 @@ try {
   console.log('\n== 4c. /servidores sin `direccion`: difusión por interfaz ==');
   {
     const t0 = Date.now();
-    const r = await (await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=800`)).json();
+    const r = await (await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=800&vecinos=0`)).json();
     const ms = Date.now() - t0;
 
     check(r.servidores?.some((s) => s.tcpPort === PUERTO_TCP),
@@ -327,7 +338,7 @@ try {
 
     const t0 = Date.now();
     const r = await (await fetch(
-      `http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=800&direccion=169.254.240.7&ips=${lista.join(',')}`
+      `http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=800&vecinos=0&direccion=169.254.240.7&ips=${lista.join(',')}`
     )).json();
     const ms = Date.now() - t0;
 
@@ -364,7 +375,8 @@ try {
       const vacio = await (await fetch(
         `http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=400&vecinos=0&direccion=169.254.240.7&ips=169.254.240.9`
       )).json();
-      check((vacio.servidores?.length ?? 0) === 0, 'una IP sin servidor no aparece por sondear el puerto');
+      const jugables = (vacio.servidores ?? []).filter((s) => !s.sinServicio);
+      check(jugables.length === 0, 'una IP sin servidor no ofrece partida al sondear el puerto');
       check(vacio.exploracion?.tcpProbados === 1, 'pero se declara que se miró');
     }
 

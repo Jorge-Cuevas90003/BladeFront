@@ -28,8 +28,8 @@ import net from 'node:net';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 import {
-  TIPOS, VERSION, ERRORES, RAZON_RECHAZO, ESTADO_PARTIDA, PARAMS_DEFECTO,
-  NOMBRE_TIPO, enmarcar, AcumuladorTCP,
+  TIPOS, VERSION, ERRORES, RAZON_RECHAZO, ESTADO_PARTIDA, ESTADO_BANDERA,
+  DIRECCIONES, PARAMS_DEFECTO, NOMBRE_TIPO, enmarcar, AcumuladorTCP,
 } from './protocolo-v3.js';
 import { MotorV3 } from '../../assets/captura-v3/js/motor-v3.js';
 import { publicarServidor } from './descubrimiento.js';
@@ -41,7 +41,7 @@ export function crearServidor({
   params = {},
   nombre = 'BladeFront',
   auto = false,
-  minJugadores = 2,
+  minJugadores = 0,   // 0 = no arrancar solo; espera a que el anfitrión lo pida
   udp = true,
   puertoUdp = PARAMS_DEFECTO.discoveryPort,
   keepAliveMs = 10000,
@@ -50,6 +50,7 @@ export function crearServidor({
 } = {}) {
   const juego = new MotorV3(params);
   const conexiones = new Map(); // socket -> { playerId, acc }
+  let anfitrionId = 0; // el primero que entró: decide cuándo empieza
   let cuenta = null;   // temporizador de la cuenta atrás
   let bucle = null;    // temporizador del ciclo de juego
   let discovery = null;
@@ -124,10 +125,37 @@ export function crearServidor({
         log(`  JOIN ${jugador.playerId} "${jugador.name}"`);
         difundir(TIPOS.LOBBY_STATE, juego.serializarLobby());
 
+        // El primero en entrar es el anfitrión: es quien decide cuándo empieza.
+        if (!anfitrionId) anfitrionId = jugador.playerId;
+
+        // Con `auto` la cuenta arranca con el primer jugador. Eso deja al
+        // anfitrión jugando SOLO, porque a partir de STARTING el servidor
+        // rechaza a todo el mundo con GAME_ALREADY_STARTED: nadie llega a
+        // entrar. Solo tiene sentido para pruebas, así que ya no es lo normal.
         const activos = juego.jugadoresActivos().length;
-        if (juego.estado === ESTADO_PARTIDA.WAITING && (auto || activos >= minJugadores)) {
+        if (juego.estado === ESTADO_PARTIDA.WAITING && (auto || (minJugadores > 0 && activos >= minJugadores))) {
           arrancarCuenta();
         }
+        return;
+      }
+
+      // Extensión local: el anfitrión pide empezar. §20 no define qué dispara
+      // el paso a STARTING, así que dejarlo en sus manos es una decisión
+      // nuestra, no una desviación del protocolo.
+      case TIPOS.HOST_START: {
+        if (!duenoValido(socket, info, msg)) return;
+        if (info.playerId !== anfitrionId) {
+          return enviar(socket, TIPOS.ERROR, {
+            code: ERRORES.UNKNOWN_PLAYER, description: 'solo el anfitrión puede empezar la partida',
+          });
+        }
+        if (juego.estado !== ESTADO_PARTIDA.WAITING) {
+          return enviar(socket, TIPOS.ERROR, {
+            code: ERRORES.GAME_ALREADY_STARTED, description: 'la partida ya está en marcha',
+          });
+        }
+        log(`  el anfitrión (${info.playerId}) pide empezar con ${juego.jugadoresActivos().length} jugadores`);
+        arrancarCuenta();
         return;
       }
 
@@ -216,8 +244,14 @@ export function crearServidor({
             j.hasFlag = false;
             j.direction = DIRECCIONES.NONE;
           }
+          // El anfitrión vuelve a decidir cuándo empieza la siguiente. Con
+          // `auto` o con un mínimo fijado, se encadena sola.
+          anfitrionId = juego.jugadoresActivos().length
+            ? Math.min(...juego.jugadoresActivos().map((j) => j.playerId))
+            : 0;
           difundir(TIPOS.LOBBY_STATE, juego.serializarLobby());
-          if (autoArrancar && juego.jugadoresActivos().length >= 1) {
+          const listos = juego.jugadoresActivos().length;
+          if (auto || (minJugadores > 0 && listos >= minJugadores)) {
             arrancarCuenta();
           }
         }, 5000);
@@ -353,7 +387,7 @@ if (esPrincipal) {
 
   const marca = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
   const auto = flag('auto');
-  const minJugadores = Number(val('min', 2));
+  const minJugadores = Number(val('min', 0));
   const nombre = val('name', 'BladeFront');
 
   const s = crearServidor({
@@ -368,7 +402,11 @@ if (esPrincipal) {
 
   const p = await s.escuchar();
   marca(`"${nombre}" escuchando TCP en el puerto ${p}`);
-  marca(auto ? '(--auto: la cuenta atrás arranca con el primer jugador)' : `(arranca con ${minJugadores} jugadores)`);
+  marca(auto
+    ? '(--auto: arranca con el primer jugador — solo para pruebas, nadie más podrá entrar)'
+    : minJugadores > 0
+      ? `(arranca solo al llegar a ${minJugadores} jugadores)`
+      : '(el anfitrión decide cuándo empezar desde el navegador)');
 
   // Sin esto, Ctrl+C deja el puerto ocupado unos segundos.
   for (const sig of ['SIGINT', 'SIGTERM']) {

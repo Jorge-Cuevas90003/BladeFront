@@ -295,6 +295,10 @@ const on = (tipo, fn) => cliente.addEventListener(String(tipo), (e) => fn(e.deta
 
 on(TIPOS.JOIN_ACCEPTED, (m) => {
   miId = m.playerId;
+  const s = $('salaServidor');
+  if (s) s.textContent = cliente.modo === 'red'
+    ? `${$('host').value || 'servidor'}:${$('puerto').value || ''} · eres #${m.playerId}`
+    : 'partida local';
   $('iYo').textContent = `#${m.playerId}`;
   $('iConn').textContent = cliente.modo === 'local' ? 'Local' : 'Conectado';
 });
@@ -310,13 +314,57 @@ on(TIPOS.JOIN_REJECTED, (m) => {
 
 on(TIPOS.LOBBY_STATE, (m) => {
   $('iJugadores').textContent = m.players.length;
-  aviso(`Lobby: ${m.players.length} jugador(es)`);
+  aviso(`Sala: ${m.players.length} jugador(es)`);
+  pintarSala(m.players);
 });
 
-on(TIPOS.GAME_COUNTDOWN, (m) => bandera(`Comienza en ${m.secondsRemaining}…`));
+// ---------------------------------------------------------------------------
+//  Sala de espera
+//
+//  Existe porque el servidor rechaza a todo el mundo en cuanto la partida pasa
+//  a STARTING (§20 + GAME_ALREADY_STARTED). Si arrancara con el primer jugador,
+//  el anfitrión se quedaría jugando solo y nadie podría unirse. Aquí se espera
+//  a que estén todos y es él quien decide.
+// ---------------------------------------------------------------------------
+function pintarSala(jugadores) {
+  if (cliente.modo !== 'red' || terminada) return;
+  const ul = $('salaJugadores');
+  const anfitrion = jugadores.length ? Math.min(...jugadores.map((p) => p.playerId)) : 0;
+  ul.innerHTML = jugadores.map((p) => {
+    const etiquetas = [];
+    if (p.playerId === anfitrion) etiquetas.push('<span class="tag anfitrion">ANFITRIÓN</span>');
+    if (p.playerId === miId) etiquetas.push('<span class="tag tu">TÚ</span>');
+    return `<li><span>${p.name}</span><span>${etiquetas.join(' ')}</span></li>`;
+  }).join('') || '<li><span>nadie todavía…</span><span></span></li>';
+
+  const soyYo = miId && miId === anfitrion;
+  $('salaEmpezar').style.display = soyYo ? '' : 'none';
+  $('salaAviso').textContent = soyYo
+    ? `Cuando estén todos, empieza tú. Ahora mismo sois ${jugadores.length}.`
+    : 'Esperando a que el anfitrión empiece la partida…';
+  $('sala').classList.remove('oculto');
+}
+
+function cerrarSala() { $('sala').classList.add('oculto'); }
+
+$('salaEmpezar')?.addEventListener('click', () => {
+  $('salaEmpezar').disabled = true;
+  $('salaAviso').textContent = 'Empezando…';
+  cliente.pedirInicio();
+  // Si el servidor no acepta la petición hay que poder reintentar, no dejar el
+  // botón muerto para siempre.
+  setTimeout(() => { $('salaEmpezar').disabled = false; }, 2500);
+});
+$('salaSalir')?.addEventListener('click', () => { cerrarSala(); alMenu(); });
+
+on(TIPOS.GAME_COUNTDOWN, (m) => {
+  bandera(`Comienza en ${m.secondsRemaining}…`);
+  $('salaAviso').textContent = `Comienza en ${m.secondsRemaining}…`;
+});
 
 on(TIPOS.GAME_STARTED, (m) => {
   terminada = false;
+  cerrarSala();
   cfg = { ...cfg, ...m };
   recalcularEscala();
   colocarGeometriaDelMapa();
@@ -605,6 +653,7 @@ window.addEventListener('resize', () => {
 //  Menú
 // ---------------------------------------------------------------------------
 function entrar() {
+  $('sala')?.classList.add('oculto');
   const nombre = ($('nombre').value || 'Templario').trim().slice(0, 20);
   const modo = $('modo').value;
   miId = 0;
@@ -630,6 +679,7 @@ function entrar() {
 }
 
 function alMenu() {
+  $('sala')?.classList.add('oculto');
   cliente.detener();
   limpiarKnights();
   miId = 0;

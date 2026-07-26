@@ -167,6 +167,30 @@
       clip-path:polygon(9px 0,100% 0,100% 100%,0 100%,0 9px); }
     .hint kbd { background:#0e131a; border:1px solid var(--line); border-radius:3px; padding:1px 5px; font-size:10px; }
 
+    /* ─── sala de espera ─── */
+    #sala {
+      position:fixed; inset:0; z-index:25; display:flex; align-items:center; justify-content:center; padding:24px;
+      background:radial-gradient(ellipse 120% 90% at 50% 42%, rgba(3,4,5,.55), rgba(3,4,5,.92) 80%);
+      backdrop-filter:blur(8px); transition:opacity .4s, visibility .4s;
+    }
+    #sala.oculto { opacity:0; visibility:hidden; pointer-events:none; }
+    .panel-sala {
+      width:min(460px,100%); background:var(--panel); border:1px solid rgba(255,182,56,.28);
+      box-shadow:0 40px 120px rgba(0,0,0,.8); padding:36px 38px 30px; backdrop-filter:blur(12px);
+      clip-path:polygon(24px 0,100% 0,100% calc(100% - 24px),calc(100% - 24px) 100%,0 100%,0 24px);
+    }
+    .panel-sala h1 { font-family:'Cinzel',serif; font-weight:800; font-size:24px; letter-spacing:.1em; color:var(--oro-hi); }
+    .panel-sala .sub { margin-top:6px; font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--dim); }
+    #salaJugadores { list-style:none; max-height:220px; overflow-y:auto; border:1px solid var(--line); background:rgba(6,9,13,.6); }
+    #salaJugadores li { padding:10px 14px; font-size:13px; font-weight:600; display:flex; justify-content:space-between;
+      align-items:center; border-bottom:1px solid rgba(42,52,70,.5); }
+    #salaJugadores li:last-child { border-bottom:0; }
+    #salaJugadores li .tag { font-size:9px; letter-spacing:.14em; padding:2px 7px; border:1px solid; }
+    #salaJugadores li .anfitrion { color:var(--oro); border-color:rgba(255,182,56,.45); }
+    #salaJugadores li .tu { color:var(--cyan); border-color:rgba(73,230,255,.45); }
+    .sala-acciones { display:grid; grid-template-columns:1fr; gap:10px; margin-top:18px; }
+    .sala-acciones:has(#salaEmpezar:not([style*="none"])) { grid-template-columns:2fr 1fr; }
+
     /* ─── panel 2D de diagnóstico ─── */
     #panel2d {
       position:fixed; bottom:22px; left:22px; z-index:6; width:340px; height:340px;
@@ -374,6 +398,23 @@
       <dt>FPS</dt><dd id="iFps">—</dd>
     </dl>
     <ul id="feed"></ul>
+  </div>
+
+  <!-- ═══════════ SALA DE ESPERA ═══════════
+       Entre entrar a la arena y empezar la partida. Sin esto el anfitrión se
+       conectaba y el juego arrancaba solo, dejando fuera a todos los demás. -->
+  <div id="sala" class="oculto">
+    <div class="panel-sala">
+      <h1>Sala de espera</h1>
+      <p class="sub" id="salaServidor">—</p>
+      <hr class="laser" style="margin:18px 0" />
+      <ul id="salaJugadores"></ul>
+      <p class="nota" id="salaAviso">Esperando a que el anfitrión empiece la partida…</p>
+      <div class="sala-acciones">
+        <button type="button" class="btn-fin p" id="salaEmpezar" style="display:none">▶ Empezar partida</button>
+        <button type="button" class="btn-fin s" id="salaSalir">☰ Salir</button>
+      </div>
+    </div>
   </div>
 
   <!-- ═══════════ VISTA 2D DE DIAGNÓSTICO ═══════════ -->

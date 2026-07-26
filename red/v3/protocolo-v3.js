@@ -36,6 +36,19 @@ export const TIPOS = {
   PLAYER_DISCONNECTED: 0x28,
   GAME_OVER: 0x29,
   ERROR: 0x2a,
+
+  // ── EXTENSIÓN LOCAL, fuera de la tabla oficial de §26 ────────────────────
+  // §20 dice que el servidor pasa a STARTING y manda la cuenta atrás, pero NO
+  // define qué lo dispara. Sin un disparador explícito solo quedan malas
+  // opciones: arrancar con el primer jugador (y entonces nadie más puede
+  // entrar, porque a partir de STARTING el servidor rechaza con
+  // GAME_ALREADY_STARTED) o fijar de antemano cuántos van a jugar.
+  //
+  // Con esto el anfitrión decide cuándo empezar. Va en 0x7f, lejos del rango
+  // oficial (0x01-0x2A), así que no colisiona con nada de la spec. Si nuestro
+  // cliente se lo manda al servidor de otro equipo, ese responderá ERROR con
+  // INVALID_MESSAGE y aquí simplemente se ignora: no rompe la interoperación.
+  HOST_START: 0x7f,
 };
 
 // Nombre legible a partir del código, para logs y depuración (§37).
@@ -217,6 +230,7 @@ export function codificar(tipo, c = {}) {
 
     case TIPOS.INTERACT:
     case TIPOS.LEAVE:
+    case TIPOS.HOST_START:
       w.u16(c.playerId);
       break;
 
@@ -323,6 +337,7 @@ export function decodificar(payload) {
 
     case TIPOS.INTERACT:
     case TIPOS.LEAVE:
+    case TIPOS.HOST_START:
       m.playerId = r.u16();
       break;
 

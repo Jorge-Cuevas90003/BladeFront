@@ -239,13 +239,25 @@ export function crearBridge({
           const mudos = [...new Set(candidatas)].filter((ip) => !yaVistos.has(ip));
           if (mudos.length) {
             try {
+              // Todos los puertos a la vez, no uno detrás de otro. En serie,
+              // cuatro puertos con 700 ms de espera cada uno hacían que la
+              // consulta tardara casi cuatro segundos, y la página sondea cada
+              // dos segundos y medio: las peticiones se solapaban. En paralelo
+              // el barrido entero cuesta una sola espera.
               const puertosASondear = [...new Set([tcpPort, 5005, 5000, 5002])];
+              const rondas = await Promise.all(
+                puertosASondear.map((pt) =>
+                  conServidorEscuchando(mudos, pt, 700).then((abiertos) => ({ pt, abiertos })))
+              );
+
+              // Si un equipo tiene varios puertos abiertos gana el primero de
+              // la lista, que es el orden de preferencia: el destino del bridge
+              // primero y después los habituales del curso.
               const encontradosHosts = new Set();
               for (const pt of puertosASondear) {
-                const pend = mudos.filter((h) => !encontradosHosts.has(h));
-                if (!pend.length) break;
-                const abiertos = await conServidorEscuchando(pend, pt, 700);
-                for (const host of abiertos) {
+                const ronda = rondas.find((r) => r.pt === pt);
+                for (const host of ronda.abiertos) {
+                  if (encontradosHosts.has(host)) continue;
                   encontradosHosts.add(host);
                   servidores.push({
                     host, tcpPort: pt, gameId: 0, serverName: nombreDeRadmin(host),
@@ -254,7 +266,10 @@ export function crearBridge({
                   });
                 }
               }
-              const cerrados = mudos.filter((h) => !encontradosHosts.has(h));
+              // Solo se listan como compañeros las direcciones REALES. Sin este
+              // filtro, cualquier cosa mal escrita en el campo de IPs aparecía
+              // en la lista como un compañero que no existe.
+              const cerrados = mudos.filter((h) => !encontradosHosts.has(h) && net.isIPv4(h));
               for (const host of cerrados) {
                 servidores.push({
                   host, tcpPort, gameId: 0, serverName: nombreDeRadmin(host),
