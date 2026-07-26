@@ -18,7 +18,14 @@ import { TIPOS, VERSION, codificar, decodificar, PARAMS_DEFECTO } from './protoc
 // --- lado servidor: responde a quien pregunte -------------------------------
 // `describir()` lo provee el servidor de juego y devuelve los datos frescos
 // (estado y jugadores conectados cambian a cada rato).
-export function publicarServidor({ puerto = PARAMS_DEFECTO.discoveryPort, describir, log = () => {} }) {
+export function publicarServidor({
+  puerto = PARAMS_DEFECTO.discoveryPort,
+  describir,
+  log = () => {},
+  // Un fallo aquí deja al servidor INVISIBLE para toda la red aunque el juego
+  // funcione, así que se avisa siempre, no solo en modo detallado.
+  alFallar = (msg) => console.error(msg),
+}) {
   const sock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
 
   sock.on('message', (datos, origen) => {
@@ -39,13 +46,29 @@ export function publicarServidor({ puerto = PARAMS_DEFECTO.discoveryPort, descri
     log(`descubrimiento ← ${origen.address}:${origen.port}`);
   });
 
-  sock.on('error', (e) => log('socket de descubrimiento:', e.message));
+  let atado = false;
+  sock.on('error', (e) => {
+    // EADDRINUSE: lo tiene otro proceso. EACCES: Windows lo reserva para un
+    // servicio del sistema. Para quien arranca el servidor es el mismo
+    // problema y tiene la misma solución, así que se explica igual.
+    if (e.code === 'EADDRINUSE' || e.code === 'EACCES') {
+      alFallar(
+        `⚠ No se pudo usar el puerto UDP ${puerto} (${e.code}): lo tiene otro ` +
+        `proceso o el sistema lo reserva. Este servidor NO aparecerá en la ` +
+        `búsqueda automática. Arráncalo con --discovery-port <otro> y que los ` +
+        `clientes usen ese mismo, o que se conecten escribiendo la IP a mano.`
+      );
+    } else {
+      alFallar(`⚠ Descubrimiento UDP caído (${e.code || e.message}): este servidor no se anunciará.`);
+    }
+  });
   sock.bind(puerto, () => {
+    atado = true;
     sock.setBroadcast(true);
     log(`descubrimiento UDP escuchando en el puerto ${puerto}`);
   });
 
-  return { cerrar: () => sock.close() };
+  return { cerrar: () => { try { sock.close(); } catch {} }, get atado() { return atado; } };
 }
 
 // --- lado cliente: pregunta y junta las respuestas --------------------------

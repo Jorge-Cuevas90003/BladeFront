@@ -91,6 +91,20 @@
     #listaServidores li.on { background:rgba(255,182,56,.16); border-left:2px solid var(--oro); }
     #listaServidores li span { color:var(--dim); font-size:11px; }
     #listaServidores li.vacio { color:var(--dim); cursor:default; justify-content:center; font-style:italic; }
+    #listaServidores li.nuevo { animation:entraServidor .45s ease both; }
+    @keyframes entraServidor { from { opacity:0; transform:translateX(-8px); } to { opacity:1; transform:none; } }
+    #listaServidores li .estado { font-size:9px; letter-spacing:.14em; padding:2px 6px; border:1px solid; }
+    #listaServidores li .abierta { color:#6ee7a0; border-color:rgba(110,231,160,.4); }
+    #listaServidores li .jugando { color:var(--oro); border-color:rgba(255,182,56,.4); }
+    #listaServidores li .llena   { color:var(--rojo); border-color:rgba(255,74,61,.4); }
+    /* el punto late mientras la búsqueda sigue viva, para que se note que no
+       hace falta pulsar nada */
+    #estadoBusqueda { color:var(--dim); letter-spacing:.1em; text-transform:none; font-weight:500; }
+    #estadoBusqueda.buscando::before {
+      content:"●"; color:var(--cyan); margin-right:5px; animation:latido 1.4s ease-in-out infinite;
+    }
+    #estadoBusqueda.sinbridge::before { content:"●"; color:var(--rojo); margin-right:5px; }
+    @keyframes latido { 0%,100% { opacity:.25; } 50% { opacity:1; } }
     .btn-sec { width:100%; margin-top:10px; cursor:pointer; background:rgba(12,14,20,.8); color:var(--steel);
       border:1px solid var(--line); padding:10px; font-family:'Rajdhani'; font-weight:600; font-size:12px;
       letter-spacing:.14em; text-transform:uppercase; }
@@ -273,8 +287,11 @@
             <input class="txt" id="puerto" type="number" value="5000" />
           </div>
         </div>
-        <button type="button" class="btn-sec" id="buscar">🔍 Buscar servidores en la red</button>
-        <ul id="listaServidores"><li class="vacio">Sin buscar</li></ul>
+        <div class="lbl" style="display:flex;justify-content:space-between;align-items:center">
+          <span>Partidas en la red</span>
+          <span id="estadoBusqueda" class="buscando">buscando…</span>
+        </div>
+        <ul id="listaServidores"><li class="vacio">Buscando en la red local…</li></ul>
         <p class="nota">
           El navegador no puede abrir TCP ni mandar UDP, así que el bridge lo hace
           por él. Arranca antes:

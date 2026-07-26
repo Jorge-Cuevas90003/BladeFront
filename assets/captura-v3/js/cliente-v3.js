@@ -19,6 +19,7 @@ import {
   TIPOS, VERSION, DIRECCIONES, ESTADO_PARTIDA, ESTADO_BANDERA, PARAMS_DEFECTO,
   enmarcar, AcumuladorTCP,
 } from '../../../red/v3/protocolo-v3.js';
+import { crearReloj } from '../../../red/v3/reloj.js';
 import { MotorV3 } from './motor-v3.js';
 import { decidirBot, reiniciarBots } from './bots-v3.js';
 
@@ -119,7 +120,7 @@ export class ClienteV3 extends EventTarget {
   }
 
   _arrancarBucleLocal(motor) {
-    this._bucle = setInterval(() => {
+    this._bucle = crearReloj(motor.p.tickIntervalMs, () => {
       // Los bots deciden con lo MISMO que ve un cliente de red: el GAME_STATE.
       const visible = motor.serializarEstado();
       for (const id of this._bots) {
@@ -137,10 +138,10 @@ export class ClienteV3 extends EventTarget {
       for (const ev of eventos) if (ev.type === TIPOS.GAME_OVER) this._emitir(ev.type, ev);
 
       if (estado === ESTADO_PARTIDA.FINISHED) {
-        clearInterval(this._bucle);
+        this._bucle.detener();
         this._bucle = null;
       }
-    }, motor.p.tickIntervalMs);
+    });
   }
 
   // ==========================================================================
@@ -235,7 +236,7 @@ export class ClienteV3 extends EventTarget {
 
   detener() {
     this._cerrandoAdrede = true;
-    if (this._bucle) { clearInterval(this._bucle); this._bucle = null; }
+    if (this._bucle) { this._bucle.detener(); this._bucle = null; }
     if (this._cuentaLocal) { clearInterval(this._cuentaLocal); this._cuentaLocal = null; }
     if (this._ws) {
       try {

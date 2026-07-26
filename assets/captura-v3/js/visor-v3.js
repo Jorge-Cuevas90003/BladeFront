@@ -31,7 +31,7 @@ import { crearMonumentos } from '../../arena-vacio/js/monumentos.js';
 
 import { ClienteV3 } from './cliente-v3.js';
 import { crearVisor2D } from './visor-2d.js';
-import { TIPOS, DIRECCIONES, ESTADO_BANDERA, PARAMS_DEFECTO } from '../../../red/v3/protocolo-v3.js';
+import { TIPOS, DIRECCIONES, ESTADO_BANDERA, ESTADO_PARTIDA, PARAMS_DEFECTO } from '../../../red/v3/protocolo-v3.js';
 
 // ---------------------------------------------------------------------------
 //  Render, escena y cámara
@@ -590,33 +590,117 @@ $('reset').addEventListener('click', alMenu);
 $('finMenu')?.addEventListener('click', alMenu);
 $('finOtra')?.addEventListener('click', () => { $('modalFin').classList.add('oculto'); entrar(); });
 
-// Buscar servidores en la red (el bridge hace el broadcast por nosotros).
-$('buscar')?.addEventListener('click', async () => {
+// ---------------------------------------------------------------------------
+//  Descubrimiento automático de partidas
+//
+//  Mientras el menú está abierto en modo red, se pregunta al bridge cada pocos
+//  segundos y la lista se actualiza sola: quien levante un servidor en la red
+//  aparece sin que nadie pulse nada, y quien lo apague desaparece.
+//
+//  La lista se reconcilia en vez de reconstruirse. Si se borrara y volviera a
+//  pintar en cada sondeo, la selección del usuario se perdería cada dos
+//  segundos y la animación de entrada parpadearía sin parar.
+// ---------------------------------------------------------------------------
+const INTERVALO_BUSQUEDA = 2500;
+let servidoresVistos = new Map();   // "host:puerto" -> datos
+let seleccionado = null;
+let buscando = false;
+
+const menuAbiertoEnRed = () =>
+  !$('menu').classList.contains('oculto') && $('modo').value === 'red';
+
+function pintarServidores() {
   const lista = $('listaServidores');
-  const base = ($('url').value || 'ws://localhost:8146').replace(/^ws/, 'http').split('?')[0];
-  lista.innerHTML = '<li class="vacio">Buscando…</li>';
-  try {
-    const servidores = await ClienteV3.buscarServidores(base);
-    if (!servidores.length) {
-      lista.innerHTML = '<li class="vacio">Ningún servidor respondió</li>';
-      return;
-    }
-    lista.innerHTML = '';
-    for (const s of servidores) {
+  const estado = $('estadoBusqueda');
+
+  if (servidoresVistos.size === 0) {
+    if (!lista.querySelector('.vacio')) lista.innerHTML = '';
+    if (!lista.children.length) {
       const li = document.createElement('li');
-      li.innerHTML = `<b>${s.serverName}</b> <span>${s.host}:${s.tcpPort} · ${s.playerCount}/${s.maximumPlayers}</span>`;
+      li.className = 'vacio';
+      li.textContent = 'Ninguna partida abierta todavía';
+      lista.appendChild(li);
+    }
+    return;
+  }
+  lista.querySelector('.vacio')?.remove();
+
+  const claves = new Set();
+  for (const [clave, s] of servidoresVistos) {
+    claves.add(clave);
+    let li = lista.querySelector(`[data-clave="${CSS.escape(clave)}"]`);
+    const nuevo = !li;
+    if (nuevo) {
+      li = document.createElement('li');
+      li.dataset.clave = clave;
+      li.className = 'nuevo';
       li.addEventListener('click', () => {
+        seleccionado = clave;
         $('host').value = s.host;
         $('puerto').value = s.tcpPort;
-        for (const otro of lista.children) otro.classList.remove('on');
-        li.classList.add('on');
+        for (const otro of lista.children) otro.classList.toggle('on', otro === li);
       });
       lista.appendChild(li);
     }
-  } catch (e) {
-    lista.innerHTML = `<li class="vacio">No respondió el bridge (${e.message})</li>`;
+
+    const lleno = s.playerCount >= s.maximumPlayers;
+    const cls = lleno ? 'llena' : (s.state === ESTADO_PARTIDA.WAITING ? 'abierta' : 'jugando');
+    const txt = lleno ? 'LLENA' : (s.state === ESTADO_PARTIDA.WAITING ? 'ABIERTA' : 'EN JUEGO');
+    li.innerHTML = `<b>${s.serverName}</b>` +
+      `<span>${s.host}:${s.tcpPort} · ${s.playerCount}/${s.maximumPlayers}</span>` +
+      `<span class="estado ${cls}">${txt}</span>`;
+    li.classList.toggle('on', clave === seleccionado);
   }
-});
+
+  // Fuera los que dejaron de responder.
+  for (const li of [...lista.children]) {
+    if (li.dataset.clave && !claves.has(li.dataset.clave)) {
+      if (li.dataset.clave === seleccionado) seleccionado = null;
+      li.remove();
+    }
+  }
+
+  // Con una sola partida a la vista, se preselecciona: es lo que casi siempre
+  // se quiere y ahorra un clic.
+  if (!seleccionado && servidoresVistos.size === 1) {
+    lista.children[0]?.click();
+  }
+}
+
+async function sondearServidores() {
+  if (buscando || !menuAbiertoEnRed()) return;
+  buscando = true;
+  const estado = $('estadoBusqueda');
+  const base = ($('url').value || 'ws://localhost:8146').replace(/^ws/, 'http').split('?')[0];
+  try {
+    const servidores = await ClienteV3.buscarServidores(base, 700);
+    servidoresVistos = new Map(servidores.map((s) => [`${s.host}:${s.tcpPort}`, s]));
+    estado.className = 'buscando';
+    estado.textContent = servidores.length
+      ? `${servidores.length} encontrada${servidores.length > 1 ? 's' : ''}`
+      : 'buscando…';
+    pintarServidores();
+  } catch {
+    // Sin bridge no hay descubrimiento posible: el navegador no puede hacer
+    // broadcast por su cuenta, así que hay que decirlo en vez de callar.
+    servidoresVistos.clear();
+    estado.className = 'sinbridge';
+    estado.textContent = 'bridge no responde';
+    $('listaServidores').innerHTML =
+      '<li class="vacio">Arranca el bridge: node red/v3/bridge-v3.js</li>';
+  } finally {
+    buscando = false;
+  }
+}
+
+setInterval(sondearServidores, INTERVALO_BUSQUEDA);
+// Al cambiar a modo red se sondea ya, sin esperar al siguiente ciclo.
+$('modo').addEventListener('change', () => { if (menuAbiertoEnRed()) sondearServidores(); });
+for (const card of document.querySelectorAll('.modo-card')) {
+  card.addEventListener('click', () => setTimeout(sondearServidores, 0));
+}
+$('url').addEventListener('change', sondearServidores);
+sondearServidores();
 
 // Gancho de depuración: permite inspeccionar y avanzar cuadros a mano desde la
 // consola sin depender del bucle de animación del navegador.

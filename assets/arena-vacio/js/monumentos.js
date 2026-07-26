@@ -1,43 +1,58 @@
 // ============================================================================
-//  LOS DOCE TESTIGOS — monumentos de mármol procedurales.
+//  LOS DOCE TESTIGOS — monumentos procedurales de una sola pieza.
 //
-//  Efigies colosales de campeones caídos de la arena, talladas en un idioma
-//  helenístico y erosionadas por el vacío. Cada una es única y determinista:
-//  la misma semilla da siempre la misma estatua.
+//  Efigies colosales de campeones caídos de la arena. Cada una es única y
+//  determinista: la misma semilla da siempre la misma estatua.
 //
-//  Lo que las hace leer como escultura griega y no como un muñeco genérico:
+//  ── Por qué el cuerpo se genera con campos de distancia ──
 //
-//   · CONTRAPPOSTO. El peso descansa sobre una pierna; la cadera de ese lado
-//     sube, los hombros contragiran, la columna traza una S y la cabeza mira
-//     hacia el lado relajado. Es LA convención del canon clásico y sin ella
-//     cualquier figura parece un maniquí en posición de firmes.
+//  La primera versión ensamblaba cilindros y esferas por articulación. A
+//  distancia de juego colaba, pero en primer plano se veían las juntas: un
+//  hombro es una bola metida en un tubo, y eso lee como muñeco articulado, no
+//  como talla.
 //
-//   · PAÑOS CON PLIEGUES VERTICALES. El chitón se genera como una superficie
-//     de revolución cuyo radio se modula con el ángulo, no como un cono liso.
-//     Los pliegues se retuercen con la altura para que caigan, no para que
-//     bajen rectos.
+//  Ahora el cuerpo entero es UNA superficie continua. Se define un esqueleto
+//  de huesos, cada hueso siembra esferas de influencia en un campo escalar, y
+//  se extrae la isosuperficie con marching cubes. Donde dos huesos se acercan,
+//  sus campos se suman y la superficie los funde con un empalme suave — que es
+//  exactamente lo que hace un escultor al desbastar la transición del deltoides
+//  al bíceps. No hay junta que ver porque no hay dos piezas.
 //
-//   · RUINA. Varias están decapitadas o mancas, con la fractura tallada. Un
-//     conjunto de doce estatuas intactas parece de catálogo; uno con mármoles
-//     rotos parece que lleva siglos ahí.
+//  La erosión se talla igual pero al revés: esferas de influencia NEGATIVA que
+//  restan masa. Así una fractura tiene borde irregular en vez de un corte liso.
 //
-//  Rendimiento: cada estatua se compone de decenas de piezas que se FUSIONAN
-//  en tres mallas (mármol, bronce, luz). Doce monumentos cuestan 36 llamadas
-//  de dibujo en vez de varios cientos.
+//  ── Lo que NO se genera así ──
+//
+//  Los paños siguen siendo superficies de revolución con pliegues, porque un
+//  campo escalar los redondearía y perderían el filo del pliegue, que es
+//  justamente lo que los hace leer como tela. Y el pedestal es arquitectura:
+//  ahí la arista viva es correcta.
 // ============================================================================
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { MarchingCubes } from 'three/addons/objects/MarchingCubes.js';
+
+// Resolución del campo. Medida: 112 cuesta ~33 ms y da ~6000 triángulos por
+// figura; 128 sube a 54 ms sin una mejora visible a la escala a la que se ven.
+const RESOLUCION = 112;
+const RESTA = 12;   // dureza del decaimiento del campo
+
+// Una sola instancia para las doce: el campo ocupa ~27 MB y no tiene sentido
+// pagarlo doce veces cuando se puede reiniciar entre estatuas.
+let _campo = null;
+function campo() {
+  if (!_campo) {
+    _campo = new MarchingCubes(RESOLUCION, new THREE.MeshBasicMaterial(), false, false, 900000);
+  }
+  return _campo;
+}
 
 // ---------------------------------------------------------------------------
-//  Fusión robusta.
-//
-//  mergeGeometries() exige que TODAS las geometrías compartan exactamente los
-//  mismos atributos y que estén todas indexadas o ninguna. Las primitivas de
-//  three.js y las superficies propias de este módulo no siempre coinciden en
-//  eso, así que se aplana todo a una forma común antes de fusionar: sin índice
-//  y con position, normal y uv. Cuesta algo de memoria y elimina de raíz una
-//  familia entera de fallos difíciles de diagnosticar.
+//  Fusión robusta: mergeGeometries exige los mismos atributos y el mismo
+//  estado de indexado en todas. Las primitivas de three.js, las superficies de
+//  revolución y la malla de marching cubes no coinciden, así que se aplana
+//  todo a una forma común. Elimina de raíz una familia entera de fallos.
 // ---------------------------------------------------------------------------
 function fusionar(lote) {
   const normalizadas = lote.map((g) => {
@@ -53,8 +68,6 @@ function fusionar(lote) {
 }
 
 // --- azar determinista ------------------------------------------------------
-// Semilla explícita: dos ejecuciones deben dar exactamente las mismas doce
-// estatuas, o el escenario cambiaría en cada recarga.
 function mulberry32(a) {
   return function () {
     a |= 0; a = (a + 0x6d2b79f5) | 0;
@@ -65,28 +78,16 @@ function mulberry32(a) {
 }
 
 // ---------------------------------------------------------------------------
-//  Superficie de revolución con pliegues.
-//
-//  Un cilindro cuyo radio depende de la ALTURA (el perfil: hombros anchos,
-//  cintura estrecha) y del ÁNGULO (los pliegues del paño). La torsión hace que
-//  los pliegues describan una hélice suave al caer, que es como se comporta la
-//  tela real colgando de una cadera desnivelada.
+//  Superficie de revolución con pliegues — para los paños.
+//  El radio se modula con el ÁNGULO (los pliegues) además de con la altura (el
+//  perfil), y la torsión los hace caer en hélice en vez de bajar rectos.
 // ---------------------------------------------------------------------------
 function revolucion({
-  perfil,                 // [{ y, r }] de abajo hacia arriba
-  radial = 48,
-  pliegues = 0,           // número de pliegues verticales
-  amplitud = 0,           // profundidad de cada pliegue (fracción del radio)
-  torsion = 0,            // giro de los pliegues por unidad de altura
-  escalaZ = 1,            // aplasta la sección: los torsos son elípticos
-  cerrarAbajo = false,
-  cerrarArriba = false,
+  perfil, radial = 48, pliegues = 0, amplitud = 0, torsion = 0,
+  escalaZ = 1, cerrarAbajo = false, cerrarArriba = false,
 }) {
   const filas = perfil.length;
-  const pos = [];
-  const nor = [];
-  const uv = [];
-  const idx = [];
+  const pos = [], nor = [], uv = [], idx = [];
 
   for (let i = 0; i < filas; i++) {
     const { y, r } = perfil[i];
@@ -96,15 +97,12 @@ function revolucion({
       const rr = r * mod;
       pos.push(Math.cos(th) * rr, y, Math.sin(th) * rr * escalaZ);
       nor.push(Math.cos(th), 0, Math.sin(th) * escalaZ);
-      // Las primitivas de three.js traen uv; para poder fusionar con ellas,
-      // estas superficies tienen que traerlo también aunque no se texturicen.
       uv.push(j / radial, i / (filas - 1));
     }
   }
   for (let i = 0; i < filas - 1; i++) {
     for (let j = 0; j < radial; j++) {
-      const a = i * (radial + 1) + j;
-      const b = a + radial + 1;
+      const a = i * (radial + 1) + j, b = a + radial + 1;
       idx.push(a, b, a + 1, b, b + 1, a + 1);
     }
   }
@@ -118,30 +116,25 @@ function revolucion({
   const tapas = [];
   if (cerrarAbajo) {
     const t = new THREE.CircleGeometry(perfil[0].r, radial);
-    t.rotateX(Math.PI / 2); t.translate(0, perfil[0].y, 0);
-    tapas.push(t);
+    t.rotateX(Math.PI / 2); t.translate(0, perfil[0].y, 0); tapas.push(t);
   }
   if (cerrarArriba) {
     const u = perfil[filas - 1];
     const t = new THREE.CircleGeometry(u.r, radial);
-    t.rotateX(-Math.PI / 2); t.translate(0, u.y, 0);
-    tapas.push(t);
+    t.rotateX(-Math.PI / 2); t.translate(0, u.y, 0); tapas.push(t);
   }
   const salida = tapas.length ? fusionar([g, ...tapas]) : g;
   salida.computeVertexNormals();
   return salida;
 }
 
-// Perfil interpolado entre puntos de control, para que los cuerpos tengan
-// transiciones suaves en vez de escalones.
 function perfilSuave(control, pasos = 14) {
   const out = [];
   for (let i = 0; i < pasos; i++) {
     const t = i / (pasos - 1);
     const p = t * (control.length - 1);
     const i0 = Math.floor(p), i1 = Math.min(control.length - 1, i0 + 1);
-    const f = p - i0;
-    const s = f * f * (3 - 2 * f); // suavizado de Hermite
+    const f = p - i0, s = f * f * (3 - 2 * f);
     out.push({
       y: control[i0].y + (control[i1].y - control[i0].y) * s,
       r: control[i0].r + (control[i1].r - control[i0].r) * s,
@@ -150,72 +143,127 @@ function perfilSuave(control, pasos = 14) {
   return out;
 }
 
-// --- materiales -------------------------------------------------------------
-// El mármol usa colores por vértice para el veteado, así que una sola
-// instancia sirve para las doce estatuas aunque cada una tenga su veta.
-const MAT_MARMOL = new THREE.MeshPhysicalMaterial({
-  vertexColors: true,
-  roughness: 0.78,          // piedra mate: el brillo alto la volvía plástico
-  metalness: 0.0,
-  clearcoat: 0.14,          // el pulido de la talla, muy tenue
-  clearcoatRoughness: 0.7,
-  sheen: 0.18,
-  sheenColor: new THREE.Color(0xffeed6),
-  sheenRoughness: 0.85,
-});
-const MAT_BRONCE = new THREE.MeshStandardMaterial({
-  color: 0x9a7b3f, metalness: 1.0, roughness: 0.34,
-});
+// ---------------------------------------------------------------------------
+//  Materiales: una piedra y un metal por estatua.
+//
+//  El contraste entre los dos es lo que da identidad a cada monumento a
+//  distancia, mucho más que la pose o la altura. Obsidiana con oro no se
+//  confunde con mármol y plata ni de lejos.
+// ---------------------------------------------------------------------------
+const PIEDRAS = {
+  marmol:    { color: 0xa8a294, roughness: 0.78, clearcoat: 0.14, clearcoatRoughness: 0.7,  veta: 1.0 },
+  obsidiana: { color: 0x0a0c11, roughness: 0.09, clearcoat: 1.0,  clearcoatRoughness: 0.06, veta: 0.35 },
+  basalto:   { color: 0x24272d, roughness: 0.9,  clearcoat: 0.04, clearcoatRoughness: 0.9,  veta: 0.5 },
+  alabastro: { color: 0xc4b494, roughness: 0.42, clearcoat: 0.35, clearcoatRoughness: 0.4,  veta: 0.75 },
+  porfido:   { color: 0x6b3b3f, roughness: 0.62, clearcoat: 0.25, clearcoatRoughness: 0.5,  veta: 0.9 },
+};
+const METALES = {
+  oro:    { color: 0xc9a227, roughness: 0.26 },
+  plata:  { color: 0xd6dbe2, roughness: 0.17 },
+  bronce: { color: 0x96742f, roughness: 0.36 },
+  cobre:  { color: 0xa85f34, roughness: 0.3 },
+  electro:{ color: 0xd9c98a, roughness: 0.22 },   // aleación de oro y plata
+};
 
-// --- veteado ----------------------------------------------------------------
-// Vetas por posición, con dos octavas de ruido barato. Determinista por
-// estatua para que cada una tenga su propio patrón de mármol.
-function vetear(geom, rng) {
-  // Tonos claramente por debajo del blanco. Con ACES y exposición 1.1, un
-  // albedo cercano a 1.0 se satura y el veteado desaparece: la estatua se ve
-  // como un recorte de papel. Bajando a ~0.7 el mármol conserva su modelado.
-  const tonos = [
-    [0.74, 0.71, 0.65],   // crema de Paros
-    [0.66, 0.68, 0.71],   // gris frío
-    [0.75, 0.69, 0.65],   // rosado
-    [0.70, 0.67, 0.58],   // pátina cálida
-  ][Math.floor(rng() * 4)];
+// Doce parejas fijas: así el anillo entero tiene variedad garantizada en vez
+// de depender de que el azar no repita.
+const COMBOS = [
+  ['obsidiana', 'oro'],   ['marmol', 'plata'],    ['marmol', 'oro'],
+  ['obsidiana', 'plata'], ['alabastro', 'oro'],   ['basalto', 'cobre'],
+  ['porfido', 'oro'],     ['marmol', 'bronce'],   ['obsidiana', 'electro'],
+  ['alabastro', 'plata'], ['basalto', 'oro'],     ['porfido', 'plata'],
+];
+
+function materialPiedra(nombre) {
+  const p = PIEDRAS[nombre];
+  return new THREE.MeshPhysicalMaterial({
+    vertexColors: true, color: p.color, metalness: 0.0,
+    roughness: p.roughness, clearcoat: p.clearcoat, clearcoatRoughness: p.clearcoatRoughness,
+    sheen: nombre === 'alabastro' ? 0.5 : 0.15,
+    sheenColor: new THREE.Color(0xffeed6), sheenRoughness: 0.8,
+  });
+}
+function materialMetal(nombre) {
+  const m = METALES[nombre];
+  return new THREE.MeshStandardMaterial({ color: m.color, metalness: 1.0, roughness: m.roughness });
+}
+
+// --- veteado por vértice ----------------------------------------------------
+// Modula el color base. En obsidiana casi no se nota (es piedra homogénea); en
+// mármol y pórfido es lo que le da vida a la superficie.
+function vetear(geom, rng, intensidad) {
   const fase = rng() * 100;
-  const dir = new THREE.Vector3(rng() - 0.5, rng() * 0.3, rng() - 0.5).normalize();
-
+  const dx = rng() - 0.5, dy = rng() * 0.3, dz = rng() - 0.5;
+  const n = Math.hypot(dx, dy, dz) || 1;
   const p = geom.attributes.position;
   const col = new Float32Array(p.count * 3);
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-    const d = x * dir.x + y * dir.y + z * dir.z;
-    // Dos octavas: la primera da la veta gruesa, la segunda la rompe para que
-    // no se vea como rayas periódicas.
-    let v = Math.sin(d * 3.1 + fase) * 0.5 + Math.sin(d * 11.3 + fase * 1.7) * 0.28;
-    v = Math.abs(v);
-    const veta = Math.pow(Math.max(0, 1 - v * 1.9), 3) * 0.42;   // vetas oscuras finas
-    const suciedad = Math.max(0, 0.45 - y * 0.1) * 0.3;          // pátina acumulada abajo
-    const k = 1 - veta - suciedad;
-    col[i * 3] = tonos[0] * k;
-    col[i * 3 + 1] = tonos[1] * k;
-    col[i * 3 + 2] = tonos[2] * k;
+    const d = (x * dx + y * dy + z * dz) / n;
+    let v = Math.abs(Math.sin(d * 3.1 + fase) * 0.5 + Math.sin(d * 11.3 + fase * 1.7) * 0.28);
+    const veta = Math.pow(Math.max(0, 1 - v * 1.9), 3) * 0.4 * intensidad;
+    const patina = Math.max(0, 0.45 - y * 0.1) * 0.28 * intensidad;
+    const k = 1 - veta - patina;
+    col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = k;
   }
   geom.setAttribute('color', new THREE.BufferAttribute(col, 3));
 }
 
 // ---------------------------------------------------------------------------
-//  Una efigie.
-//  `semilla` fija todo: proporciones, pose, ropaje, atributo y daño.
+//  Cuerpo continuo.
+//
+//  Se trabaja en el espacio del campo, [0,1] en los tres ejes, y al final se
+//  reescala a la altura pedida a partir de la caja envolvente real. Así el
+//  esqueleto se escribe con números legibles y no hay que calibrar a mano.
 // ---------------------------------------------------------------------------
-export function crearMonumento(semilla = 1) {
+function cuerpoContinuo(construir) {
+  const mc = campo();
+  mc.reset();
+
+  // radio → intensidad: en MarchingCubes el radio efectivo de una esfera de
+  // influencia es sqrt(intensidad / resta).
+  const bola = (x, y, z, r) => {
+    if (r <= 0) return;
+    mc.addBall(x, y, z, r * r * RESTA, RESTA);
+  };
+  // Esfera negativa: resta masa. Con esto se tallan las fracturas.
+  const hueco = (x, y, z, r) => mc.addBall(x, y, z, -r * r * RESTA, RESTA);
+
+  // Un hueso es una cadena de esferas entre dos puntos, con el radio
+  // interpolado. Al solaparse forman un tronco continuo, y al acercarse a otro
+  // hueso los campos se suman y la unión sale sola.
+  const hueso = (a, b, r0, r1, n = 8) => {
+    for (let i = 0; i < n; i++) {
+      const t = n === 1 ? 0 : i / (n - 1);
+      bola(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t,
+           r0 + (r1 - r0) * t);
+    }
+  };
+
+  construir({ bola, hueco, hueso });
+  mc.update();
+
+  const n = mc.count;
+  if (!n) return null;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(mc.geometry.getAttribute('position').array.slice(0, n * 3), 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(mc.geometry.getAttribute('normal').array.slice(0, n * 3), 3));
+  return g;
+}
+
+// ---------------------------------------------------------------------------
+//  Una efigie.
+// ---------------------------------------------------------------------------
+export function crearMonumento(semilla = 1, indiceCombo = 0) {
   const rng = mulberry32(semilla * 2654435761);
   const az = (a, b) => a + rng() * (b - a);
   const elegir = (arr) => arr[Math.floor(rng() * arr.length)];
 
-  const marmol = [];   // geometrías que irán a la malla de mármol
-  const bronce = [];
+  const [nombrePiedra, nombreMetal] = COMBOS[indiceCombo % COMBOS.length];
   const grupo = new THREE.Group();
+  const piedraExtra = [];   // paños: misma piedra, geometría aparte
+  const metal = [];
 
-  // Añade una pieza al lote aplicándole su transformación.
   const pieza = (geom, lote, { x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, s = 1, sx, sy, sz } = {}) => {
     const g = geom.clone();
     g.scale(sx ?? s, sy ?? s, sz ?? s);
@@ -226,395 +274,319 @@ export function crearMonumento(semilla = 1) {
     lote.push(g);
   };
 
-  // ── carácter de la figura ────────────────────────────────────────────────
-  const alturaFig = az(3.0, 3.7);
-  const corpulencia = az(0.88, 1.18);
-  const ladoFirme = rng() < 0.5 ? -1 : 1;      // pierna que soporta el peso
-  // El desnudo heroico existe en el canon, pero es minoría: la mayoría de las
-  // efigies van vestidas. Además el paño resuelve un problema de construcción,
-  // porque cubre justo las uniones de cadera y muslo, que es donde una figura
-  // hecha de piezas se delata como muñeco.
-  const ropaje = elegir(['chiton', 'chiton', 'chiton', 'himation', 'himation', 'peplo', 'peplo', 'desnudo']);
-  const atributo = elegir(['lanza', 'escudo', 'laurel', 'urna', 'rollo', 'espada', 'ninguno']);
-  const dano = elegir(['intacta', 'intacta', 'sin-cabeza', 'sin-brazo', 'agrietada']);
+  // ── carácter ─────────────────────────────────────────────────────────────
+  const alturaFig = az(3.4, 4.3);
+  const corpulencia = az(0.9, 1.15);
+  const ladoFirme = rng() < 0.5 ? -1 : 1;
+  const ropaje = elegir(['chiton', 'chiton', 'himation', 'himation', 'peplo', 'desnudo']);
+  const atributo = elegir(['lanza', 'escudo', 'laurel', 'urna', 'espada', 'antorcha', 'ninguno']);
+  const dano = elegir(['intacta', 'intacta', 'sin-cabeza', 'sin-brazo', 'erosionada']);
   const pedestal = elegir(['tambor', 'gradas', 'ortostato']);
 
+  // ── el cuerpo, de una pieza ──────────────────────────────────────────────
+  // Coordenadas del campo: pies en y≈0.10, coronilla en y≈0.93.
+  const brazoPerdido = dano === 'sin-brazo' ? (rng() < 0.5 ? -1 : 1) : 0;
+  const ladoAtributo = brazoPerdido === 1 ? -1 : (brazoPerdido === -1 ? 1 : (rng() < 0.5 ? -1 : 1));
+  const cx = 0.5, cz = 0.5;
+  const k = corpulencia;
+
+  // Contrapposto: la cadera del lado que aguanta el peso sube y los hombros
+  // contragiran. Sin esto la figura queda en posición de firmes.
+  const subeCadera = 0.012 * ladoFirme;
+  const inclHombro = -0.010 * ladoFirme;
+  const desvio = 0.012 * ladoFirme;         // el eje del cuerpo cae sobre la pierna firme
+
+  // Canon de siete cabezas y media, medido desde el suelo: la entrepierna cae
+  // a la mitad justa de la altura, los hombros a cinco cabezas y cuarto, y la
+  // coronilla arriba. Con la cadera más baja el torso se alarga y la figura
+  // deja de leer como humana.
+  const yPies = 0.10, yCoronilla = 0.93;
+  const alto = yCoronilla - yPies;
+  const yCadera = yPies + alto * 0.50;
+  const yHombro = yPies + alto * 0.835;
+  const manoPos = {};
+
+  const cuerpo = cuerpoContinuo(({ bola, hueco, hueso }) => {
+    // Piernas. Los radios salen del canon: el muslo es casi tan ancho como
+    // media cabeza. Con miembros finos la figura lee como alambre, no como
+    // mármol tallado.
+    for (const lado of [-1, 1]) {
+      const firme = lado === ladoFirme;
+      const xCad = cx + desvio + lado * 0.052 * k;
+      const yCad = yCadera + (firme ? subeCadera : -subeCadera);
+      const xPie = cx + lado * (firme ? 0.055 : 0.105) * k;
+      const zPie = cz + (firme ? 0.0 : az(0.05, 0.085));
+      const xRod = (xCad + xPie) / 2 + (firme ? 0 : lado * 0.006);
+      const yRod = yPies + alto * 0.27;
+
+      hueso([xCad, yCad, cz], [xRod, yRod, cz + (zPie - cz) * 0.4], 0.082 * k, 0.058 * k, 10);
+      hueso([xRod, yRod, cz + (zPie - cz) * 0.4], [xPie, yPies + 0.03, zPie], 0.062 * k, 0.036 * k, 10);
+      bola(xPie, yPies + 0.018, zPie + 0.022, 0.040 * k);   // empeine
+      bola(xPie, yPies + 0.012, zPie + 0.05, 0.031 * k);    // punta del pie
+    }
+
+    // Pelvis y torso: caja torácica ancha, cintura marcada.
+    hueso([cx + desvio, yCadera + subeCadera * 0.5, cz], [cx + desvio * 0.6, yCadera + alto * 0.1, cz], 0.105 * k, 0.088 * k, 7);
+    hueso([cx + desvio * 0.6, yCadera + alto * 0.1, cz], [cx, yCadera + alto * 0.21, cz], 0.088 * k, 0.098 * k, 7);
+    hueso([cx, yCadera + alto * 0.21, cz], [cx - desvio * 0.4, yHombro, cz], 0.098 * k, 0.105 * k, 8);
+    // Clavículas: el ancho de hombros es lo que da porte heroico.
+    hueso([cx - 0.10 * k, yHombro + inclHombro, cz], [cx + 0.10 * k, yHombro - inclHombro, cz], 0.058 * k, 0.058 * k, 8);
+
+    // Brazos
+    for (const lado of [-1, 1]) {
+      if (lado === brazoPerdido) {
+        // Muñón: se deja el hombro y se talla la rotura restando masa.
+        bola(cx + lado * 0.10 * k, yHombro + inclHombro * lado, cz, 0.058 * k);
+        hueco(cx + lado * 0.145 * k, yHombro - 0.02, cz + az(-0.02, 0.02), 0.06);
+        continue;
+      }
+      const sostiene = lado === ladoAtributo && atributo !== 'ninguno' && atributo !== 'laurel';
+      const xH = cx + lado * 0.10 * k, yH = yHombro + inclHombro * lado;
+      const xC = xH + lado * az(0.025, 0.05);
+      // Brazo caído: la muñeca cae a la altura de la cadera, ni más ni menos.
+      const yC = yH - (sostiene ? alto * 0.14 : alto * 0.19);
+      const zC = cz + (sostiene ? az(0.02, 0.05) : az(-0.01, 0.02));
+      const xM = xC + lado * (sostiene ? az(0.0, 0.02) : az(0.005, 0.018));
+      const yM = yC - (sostiene ? az(0.02, 0.07) : alto * 0.175);
+      const zM = zC + (sostiene ? az(0.06, 0.1) : az(0.0, 0.02));
+
+      hueso([xH, yH, cz], [xC, yC, zC], 0.058 * k, 0.044 * k, 9);
+      hueso([xC, yC, zC], [xM, yM, zM], 0.044 * k, 0.033 * k, 9);
+      bola(xM, yM - 0.016, zM + 0.01, 0.036 * k);   // mano
+      if (sostiene) manoPos[lado] = [xM, yM, zM];
+    }
+
+    // Cuello y cabeza
+    if (dano !== 'sin-cabeza') {
+      const giro = -0.3 * ladoFirme;
+      const yBarbilla = yHombro + alto * 0.055;
+      const xCab = cx + Math.sin(giro) * 0.012;
+      hueso([cx, yHombro + 0.005, cz], [xCab, yBarbilla, cz - 0.004], 0.046 * k, 0.040 * k, 5);
+      // Cráneo: óvalo idealizado del canon, no una esfera.
+      hueso([xCab, yBarbilla + 0.005, cz - 0.002], [xCab, yCoronilla - 0.012, cz - 0.008], 0.056, 0.048, 8);
+      // Perfil griego: la nariz sale recta desde la frente, sin escalón. Es el
+      // rasgo que identifica el estilo aunque la cara no tenga nada más.
+      bola(xCab + Math.sin(giro) * 0.052, yBarbilla + alto * 0.045, cz + Math.cos(giro) * 0.052, 0.021);
+      bola(xCab, yCoronilla - 0.03, cz - 0.035, 0.052);   // masa de pelo en la nuca
+      bola(xCab, yBarbilla + alto * 0.05, cz - 0.055, 0.045);
+    } else {
+      bola(cx, yHombro + 0.02, cz, 0.05 * k);
+      hueco(cx + az(-0.03, 0.03), yHombro + 0.075, cz + az(-0.03, 0.03), 0.065);
+    }
+
+    // Erosión: mordidas al azar en la masa. Es lo que separa una ruina de una
+    // figura lisa a la que le falta un trozo.
+    if (dano === 'erosionada') {
+      for (let i = 0; i < 5; i++) {
+        hueco(cx + az(-0.11, 0.11), az(0.3, 0.8), cz + az(-0.09, 0.09), az(0.035, 0.07));
+      }
+    }
+    for (let i = 0; i < 3; i++) {
+      hueco(cx + az(-0.12, 0.12), az(0.15, 0.85), cz + az(-0.1, 0.1), az(0.018, 0.032));
+    }
+  });
+
+  // Reescalado a partir de la caja real: el esqueleto se escribe en números
+  // cómodos y la altura final la fija esta normalización.
+  cuerpo.computeBoundingBox();
+  const bb = cuerpo.boundingBox;
+  const escala = alturaFig / (bb.max.y - bb.min.y);
+  cuerpo.translate(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2);
+  cuerpo.scale(escala, escala, escala);
+
   // ── pedestal ─────────────────────────────────────────────────────────────
-  // La base no es decorado: da escala a la figura y la separa del suelo, que
-  // es lo que convierte una estatua en un monumento.
   let yBase = 0;
   if (pedestal === 'tambor') {
-    // Tambor acanalado, como un fuste de columna reaprovechado.
     const h = az(1.0, 1.35);
     pieza(revolucion({
       perfil: [{ y: 0, r: 0.82 }, { y: h, r: 0.74 }],
       radial: 64, pliegues: 20, amplitud: 0.035, cerrarArriba: true, cerrarAbajo: true,
-    }), marmol);
-    pieza(new THREE.CylinderGeometry(0.9, 0.96, 0.14, 64), marmol, { y: 0.07 });
-    pieza(new THREE.CylinderGeometry(0.86, 0.8, 0.1, 64), marmol, { y: h - 0.05 });
-    pieza(new THREE.TorusGeometry(0.79, 0.022, 8, 64), bronce, { y: h - 0.24, rx: Math.PI / 2 });
-    yBase = h + 0.02;
+    }), piedraExtra);
+    pieza(new THREE.CylinderGeometry(0.9, 0.96, 0.14, 64), piedraExtra, { y: 0.07 });
+    pieza(new THREE.CylinderGeometry(0.86, 0.8, 0.1, 64), piedraExtra, { y: h - 0.05 });
+    pieza(new THREE.TorusGeometry(0.79, 0.024, 8, 64), metal, { y: h - 0.24, rx: Math.PI / 2 });
+    yBase = h;
   } else if (pedestal === 'gradas') {
-    // Plinto escalonado: tres losas decrecientes con bisel.
-    const alturas = [0.24, 0.2, 0.16];
-    const anchos = [1.05, 0.92, 0.8];
+    const alturas = [0.24, 0.2, 0.16], anchos = [1.05, 0.92, 0.8];
     let y = 0;
     for (let i = 0; i < 3; i++) {
-      pieza(new THREE.BoxGeometry(anchos[i] * 2, alturas[i], anchos[i] * 2), marmol, { y: y + alturas[i] / 2 });
+      pieza(new THREE.BoxGeometry(anchos[i] * 2, alturas[i], anchos[i] * 2), piedraExtra, { y: y + alturas[i] / 2 });
       y += alturas[i];
     }
-    yBase = y + 0.02;
+    pieza(new THREE.TorusGeometry(0.74, 0.02, 8, 48), metal, { y: y - 0.02, rx: Math.PI / 2 });
+    yBase = y;
   } else {
-    // Ortostato: bloque alto con una moldura y una franja de inscripción.
     const h = az(1.15, 1.45);
-    pieza(new THREE.BoxGeometry(1.55, h, 1.3), marmol, { y: h / 2 });
-    pieza(new THREE.BoxGeometry(1.72, 0.13, 1.46), marmol, { y: 0.065 });
-    pieza(new THREE.BoxGeometry(1.68, 0.1, 1.42), marmol, { y: h - 0.05 });
-    // Surco de inscripción, insinuado con dos filetes de bronce.
+    pieza(new THREE.BoxGeometry(1.55, h, 1.3), piedraExtra, { y: h / 2 });
+    pieza(new THREE.BoxGeometry(1.72, 0.13, 1.46), piedraExtra, { y: 0.065 });
+    pieza(new THREE.BoxGeometry(1.68, 0.1, 1.42), piedraExtra, { y: h - 0.05 });
     for (const dz of [0.652, -0.652]) {
-      pieza(new THREE.BoxGeometry(1.1, 0.012, 0.012), bronce, { y: h * 0.62, z: dz });
-      pieza(new THREE.BoxGeometry(1.1, 0.012, 0.012), bronce, { y: h * 0.5, z: dz });
+      pieza(new THREE.BoxGeometry(1.1, 0.014, 0.014), metal, { y: h * 0.62, z: dz });
+      pieza(new THREE.BoxGeometry(1.1, 0.014, 0.014), metal, { y: h * 0.5, z: dz });
     }
-    yBase = h + 0.02;
+    yBase = h;
   }
+  cuerpo.translate(0, yBase, 0);
 
-  // ── esqueleto en contrapposto ────────────────────────────────────────────
-  // Todas las medidas se derivan de la altura para que las proporciones se
-  // mantengan al variar el tamaño.
-  const hPierna = alturaFig * 0.47;
-  const hTorso = alturaFig * 0.34;
-  const rCadera = 0.2 * corpulencia;
-  const yCadera = yBase + hPierna;
-  const yHombro = yCadera + hTorso;
+  // ── paños ────────────────────────────────────────────────────────────────
+  // Del espacio del campo a la altura real del monumento.
+  const aMonumento = (yCampo) => yBase + (yCampo - yPies) / alto * alturaFig;
+  const yCaderaM = aMonumento(yCadera);
+  const yHombroM = aMonumento(yHombro);
 
-  const inclCadera = 0.075 * ladoFirme;   // la cadera del lado firme SUBE
-  const inclHombro = -0.06 * ladoFirme;   // los hombros contragiran
-  const giroCabeza = -0.32 * ladoFirme;   // mira hacia el lado relajado
-  const desplazo = 0.055 * ladoFirme;     // el peso cae sobre la pierna firme
+  // Radio del cuerpo en el mundo, para que la tela nunca sea más estrecha que
+  // lo que envuelve. La primera versión usaba un número fijo y dejaba un
+  // escalón visible entre el torso y la falda.
+  const rCuerpo = (rCampo) => rCampo * 2 * escala;
+  const rCintura = rCuerpo(0.088 * k);
 
-  // Piernas. La firme va recta bajo la cadera; la relajada se adelanta,
-  // se abre y dobla la rodilla: eso es lo que crea la línea del contrapposto.
-  for (const lado of [-1, 1]) {
-    const firme = lado === ladoFirme;
-    const xPie = lado * (0.17 + (firme ? 0 : 0.1));
-    const zPie = firme ? 0 : az(0.14, 0.24);
-    const xCad = lado * rCadera * 0.86 + desplazo;
-
-    const muslo = revolucion({
-      perfil: perfilSuave([{ y: 0, r: 0.115 }, { y: 0.45, r: 0.135 }, { y: 1, r: 0.105 }], 10),
-      radial: 32, escalaZ: 0.88,
-    });
-    const hMuslo = hPierna * 0.52;
-    const incl = Math.atan2(xCad - xPie, hMuslo);
-    pieza(muslo, marmol, {
-      x: (xCad + xPie) / 2, y: yCadera - hMuslo / 2, z: zPie * 0.35,
-      sy: hMuslo, sx: corpulencia, sz: corpulencia, rz: incl,
-    });
-
-    const pantorrilla = revolucion({
-      perfil: perfilSuave([{ y: 0, r: 0.07 }, { y: 0.35, r: 0.105 }, { y: 1, r: 0.075 }], 10),
-      radial: 32, escalaZ: 0.9,
-    });
-    const hPant = hPierna * 0.48;
-    pieza(pantorrilla, marmol, {
-      x: xPie, y: yBase + hPant / 2, z: zPie,
-      sy: hPant, sx: corpulencia, sz: corpulencia,
-    });
-    // Rodilla y pie, que rematan las articulaciones y evitan el corte seco.
-    pieza(new THREE.SphereGeometry(0.1 * corpulencia, 20, 14), marmol, { x: xPie, y: yBase + hPant, z: zPie });
-    pieza(new THREE.BoxGeometry(0.19, 0.09, 0.34), marmol, { x: xPie, y: yBase + 0.045, z: zPie + 0.07 });
-  }
-
-  // Torso: sección elíptica, pecho ancho y cintura marcada.
-  const torso = revolucion({
-    perfil: perfilSuave([
-      { y: 0, r: 0.2 }, { y: 0.18, r: 0.185 }, { y: 0.42, r: 0.175 },
-      { y: 0.72, r: 0.225 }, { y: 0.92, r: 0.235 }, { y: 1, r: 0.19 },
-    ], 18),
-    radial: 44, escalaZ: 0.72, cerrarArriba: true, cerrarAbajo: true,
-  });
-  pieza(torso, marmol, {
-    x: desplazo, y: yCadera, sy: hTorso, sx: corpulencia, sz: corpulencia,
-    rz: (inclCadera + inclHombro) * 0.5,
-  });
-
-  // ── ropaje ───────────────────────────────────────────────────────────────
-  // El chitón cae desde la cintura; el himatión cruza el torso. Los pliegues
-  // se retuercen con la altura para que caigan en vez de bajar rectos.
   if (ropaje !== 'desnudo') {
-    // El peplo arranca del pecho; el chitón, de la cintura. El himatión es un
-    // manto más corto sobre la túnica.
-    const yAlto = ropaje === 'peplo' ? yCadera + hTorso * 0.72 : yCadera + hTorso * 0.18;
-    const largo = ropaje === 'himation' ? hPierna * az(0.55, 0.72)
-                : (yAlto - (yBase + az(0.06, 0.16)));
-
-    // Perfil ancho: la tela cae SEPARADA del cuerpo, y ese hueco es lo que la
-    // hace parecer tela y no pintura sobre la pierna.
-    const tela = revolucion({
-      perfil: perfilSuave([
-        { y: 0, r: 0.40 }, { y: 0.2, r: 0.365 }, { y: 0.55, r: 0.315 },
-        { y: 0.85, r: 0.28 }, { y: 1, r: 0.245 },
-      ], 24),
-      radial: 72,
-      pliegues: Math.floor(az(10, 16)),
-      amplitud: az(0.075, 0.125),   // pliegues más profundos: leen a distancia
-      torsion: az(-3.0, 3.0),
-      escalaZ: 0.88,
-    });
-    pieza(tela, marmol, {
-      x: desplazo, y: yAlto - largo, z: 0,
-      sy: largo, sx: corpulencia, sz: corpulencia,
-      rz: inclCadera * 0.6, ry: az(0, Math.PI),
-    });
-
-    // Sobrepliegue (apoptygma): el doblez que cae sobre el pecho en el peplo.
-    // Es el detalle que más identifica la prenda.
-    if (ropaje === 'peplo') {
-      pieza(revolucion({
-        perfil: perfilSuave([{ y: 0, r: 0.30 }, { y: 0.6, r: 0.335 }, { y: 1, r: 0.30 }], 10),
-        radial: 64, pliegues: 12, amplitud: 0.1, torsion: 1.4, escalaZ: 0.88,
-      }), marmol, {
-        x: desplazo, y: yCadera + hTorso * 0.3,
-        sy: hTorso * 0.42, sx: corpulencia, sz: corpulencia,
-      });
-    }
-
-    // Cinturón: hace que la tela parezca sujeta y no un cono apoyado.
-    pieza(new THREE.TorusGeometry(0.225 * corpulencia, 0.028, 8, 44), bronce, {
-      x: desplazo, y: yAlto - largo * 0.06, rx: Math.PI / 2,
-    });
-
-    if (ropaje === 'himation') {
-      // Manto cruzando el torso en diagonal, con sus propios pliegues. Rompe
-      // la simetría y cubre un hombro, que es como se llevaba.
-      const ladoManto = rng() < 0.5 ? -1 : 1;
-      pieza(revolucion({
-        perfil: perfilSuave([{ y: 0, r: 0.26 }, { y: 0.5, r: 0.235 }, { y: 1, r: 0.16 }], 12),
-        radial: 56, pliegues: 9, amplitud: 0.11, torsion: 2.2, escalaZ: 0.8,
-      }), marmol, {
-        x: desplazo + ladoManto * 0.04, y: yCadera + hTorso * 0.24,
-        sy: hTorso * 0.78, sx: corpulencia, sz: corpulencia,
-        rz: ladoManto * 0.1,
-      });
-      // Caída sobre el hombro.
-      pieza(new THREE.BoxGeometry(0.13, 0.46, 0.34), marmol, {
-        x: desplazo + ladoManto * 0.19, y: yHombro - 0.24,
-        rz: ladoManto * 0.24, ry: az(-0.3, 0.3),
-      });
-    }
-  }
-
-  // ── brazos ───────────────────────────────────────────────────────────────
-  // Uno sostiene el atributo (más alto y adelantado), el otro cuelga relajado.
-  const brazoPerdido = dano === 'sin-brazo' ? (rng() < 0.5 ? -1 : 1) : 0;
-  const ladoAtributo = rng() < 0.5 ? -1 : 1;
-
-  for (const lado of [-1, 1]) {
-    if (lado === brazoPerdido) {
-      // Fractura tallada: un muñón irregular en el hombro.
-      pieza(new THREE.IcosahedronGeometry(0.11 * corpulencia, 0), marmol, {
-        x: desplazo + lado * 0.24, y: yHombro - 0.06, ry: rng() * 3,
-        sx: 1, sy: 0.7, sz: 1,
-      });
-      continue;
-    }
-    const sostiene = lado === ladoAtributo && atributo !== 'ninguno';
-    const elevacion = sostiene ? az(0.35, 0.75) : az(-0.12, 0.1);
-    const apertura = sostiene ? az(0.3, 0.55) : az(0.1, 0.22);
-    const lBrazo = hTorso * 0.56, lAnte = hTorso * 0.52;
-
-    const xH = desplazo + lado * 0.23 * corpulencia;
-    const yH = yHombro - 0.08;
-    const xC = xH + lado * apertura;             // codo
-    const yC = yH - lBrazo * Math.cos(elevacion);
-    const zC = lBrazo * Math.sin(elevacion) * 0.6;
-
-    pieza(new THREE.SphereGeometry(0.095 * corpulencia, 20, 14), marmol, { x: xH, y: yH });
-
-    const brazo = revolucion({
-      perfil: perfilSuave([{ y: 0, r: 0.06 }, { y: 0.4, r: 0.078 }, { y: 1, r: 0.058 }], 8),
-      radial: 28, escalaZ: 0.92,
-    });
-    pieza(brazo, marmol, {
-      x: (xH + xC) / 2, y: (yH + yC) / 2, z: zC / 2,
-      sy: Math.hypot(xC - xH, yC - yH), sx: corpulencia, sz: corpulencia,
-      rz: Math.atan2(xC - xH, yH - yC),
-    });
-    pieza(new THREE.SphereGeometry(0.075 * corpulencia, 18, 12), marmol, { x: xC, y: yC, z: zC });
-
-    const xM = xC + lado * (sostiene ? 0.05 : 0.04);
-    const yM = yC - lAnte * (sostiene ? 0.55 : 0.95);
-    const zM = zC + (sostiene ? lAnte * 0.6 : 0.04);
-    const ante = revolucion({
-      perfil: perfilSuave([{ y: 0, r: 0.05 }, { y: 0.35, r: 0.066 }, { y: 1, r: 0.045 }], 8),
-      radial: 28, escalaZ: 0.92,
-    });
-    pieza(ante, marmol, {
-      x: (xC + xM) / 2, y: (yC + yM) / 2, z: (zC + zM) / 2,
-      sy: Math.hypot(xM - xC, yM - yC, zM - zC), sx: corpulencia, sz: corpulencia,
-      rz: Math.atan2(xM - xC, yC - yM), rx: -Math.atan2(zM - zC, Math.abs(yC - yM)),
-    });
-    pieza(new THREE.SphereGeometry(0.058 * corpulencia, 16, 12), marmol, { x: xM, y: yM, z: zM });
-
-    if (sostiene) grupo.userData.mano = { x: xM, y: yM, z: zM, lado };
-  }
-
-  // ── cabeza ───────────────────────────────────────────────────────────────
-  if (dano !== 'sin-cabeza') {
-    const yCuello = yHombro - 0.02;
-    pieza(new THREE.CylinderGeometry(0.075, 0.088, 0.15, 24), marmol, {
-      x: desplazo, y: yCuello + 0.07, rz: inclHombro,
-    });
-    const yCab = yCuello + 0.26;
-    const xCab = desplazo + Math.sin(giroCabeza) * 0.02;
-
-    // Óvalo idealizado: el canon clásico no retrata, idealiza.
-    pieza(new THREE.SphereGeometry(0.17, 32, 24), marmol, {
-      x: xCab, y: yCab, ry: giroCabeza, sx: 0.92, sy: 1.12, sz: 0.98,
-    });
-    // Masa de pelo: casquete con pliegues, tratado como los paños.
+    const yAlto = ropaje === 'peplo' ? yHombroM - alturaFig * 0.05 : yCaderaM + alturaFig * 0.035;
+    const largo = ropaje === 'himation' ? (yAlto - yBase) * az(0.5, 0.68) : (yAlto - yBase) * az(0.88, 0.98);
+    // El perfil va normalizado a 1 en su punto más ancho; el factor lo ata al
+    // cuerpo: arriba algo más ancho que la cintura, abajo bien acampanado.
+    const fTela = rCintura * 1.16;
     pieza(revolucion({
-      perfil: perfilSuave([{ y: 0, r: 0.175 }, { y: 0.55, r: 0.192 }, { y: 1, r: 0.1 }], 10),
-      radial: 40, pliegues: 14, amplitud: 0.07, torsion: 1.6,
-    }), marmol, { x: xCab, y: yCab - 0.02, ry: giroCabeza, sy: 0.24 });
-    // Nariz recta desde la frente: el "perfil griego", el rasgo que más
-    // identifica el estilo aunque la cara no tenga ningún otro detalle.
-    pieza(new THREE.BoxGeometry(0.035, 0.11, 0.05), marmol, {
-      x: xCab + Math.sin(giroCabeza) * 0.15, y: yCab - 0.015,
-      z: Math.cos(giroCabeza) * 0.15, ry: giroCabeza, rx: 0.12,
+      perfil: perfilSuave([
+        { y: 0, r: 1.62 }, { y: 0.2, r: 1.46 }, { y: 0.55, r: 1.24 },
+        { y: 0.85, r: 1.08 }, { y: 1, r: 1.0 },
+      ], 24),
+      radial: 72, pliegues: Math.floor(az(10, 16)), amplitud: az(0.08, 0.13),
+      torsion: az(-3.0, 3.0), escalaZ: 0.88,
+    }), piedraExtra, {
+      y: yAlto - largo, sy: largo, sx: fTela, sz: fTela, rz: subeCadera * 6, ry: az(0, Math.PI),
     });
 
-    if (atributo === 'laurel') {
-      pieza(new THREE.TorusGeometry(0.166, 0.016, 8, 40), bronce, {
-        x: xCab, y: yCab + 0.055, rx: Math.PI / 2 + 0.1, ry: giroCabeza,
+    if (ropaje === 'peplo') {
+      // Apoptygma: el doblez que cae sobre el pecho. Es lo que identifica la
+      // prenda, y va por fuera del torso para que se lea como una capa aparte.
+      const fDobl = rCuerpo(0.098 * k) * 1.14;
+      pieza(revolucion({
+        perfil: perfilSuave([{ y: 0, r: 1.0 }, { y: 0.6, r: 1.1 }, { y: 1, r: 1.0 }], 10),
+        radial: 64, pliegues: 12, amplitud: 0.11, torsion: 1.4, escalaZ: 0.88,
+      }), piedraExtra, { y: yCaderaM + alturaFig * 0.12, sy: alturaFig * 0.15, sx: fDobl, sz: fDobl });
+    }
+    if (ropaje === 'himation') {
+      const ladoManto = rng() < 0.5 ? -1 : 1;
+      const fManto = rCuerpo(0.10 * k) * 1.12;
+      pieza(revolucion({
+        perfil: perfilSuave([{ y: 0, r: 1.0 }, { y: 0.5, r: 0.94 }, { y: 1, r: 0.72 }], 12),
+        radial: 56, pliegues: 9, amplitud: 0.12, torsion: 2.2, escalaZ: 0.8,
+      }), piedraExtra, {
+        y: yCaderaM + alturaFig * 0.07, sy: alturaFig * 0.27, sx: fManto, sz: fManto, rz: ladoManto * 0.1,
       });
     }
-  } else {
-    // Cuello quebrado: superficie irregular donde estaba la cabeza.
-    pieza(new THREE.IcosahedronGeometry(0.1, 0), marmol, {
-      x: desplazo, y: yHombro + 0.03, ry: rng() * 3, sy: 0.55,
-    });
+    // Cinturón: el metal a media altura ancla la silueta y es donde primero se
+    // ve de qué está hecha cada estatua.
+    pieza(new THREE.TorusGeometry(fTela * 1.02, 0.032, 8, 44), metal, { y: yAlto - largo * 0.04, rx: Math.PI / 2 });
   }
 
-  // ── atributo ─────────────────────────────────────────────────────────────
-  const mano = grupo.userData.mano;
-  if (mano && atributo !== 'laurel') {
-    const { x, y, z, lado } = mano;
+  // ── atributo, en metal ───────────────────────────────────────────────────
+  const lado = ladoAtributo;
+  const mp = manoPos[lado];
+  if (mp) {
+    // De coordenadas del campo a las del monumento. El campo [0,1] sale de
+    // marching cubes en [-1,1], de ahí el factor 2, y luego va la escala que
+    // fijó la normalización de altura.
+    const x = (mp[0] - cx) * escala * 2;
+    const y = aMonumento(mp[1]);
+    const z = (mp[2] - cz) * escala * 2;
+
     if (atributo === 'lanza') {
-      const largo = alturaFig * az(1.02, 1.2);
-      pieza(new THREE.CylinderGeometry(0.022, 0.026, largo, 16), marmol, { x, y: y + largo * 0.32, z });
-      pieza(new THREE.ConeGeometry(0.05, 0.24, 16), bronce, { x, y: y + largo * 0.32 + largo / 2 + 0.1, z });
-      pieza(new THREE.ConeGeometry(0.032, 0.12, 12), bronce, { x, y: y + largo * 0.32 - largo / 2 - 0.05, z, rx: Math.PI });
+      const largo = alturaFig * az(1.0, 1.18);
+      pieza(new THREE.CylinderGeometry(0.024, 0.028, largo, 16), metal, { x, y: y + largo * 0.3, z });
+      pieza(new THREE.ConeGeometry(0.055, 0.26, 16), metal, { x, y: y + largo * 0.3 + largo / 2 + 0.11, z });
+      pieza(new THREE.ConeGeometry(0.034, 0.13, 12), metal, { x, y: y + largo * 0.3 - largo / 2 - 0.055, z, rx: Math.PI });
     } else if (atributo === 'escudo') {
-      // Aspis: disco abombado con umbo y refuerzo perimetral.
       pieza(revolucion({
-        perfil: perfilSuave([{ y: 0, r: 0.44 }, { y: 0.5, r: 0.4 }, { y: 1, r: 0.18 }], 10),
-        radial: 48,
-      }), marmol, { x: x + lado * 0.12, y: y - 0.05, z: z + 0.06, rx: Math.PI / 2, sy: 0.16, rz: az(-0.3, 0.3) });
-      pieza(new THREE.TorusGeometry(0.44, 0.03, 10, 48), bronce, {
-        x: x + lado * 0.12, y: y - 0.05, z: z + 0.06, ry: Math.PI / 2, rz: Math.PI / 2,
-      });
-      pieza(new THREE.SphereGeometry(0.075, 20, 14), bronce, { x: x + lado * 0.12, y: y - 0.05, z: z + 0.15 });
+        perfil: perfilSuave([{ y: 0, r: 0.48 }, { y: 0.5, r: 0.43 }, { y: 1, r: 0.2 }], 12),
+        radial: 56,
+      }), metal, { x: x + lado * 0.13, y: y - 0.05, z: z + 0.07, rx: Math.PI / 2, sy: 0.18, rz: az(-0.3, 0.3) });
+      pieza(new THREE.SphereGeometry(0.08, 20, 14), metal, { x: x + lado * 0.13, y: y - 0.05, z: z + 0.17 });
     } else if (atributo === 'urna') {
       pieza(revolucion({
         perfil: perfilSuave([
-          { y: 0, r: 0.1 }, { y: 0.12, r: 0.16 }, { y: 0.5, r: 0.22 },
-          { y: 0.82, r: 0.13 }, { y: 1, r: 0.17 },
+          { y: 0, r: 0.1 }, { y: 0.12, r: 0.17 }, { y: 0.5, r: 0.23 },
+          { y: 0.82, r: 0.13 }, { y: 1, r: 0.18 },
         ], 16),
         radial: 40, cerrarAbajo: true,
-      }), marmol, { x, y: y - 0.14, z, sy: 0.46 });
-      pieza(new THREE.TorusGeometry(0.155, 0.018, 8, 32), bronce, { x, y: y + 0.19, z, rx: Math.PI / 2 });
-    } else if (atributo === 'rollo') {
-      pieza(new THREE.CylinderGeometry(0.045, 0.045, 0.34, 20), marmol, { x, y: y - 0.02, z, rz: Math.PI / 2 + az(-0.3, 0.3) });
-      pieza(new THREE.CylinderGeometry(0.055, 0.055, 0.03, 20), bronce, { x: x + 0.17, y: y - 0.02, z, rz: Math.PI / 2 });
-      pieza(new THREE.CylinderGeometry(0.055, 0.055, 0.03, 20), bronce, { x: x - 0.17, y: y - 0.02, z, rz: Math.PI / 2 });
+      }), metal, { x, y: y - 0.16, z, sy: 0.5 });
     } else if (atributo === 'espada') {
-      const l = alturaFig * 0.34;
-      pieza(new THREE.BoxGeometry(0.075, l, 0.022), marmol, { x, y: y - l / 2 - 0.06, z });
-      pieza(new THREE.BoxGeometry(0.22, 0.035, 0.05), bronce, { x, y: y - 0.05, z });
-      pieza(new THREE.SphereGeometry(0.045, 16, 12), bronce, { x, y: y + 0.04, z });
+      const l = alturaFig * 0.32;
+      pieza(new THREE.BoxGeometry(0.08, l, 0.024), metal, { x, y: y - l / 2 - 0.06, z });
+      pieza(new THREE.BoxGeometry(0.24, 0.038, 0.055), metal, { x, y: y - 0.05, z });
+      pieza(new THREE.SphereGeometry(0.048, 16, 12), metal, { x, y: y + 0.04, z });
+    } else if (atributo === 'antorcha') {
+      pieza(new THREE.CylinderGeometry(0.028, 0.034, 0.5, 14), metal, { x, y: y + 0.16, z });
+      pieza(revolucion({
+        perfil: perfilSuave([{ y: 0, r: 0.05 }, { y: 0.5, r: 0.13 }, { y: 1, r: 0.1 }], 8),
+        radial: 24,
+      }), metal, { x, y: y + 0.41, z, sy: 0.2 });
+      grupo.userData.antorcha = new THREE.Vector3(x, y + 0.6, z);
     }
   }
-
-  // ── grieta ───────────────────────────────────────────────────────────────
-  // No se resta geometría: se marca la fractura con una cuña oscura hundida,
-  // que a esta distancia lee igual y cuesta una fracción.
-  if (dano === 'agrietada') {
-    const yG = yCadera + hTorso * az(0.2, 0.7);
-    pieza(new THREE.BoxGeometry(0.5, 0.03, 0.5), marmol, {
-      x: desplazo, y: yG, rz: az(-0.4, 0.4), ry: az(0, 3), sy: 1.4,
-    });
+  if (atributo === 'laurel' && dano !== 'sin-cabeza') {
+    const yCab = aMonumento(yHombro + alto * 0.105);
+    pieza(new THREE.TorusGeometry(alturaFig * 0.052, 0.018, 8, 40), metal, { y: yCab, rx: Math.PI / 2 + 0.12 });
   }
 
-  // ── fusión ───────────────────────────────────────────────────────────────
-  const mallaMarmol = fusionar(marmol);
-  vetear(mallaMarmol, rng);
-  const m1 = new THREE.Mesh(mallaMarmol, MAT_MARMOL);
-  m1.castShadow = m1.receiveShadow = true;
-  grupo.add(m1);
+  // ── mallas ───────────────────────────────────────────────────────────────
+  const matPiedra = materialPiedra(nombrePiedra);
+  const geomPiedra = fusionar([cuerpo, ...piedraExtra]);
+  vetear(geomPiedra, rng, PIEDRAS[nombrePiedra].veta);
+  const mallaPiedra = new THREE.Mesh(geomPiedra, matPiedra);
+  mallaPiedra.castShadow = mallaPiedra.receiveShadow = true;
+  grupo.add(mallaPiedra);
 
-  if (bronce.length) {
-    const m2 = new THREE.Mesh(fusionar(bronce), MAT_BRONCE);
-    m2.castShadow = true;
-    grupo.add(m2);
+  if (metal.length) {
+    const mallaMetal = new THREE.Mesh(fusionar(metal), materialMetal(nombreMetal));
+    mallaMetal.castShadow = true;
+    grupo.add(mallaMetal);
   }
 
-  grupo.userData.perfil = { alturaFig, ropaje, atributo, dano, pedestal, ladoFirme };
+  grupo.userData.perfil = {
+    alturaFig: +alturaFig.toFixed(2), piedra: nombrePiedra, metal: nombreMetal,
+    ropaje, atributo, dano, pedestal, ladoFirme,
+    triangulos: geomPiedra.getAttribute('position').count / 3,
+  };
   return grupo;
 }
 
 // ---------------------------------------------------------------------------
 //  El anillo completo.
-//  Devuelve { group, update(dt, t) } — la actualización solo mueve el pebetero
-//  de cada monumento, porque la piedra no debe animarse.
 // ---------------------------------------------------------------------------
-export function crearMonumentos({ cantidad = 12, radio = 16, escala = 1, conBrasero = true } = {}) {
+export function crearMonumentos({ cantidad = 12, radio = 16, escala = 1 } = {}) {
   const group = new THREE.Group();
-  const braseros = [];
+  const llamas = [];
 
   for (let i = 0; i < cantidad; i++) {
     const a = (i / cantidad) * Math.PI * 2 + Math.PI / cantidad;
-    const m = crearMonumento(i + 1);
+    const m = crearMonumento(i + 1, i);
     m.scale.setScalar(escala);
     m.position.set(Math.cos(a) * radio, 0, Math.sin(a) * radio);
     m.rotation.y = -a + Math.PI / 2 + (mulberry32(i * 7919)() - 0.5) * 0.5;
     group.add(m);
 
-    if (conBrasero) {
-      // Un pebetero bajo entre monumentos: separa las siluetas y da el único
-      // punto de color cálido a un anillo que si no sería todo piedra fría.
-      const b = new THREE.Group();
-      const ang = a + Math.PI / cantidad;
-      const cuenco = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.16, 0.1, 0.14, 20),
-        new THREE.MeshStandardMaterial({ color: 0x2a2118, metalness: 0.9, roughness: 0.45 })
-      );
-      cuenco.position.y = 0.42 * escala;
+    // Si la efigie lleva antorcha, arde. Es el único elemento animado: la
+    // piedra debe quedarse quieta o deja de parecer piedra.
+    if (m.userData.antorcha) {
       const llama = new THREE.Mesh(
-        new THREE.IcosahedronGeometry(0.13, 1),
-        new THREE.MeshBasicMaterial({ color: 0xffb638, transparent: true, opacity: 0.85, fog: false })
+        new THREE.IcosahedronGeometry(0.11, 1),
+        new THREE.MeshBasicMaterial({ color: 0xffc766, transparent: true, opacity: 0.85, fog: false })
       );
-      llama.position.y = 0.55 * escala;
-      const pie = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.05, 0.09, 0.42, 12),
-        new THREE.MeshStandardMaterial({ color: 0x241c14, metalness: 0.85, roughness: 0.5 })
-      );
-      pie.position.y = 0.21 * escala;
-      b.add(pie, cuenco, llama);
-      b.scale.setScalar(escala);
-      b.position.set(Math.cos(ang) * radio, 0, Math.sin(ang) * radio);
-      group.add(b);
-      braseros.push({ llama, semilla: i * 2.1 });
+      llama.position.copy(m.userData.antorcha);
+      m.add(llama);
+      llamas.push({ llama, semilla: i * 2.1 });
     }
   }
 
   return {
     group,
     update(dt, t) {
-      for (const { llama, semilla } of braseros) {
-        const p = 1 + Math.sin(t * 7 + semilla) * 0.14 + Math.sin(t * 13.3 + semilla) * 0.07;
-        llama.scale.set(p, p * 1.25, p);
-        llama.material.opacity = 0.7 + Math.sin(t * 9 + semilla) * 0.16;
+      for (const { llama, semilla } of llamas) {
+        const p = 1 + Math.sin(t * 7 + semilla) * 0.16 + Math.sin(t * 13.3 + semilla) * 0.08;
+        llama.scale.set(p, p * 1.3, p);
+        llama.material.opacity = 0.68 + Math.sin(t * 9 + semilla) * 0.18;
       }
     },
   };

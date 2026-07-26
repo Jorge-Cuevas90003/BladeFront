@@ -33,6 +33,7 @@ import {
 } from './protocolo-v3.js';
 import { MotorV3 } from '../../assets/captura-v3/js/motor-v3.js';
 import { publicarServidor } from './descubrimiento.js';
+import { crearReloj } from './reloj.js';
 
 export function crearServidor({
   puerto = PARAMS_DEFECTO.serverPort,
@@ -167,16 +168,16 @@ export function crearServidor({
     log(`== cuenta atrás: ${restantes} ==`);
     difundir(TIPOS.GAME_COUNTDOWN, { secondsRemaining: restantes });
 
-    cuenta = setInterval(() => {
+    cuenta = crearReloj(1000, () => {
       restantes--;
       if (restantes >= 1) {
         difundir(TIPOS.GAME_COUNTDOWN, { secondsRemaining: restantes });
       } else {
-        clearInterval(cuenta);
+        cuenta.detener();
         cuenta = null;
         arrancarPartida();
       }
-    }, 1000);
+    });
   }
 
   function arrancarPartida() {
@@ -185,7 +186,7 @@ export function crearServidor({
     difundir(TIPOS.GAME_STARTED, inicio);
     log(`== partida iniciada con ${inicio.players.length} jugadores ==`);
 
-    bucle = setInterval(() => {
+    bucle = crearReloj(juego.p.tickIntervalMs, () => {
       const { eventos, estado } = juego.ciclo();
 
       // §29.11: primero los eventos del ciclo, luego el GAME_STATE de ese tick,
@@ -200,12 +201,12 @@ export function crearServidor({
       }
 
       if (estado === ESTADO_PARTIDA.FINISHED) {
-        clearInterval(bucle);
+        bucle.detener();
         bucle = null;
         const g = juego.jugadores.get(juego.ganadorId);
         log(`== fin: gana ${juego.ganadorId} "${g?.name ?? '?'}" en el tick ${juego.tick} ==`);
       }
-    }, juego.p.tickIntervalMs);
+    });
   }
 
   // --- socket TCP ------------------------------------------------------------
@@ -265,6 +266,9 @@ export function crearServidor({
             discovery = publicarServidor({
               puerto: puertoUdp,
               log: verboso ? log : () => {},
+              // Siempre visible: sin descubrimiento el servidor existe pero
+              // nadie lo encuentra, y eso hay que saberlo al arrancar.
+              alFallar: (msg) => log(msg),
               describir: () => ({
                 gameId: juego.gameId,
                 serverName: nombre,
@@ -281,8 +285,8 @@ export function crearServidor({
     },
 
     cerrar() {
-      if (cuenta) { clearInterval(cuenta); cuenta = null; }
-      if (bucle) { clearInterval(bucle); bucle = null; }
+      if (cuenta) { cuenta.detener(); cuenta = null; }
+      if (bucle) { bucle.detener(); bucle = null; }
       try { discovery?.cerrar(); } catch {}
       for (const s of conexiones.keys()) s.destroy();
       conexiones.clear();
