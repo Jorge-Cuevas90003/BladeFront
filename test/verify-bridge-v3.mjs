@@ -188,8 +188,61 @@ try {
     check(servidores?.[0]?.serverName === 'Arena de prueba', `con su nombre ("${servidores?.[0]?.serverName}")`);
     check(servidores?.[0]?.tcpPort === PUERTO_TCP, 'y el puerto TCP al que conectarse');
 
+    check(servidores?.[0]?.via === 'broadcast', `y la vía por la que se encontró ("${servidores?.[0]?.via}")`);
+
     const salud = await (await fetch(`http://127.0.0.1:${PUERTO_WS}/salud`)).json();
     check(salud?.ok === true, '/salud responde');
+  }
+
+  // ── 4b. Sondeo dirigido delegado (el caso Radmin VPN) ─────────────────────
+  // Sobre Radmin el broadcast suele no atravesar el adaptador virtual, así que
+  // la ruta tiene que poder preguntar a IPs concretas.
+  console.log('\n== 4b. /servidores con sondeo dirigido ==');
+  {
+    const pide = async (query) =>
+      (await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&${query}`)).json();
+
+    // ?ips= sin broadcast útil: se apunta el broadcast a una dirección donde no
+    // hay nadie, así que todo lo que aparezca vino del sondeo dirigido.
+    const dirigido = await pide('direccion=169.254.240.7&ips=127.0.0.1');
+    check(dirigido.servidores?.length === 1, `?ips= encuentra el servidor (${dirigido.servidores?.length})`);
+    check(dirigido.servidores?.[0]?.via === 'directo', `marcado como directo ("${dirigido.servidores?.[0]?.via}")`);
+    check(dirigido.servidores?.[0]?.tcpPort === PUERTO_TCP, 'con el puerto TCP al que conectarse');
+
+    // Las dos vías dan con el mismo servidor: debe salir UNA sola entrada.
+    const ambas = await pide('direccion=127.0.0.1&ips=127.0.0.1');
+    check(ambas.servidores?.length === 1, `broadcast + sondeo no duplican (${ambas.servidores?.length})`);
+    check(ambas.servidores?.[0]?.via === 'broadcast', 'y se etiqueta con la vía que ya funcionaba');
+
+    // Una IP muda no añade ruido a la lista.
+    const muda = await pide('direccion=169.254.240.7&ips=169.254.240.8');
+    check(muda.servidores?.length === 0, `una IP que no responde no aparece (${muda.servidores?.length})`);
+
+    // ?escanear=1 barre las subredes Radmin locales. En una máquina sin Radmin
+    // no hay nada que barrer, pero la ruta debe contestar igual.
+    const t0 = Date.now();
+    const escaneo = await pide('direccion=127.0.0.1&escanear=1');
+    const ms = Date.now() - t0;
+    check(Array.isArray(escaneo.servidores), '?escanear=1 devuelve una lista');
+    check(escaneo.servidores?.some((s) => s.tcpPort === PUERTO_TCP),
+      'sin perder lo que ya encontraba el broadcast');
+    // Las dos vías corren en paralelo: el escaneo no debe sumar su espera.
+    check(ms < 2500, `el escaneo no alarga la petición (${ms} ms)`);
+    console.log(`  · /servidores?escanear=1 tardó ${ms} ms`);
+
+    // Basura en ?ips= no puede tumbar la ruta: se descarta y se responde igual.
+    const basura = await pide('direccion=127.0.0.1&ips=no-es-ip,,999.999.1.1');
+    check(basura.servidores?.length === 1, 'IPs inválidas se ignoran y la ruta sigue respondiendo');
+
+    // Si una vía se cae (aquí el broadcast, con un destino irresoluble), la
+    // otra tiene que entregar igual lo que encontró: media lista es infinitamente
+    // mejor que un 500 y una pantalla vacía.
+    const r = await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&direccion=destino.que.no.existe.invalido&ips=127.0.0.1`);
+    check(r.ok, `con el broadcast roto la ruta sigue devolviendo 200 (${r.status})`);
+    const roto = await r.json();
+    check(roto.servidores?.length === 1, 'y entrega lo que sí encontró el sondeo dirigido');
+    check(Array.isArray(roto.avisos) && roto.avisos.length > 0,
+      `explicando el fallo en 'avisos' ("${roto.avisos?.[0]}")`);
   }
 
   // ── 5. Destino elegible por query ─────────────────────────────────────────

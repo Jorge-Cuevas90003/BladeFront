@@ -204,13 +204,27 @@ export class ClienteV3 extends EventTarget {
     this._emitir(msg.type, msg);
   }
 
-  // Pregunta al bridge por los servidores de la red (él hace el broadcast UDP,
-  // que el navegador no puede hacer por sí mismo).
-  static async buscarServidores(urlBridge = 'http://localhost:8146', esperaMs = 900) {
-    const r = await fetch(`${urlBridge}/servidores?espera=${esperaMs}`);
+  // Pregunta al bridge por las partidas de la red. El navegador no puede hacer
+  // broadcast UDP ni sondear direcciones, así que lo hace el bridge.
+  //
+  //   escanear : además del broadcast, barre las subredes Radmin locales. Hace
+  //              falta porque sobre la VPN el broadcast suele no atravesar el
+  //              adaptador virtual y los compañeros quedan invisibles.
+  //   ips      : direcciones concretas a preguntar, para las que el usuario
+  //              escribe a mano.
+  //
+  // Devuelve { servidores, avisos } — los avisos explican qué vía falló, que es
+  // la diferencia entre "no hay nadie" y "no pude mirar".
+  static async buscarServidores(urlBridge = 'http://localhost:8146', {
+    esperaMs = 800, escanear = false, ips = [],
+  } = {}) {
+    const q = new URLSearchParams({ espera: String(esperaMs) });
+    if (escanear) q.set('escanear', '1');
+    if (ips.length) q.set('ips', ips.join(','));
+    const r = await fetch(`${urlBridge}/servidores?${q}`);
     if (!r.ok) throw new Error('el bridge respondió ' + r.status);
-    const { servidores } = await r.json();
-    return servidores ?? [];
+    const datos = await r.json();
+    return { servidores: datos.servidores ?? [], avisos: datos.avisos ?? [] };
   }
 
   // ==========================================================================

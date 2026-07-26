@@ -646,7 +646,13 @@ function pintarServidores() {
     const lleno = s.playerCount >= s.maximumPlayers;
     const cls = lleno ? 'llena' : (s.state === ESTADO_PARTIDA.WAITING ? 'abierta' : 'jugando');
     const txt = lleno ? 'LLENA' : (s.state === ESTADO_PARTIDA.WAITING ? 'ABIERTA' : 'EN JUEGO');
-    li.innerHTML = `<b>${s.serverName}</b>` +
+    // `via` dice si respondió al broadcast o si hubo que preguntarle directo.
+    // Es información de diagnóstico real: si todos aparecen como "directo", el
+    // broadcast no está atravesando la VPN.
+    const via = s.via === 'directo'
+      ? '<span class="via" title="respondió a un sondeo dirigido, no al broadcast">⇢</span>'
+      : '<span class="via" title="respondió al broadcast de la red">◎</span>';
+    li.innerHTML = `<b>${s.serverName}</b>` + via +
       `<span>${s.host}:${s.tcpPort} · ${s.playerCount}/${s.maximumPlayers}</span>` +
       `<span class="estado ${cls}">${txt}</span>`;
     li.classList.toggle('on', clave === seleccionado);
@@ -667,31 +673,65 @@ function pintarServidores() {
   }
 }
 
+// IPs que el usuario añadió a mano. Se preguntan en cada sondeo junto con el
+// escaneo automático, así que un compañero al que el broadcast no alcanza se
+// escribe una vez y ya aparece siempre en la lista como los demás.
+const ipsManuales = new Set();
+
 async function sondearServidores() {
   if (buscando || !menuAbiertoEnRed()) return;
   buscando = true;
   const estado = $('estadoBusqueda');
   const base = ($('url').value || 'ws://localhost:8146').replace(/^ws/, 'http').split('?')[0];
   try {
-    const servidores = await ClienteV3.buscarServidores(base, 700);
+    // escanear:true barre las subredes Radmin locales además del broadcast.
+    // Cuesta unos 800 ms y es lo que hace que se vean los compañeros de la VPN.
+    const { servidores, avisos } = await ClienteV3.buscarServidores(base, {
+      escanear: true,
+      ips: [...ipsManuales],
+      esperaMs: 800,
+    });
     servidoresVistos = new Map(servidores.map((s) => [`${s.host}:${s.tcpPort}`, s]));
     estado.className = 'buscando';
     estado.textContent = servidores.length
       ? `${servidores.length} encontrada${servidores.length > 1 ? 's' : ''}`
       : 'buscando…';
     pintarServidores();
+    // Los avisos distinguen "no hay nadie" de "no pude mirar", que para quien
+    // está intentando jugar no es lo mismo en absoluto.
+    const nota = $('avisoBusqueda');
+    if (avisos.length) { nota.textContent = avisos[0]; nota.style.display = ''; }
+    else nota.style.display = 'none';
   } catch {
-    // Sin bridge no hay descubrimiento posible: el navegador no puede hacer
-    // broadcast por su cuenta, así que hay que decirlo en vez de callar.
     servidoresVistos.clear();
     estado.className = 'sinbridge';
     estado.textContent = 'bridge no responde';
     $('listaServidores').innerHTML =
       '<li class="vacio">Arranca el bridge: node red/v3/bridge-v3.js</li>';
+    $('avisoBusqueda').style.display = 'none';
   } finally {
     buscando = false;
   }
 }
+
+// Añadir la IP de un compañero a mano, para cuando ni el broadcast ni el
+// escaneo automático lo alcanzan (otra subred, o Radmin repartiendo un rango
+// distinto del que tiene esta máquina).
+function anadirIpManual() {
+  const campo = $('ipManual');
+  const ip = campo.value.trim();
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) {
+    campo.classList.add('malo');
+    setTimeout(() => campo.classList.remove('malo'), 900);
+    return;
+  }
+  ipsManuales.add(ip);
+  campo.value = '';
+  $('estadoBusqueda').textContent = 'preguntando a ' + ip + '…';
+  sondearServidores();
+}
+$('anadirIp')?.addEventListener('click', anadirIpManual);
+$('ipManual')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); anadirIpManual(); } });
 
 setInterval(sondearServidores, INTERVALO_BUSQUEDA);
 // Al cambiar a modo red se sondea ya, sin esperar al siguiente ciclo.

@@ -7,7 +7,11 @@
 // ============================================================================
 
 import dgram from 'node:dgram';
-import { publicarServidor, buscarServidores } from '../red/v3/descubrimiento.js';
+import {
+  publicarServidor, buscarServidores, sondearDirecciones,
+  direccionesDeSubred, interfacesLocales, direccionesRadminLocales,
+  combinarHallazgos, esRangoRadmin, LIMITE_SONDEO,
+} from '../red/v3/descubrimiento.js';
 import { TIPOS, VERSION, ESTADO_PARTIDA, codificar, decodificar } from '../red/v3/protocolo-v3.js';
 
 const PUERTO = 15601;
@@ -110,6 +114,156 @@ try {
     const sigueVivo = await buscarServidores({ puerto: PUERTO, direccion: '127.0.0.1', esperaMs: 700 });
     check(sigueVivo.length === 1, 'tras recibir basura y otra versión, sigue respondiendo');
     sock.close();
+  }
+
+  // ── 5. Sondeo DIRIGIDO: el plan B para Radmin VPN ─────────────────────────
+  // Sobre Radmin el broadcast a menudo no atraviesa el adaptador virtual, así
+  // que hay que poder preguntar IP por IP.
+  console.log('\n== 5. Sondeo dirigido a una lista de IPs ==');
+  {
+    const hallados = await sondearDirecciones({
+      direcciones: ['127.0.0.1'], puerto: PUERTO, esperaMs: 700,
+    });
+    check(hallados.length === 1, `sondeando 127.0.0.1 aparece el servidor (${hallados.length})`);
+    check(hallados[0]?.serverName === 'Arena BladeFront', 'con los mismos datos que por broadcast');
+    check(hallados[0]?.tcpPort === 5000, 'y el puerto TCP al que conectarse');
+    check(hallados[0]?.host === '127.0.0.1', 'la IP sigue saliendo del origen del datagrama (§27)');
+
+    // Sin este campo la interfaz no puede explicar de dónde salió cada partida.
+    check(hallados[0]?.via === 'directo', `marcado como hallado por sondeo ("${hallados[0]?.via}")`);
+    const porBroadcast = await buscarServidores({ puerto: PUERTO, direccion: '127.0.0.1', esperaMs: 700 });
+    check(porBroadcast[0]?.via === 'broadcast', `y la otra vía se marca distinto ("${porBroadcast[0]?.via}")`);
+  }
+
+  // ── 6. Una IP que no responde simplemente no aparece ──────────────────────
+  console.log('\n== 6. Direcciones mudas y basura ==');
+  {
+    // 169.254.x es link-local: no hay nadie ahí, y según la máquina el envío
+    // fallará o se perderá. En los dos casos el resultado debe ser el mismo.
+    const hallados = await sondearDirecciones({
+      direcciones: ['169.254.240.7', '127.0.0.1', '169.254.240.8'],
+      puerto: PUERTO, esperaMs: 700,
+    });
+    check(hallados.length === 1, `de 3 direcciones solo aparece la que contesta (${hallados.length})`);
+    check(hallados[0]?.host === '127.0.0.1', 'y es la correcta');
+
+    // Que una IP esté mal escrita no puede abortar el sondeo entero.
+    const conBasura = await sondearDirecciones({
+      direcciones: ['no-es-una-ip', '999.1.1.1', '', '127.0.0.1'],
+      puerto: PUERTO, esperaMs: 700,
+    });
+    check(conBasura.length === 1, 'las entradas que no son IPv4 se descartan sin romper nada');
+
+    const vacio = await sondearDirecciones({ direcciones: [], puerto: PUERTO, esperaMs: 700 });
+    check(Array.isArray(vacio) && vacio.length === 0, 'una lista vacía devuelve [] sin tocar la red');
+  }
+
+  // ── 7. Direcciones de una subred ──────────────────────────────────────────
+  console.log('\n== 7. Cálculo de las direcciones de una subred ==');
+  {
+    const d = direccionesDeSubred('26.11.206.94', '255.255.255.0');
+    check(d.length === 254, `un /24 da 254 direcciones (${d.length})`);
+    check(d[0] === '26.11.206.1', `empieza en .1 (${d[0]})`);
+    check(d.at(-1) === '26.11.206.254', `termina en .254 (${d.at(-1)})`);
+    // Sondear la de red o la de difusión no aportaría nada: nadie las tiene.
+    check(!d.includes('26.11.206.0'), 'no incluye la dirección de red');
+    check(!d.includes('26.11.206.255'), 'no incluye la de difusión');
+    check(!d.includes('26.11.207.1'), 'no se sale de la subred');
+
+    // La IP de partida no tiene por qué ser la primera de su subred.
+    const otra = direccionesDeSubred('26.11.206.1', '255.255.255.0');
+    check(otra.length === 254 && otra[0] === '26.11.206.1', 'da igual qué IP de la subred se pase');
+
+    const cuatro = direccionesDeSubred('192.168.5.6', '255.255.255.252');
+    check(cuatro.length === 2 && cuatro[0] === '192.168.5.5' && cuatro[1] === '192.168.5.6',
+      `un /30 deja solo 2 hosts (${cuatro.join(', ')})`);
+    check(direccionesDeSubred('10.0.0.1', '255.255.255.255').length === 0,
+      'un /32 no tiene hosts que sondear');
+
+    // El tope existe para que nadie pida un barrido imposible: el /8 que
+    // anuncia Radmin serían 16 millones de direcciones.
+    let lanzo = false;
+    try { direccionesDeSubred('26.11.206.94', '255.255.0.0'); } catch { lanzo = true; }
+    check(lanzo, 'una subred mayor que el tope se rechaza en vez de generarse');
+    let lanzoIp = false;
+    try { direccionesDeSubred('carro', '255.255.255.0'); } catch { lanzoIp = true; }
+    check(lanzoIp, 'y una IP inválida también');
+  }
+
+  // ── 8. Interfaces locales y detección de Radmin ───────────────────────────
+  console.log('\n== 8. Interfaces locales (26.x.x.x = Radmin) ==');
+  {
+    const ifaces = interfacesLocales();
+    check(ifaces.length > 0, `se listan las IPv4 locales (${ifaces.length})`);
+    check(ifaces.every((i) => typeof i.address === 'string' && typeof i.netmask === 'string'),
+      'todas traen dirección y máscara');
+    check(ifaces.every((i) => !i.address.includes(':')), 'y ninguna es IPv6');
+
+    const loop = ifaces.find((i) => i.address === '127.0.0.1');
+    check(!!loop && loop.interna === true, 'el loopback aparece marcado como interno');
+    check(loop?.radmin === false, 'y no se confunde con Radmin');
+
+    check(esRangoRadmin('26.11.206.94') === true, '26.11.206.94 se reconoce como Radmin');
+    check(esRangoRadmin('192.168.1.20') === false, 'y 192.168.1.20 no');
+    check(esRangoRadmin('126.1.1.1') === false, 'ni 126.1.1.1 (no basta con que empiece por 26)');
+
+    // En una máquina sin Radmin esto es [], y el escaneo automático no hará
+    // nada — que es lo correcto, no un error.
+    const auto = direccionesRadminLocales();
+    check(Array.isArray(auto), `las candidatas del escaneo automático salen de ahí (${auto.length})`);
+    check(auto.length <= LIMITE_SONDEO, `y nunca pasan del tope (${auto.length} ≤ ${LIMITE_SONDEO})`);
+    check(auto.every((d) => esRangoRadmin(d)), 'todas dentro del rango 26.x.x.x');
+    if (auto.length) {
+      // Radmin anuncia máscara /8: si se tomara al pie de la letra saldrían 16
+      // millones de direcciones, así que se estrecha a /24.
+      check(auto.length === 254, `de la interfaz Radmin salen 254 candidatas, no el /8 entero (${auto.length})`);
+    } else {
+      console.log('  · (sin interfaz Radmin en esta máquina: el /24 no se pudo comprobar aquí)');
+    }
+  }
+
+  // ── 9. Combinar las dos vías sin duplicar ─────────────────────────────────
+  console.log('\n== 9. Fusión de broadcast y sondeo dirigido ==');
+  {
+    // El caso real: el mismo servidor contesta al broadcast Y al sondeo.
+    const porBroadcast = await buscarServidores({ puerto: PUERTO, direccion: '127.0.0.1', esperaMs: 700 });
+    const porSondeo = await sondearDirecciones({ direcciones: ['127.0.0.1'], puerto: PUERTO, esperaMs: 700 });
+    check(porBroadcast.length === 1 && porSondeo.length === 1, 'las dos vías encuentran el servidor por separado');
+
+    const juntos = combinarHallazgos(porBroadcast, porSondeo);
+    check(juntos.length === 1, `combinados siguen siendo 1, no 2 (${juntos.length})`);
+    check(juntos[0]?.via === 'broadcast', 'y gana el broadcast, que es la vía que ya funcionaba');
+
+    // Dos partidas distintas en el mismo host se distinguen por el puerto TCP.
+    const mismoHostOtroPuerto = [{ ...porSondeo[0], tcpPort: 5001 }];
+    check(combinarHallazgos(porBroadcast, mismoHostOtroPuerto).length === 2,
+      'pero dos puertos TCP en el mismo host son dos servidores');
+    check(combinarHallazgos([], []).length === 0, 'combinar listas vacías no inventa nada');
+  }
+
+  // ── 10. Rendimiento del barrido de un /24 ─────────────────────────────────
+  console.log('\n== 10. Un /24 entero en una sola espera ==');
+  {
+    // 254 datagramas por UN socket y UN temporizador: el barrido debe costar
+    // lo que la espera, no 254 esperas encadenadas.
+    const barrido = direccionesDeSubred('127.0.0.1', '255.255.255.0');
+    check(barrido.length === 254, `se preparan 254 direcciones (${barrido.length})`);
+
+    const t0 = performance.now();
+    const hallados = await sondearDirecciones({ direcciones: barrido, puerto: PUERTO, esperaMs: 1000 });
+    const ms = performance.now() - t0;
+
+    console.log(`  · 254 IPs sondeadas en ${ms.toFixed(0)} ms (espera configurada: 1000 ms)`);
+    check(ms < 1400, `el barrido cuesta la espera y poco más (${ms.toFixed(0)} ms < 1400)`);
+    check(hallados.some((s) => s.host === '127.0.0.1'), 'y aun así encuentra el servidor entre las 254');
+
+    // El tope por petición no es decorativo: con 520 candidatas delante, la que
+    // responde queda fuera del corte y no se sondea.
+    const relleno = Array.from({ length: 520 }, (_, i) => `169.254.${Math.floor(i / 254)}.${(i % 254) + 1}`);
+    const recortado = await sondearDirecciones({
+      direcciones: [...relleno, '127.0.0.1'], puerto: PUERTO, esperaMs: 700,
+    });
+    check(recortado.length === 0, `lo que pasa de ${LIMITE_SONDEO} direcciones no se sondea (${recortado.length})`);
   }
 
   terminar(fail ? 1 : 0);

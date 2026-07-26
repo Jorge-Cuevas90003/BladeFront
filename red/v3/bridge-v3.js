@@ -24,7 +24,10 @@ import net from 'node:net';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 import { WebSocketServer } from 'ws';
-import { buscarServidores } from './descubrimiento.js';
+import {
+  buscarServidores, sondearDirecciones, direccionesRadminLocales,
+  combinarHallazgos, LIMITE_SONDEO,
+} from './descubrimiento.js';
 import { PARAMS_DEFECTO } from './protocolo-v3.js';
 
 export function crearBridge({
@@ -49,16 +52,64 @@ export function crearBridge({
 
     // Descubrimiento por delegación: el navegador no puede hacer broadcast UDP,
     // así que lo hace el bridge y devuelve la lista ya resuelta.
+    //
+    //   /servidores                       → solo broadcast (como siempre)
+    //   /servidores?escanear=1            → + sondeo de las subredes Radmin locales
+    //   /servidores?ips=26.11.206.5,...   → + sondeo de esas IPs concretas
+    //
+    // El sondeo dirigido SUMA al broadcast, no lo sustituye: sobre Radmin VPN el
+    // broadcast suele no atravesar el adaptador virtual, pero cuando sí pasa es
+    // más barato que barrer 254 direcciones.
     if (url.pathname === '/servidores') {
       const espera = Math.min(3000, Number(url.searchParams.get('espera')) || 800);
+      const puerto = Number(url.searchParams.get('puerto')) || puertoUdp;
+      const avisos = [];
+
+      // Cada vía se resuelve por su cuenta y con su propio catch: que una falle
+      // (interfaz caída, broadcast sin permisos) no puede dejar sin respuesta a
+      // la otra. Se devuelve lo que sí se encontró y el motivo en `avisos`.
+      const aparte = (etiqueta, promesa) => promesa.catch((e) => {
+        avisos.push(`${etiqueta}: ${e.message}`);
+        log(`descubrimiento — ${etiqueta} falló: ${e.message}`);
+        return [];
+      });
+
       try {
-        const servidores = await buscarServidores({
-          puerto: Number(url.searchParams.get('puerto')) || puertoUdp,
+        const porBroadcast = aparte('broadcast', buscarServidores({
+          puerto,
           direccion: url.searchParams.get('direccion') || '255.255.255.255',
           esperaMs: espera,
-        });
+        }));
+
+        // Las candidatas de ambos parámetros se juntan en UNA sola lista para
+        // que el recorte a LIMITE_SONDEO valga por petición, no por parámetro.
+        const candidatas = [];
+        if (url.searchParams.get('escanear') === '1') {
+          try {
+            const auto = direccionesRadminLocales({ limite: LIMITE_SONDEO });
+            if (auto.length === 0) avisos.push('no hay ninguna interfaz local en el rango 26.x.x.x (Radmin)');
+            candidatas.push(...auto);
+          } catch (e) {
+            avisos.push(`escaneo automático: ${e.message}`);
+          }
+        }
+        const ips = url.searchParams.get('ips');
+        if (ips) candidatas.push(...ips.split(',').map((s) => s.trim()).filter(Boolean));
+
+        // sondearDirecciones ya filtra las no-IPv4 y recorta al tope, así que
+        // aquí no hace falta validar nada más.
+        const porSondeo = candidatas.length
+          ? aparte('sondeo dirigido', sondearDirecciones({
+              direcciones: candidatas, puerto, esperaMs: espera, limite: LIMITE_SONDEO, log,
+            }))
+          : Promise.resolve([]);
+
+        // En paralelo: las dos esperas son la misma, no se suman.
+        const [b, d] = await Promise.all([porBroadcast, porSondeo]);
+        const servidores = combinarHallazgos(b, d); // broadcast primero: gana su `via`
+
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
-        return res.end(JSON.stringify({ servidores }));
+        return res.end(JSON.stringify(avisos.length ? { servidores, avisos } : { servidores }));
       } catch (e) {
         res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' });
         return res.end(JSON.stringify({ error: e.message }));
