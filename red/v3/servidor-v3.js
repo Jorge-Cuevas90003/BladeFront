@@ -271,26 +271,23 @@ export function crearServidor({
         log(`== fin: gana ${juego.ganadorId} "${g?.name ?? '?'}" en el tick ${juego.tick} ==`);
 
         setTimeout(() => {
-          log('== reiniciando partida para nuevo juego ==');
+          log('== finalizando conexiones de partida terminada y reseteando sala ==');
           juego.estado = ESTADO_PARTIDA.WAITING;
           juego.tick = 0;
           juego.bandera = { x: 0, y: 0, status: ESTADO_BANDERA.AVAILABLE, carrierId: 0 };
           juego.ganadorId = 0;
+          anfitrionId = 0;
           for (const j of juego.jugadores.values()) {
             j.hasFlag = false;
             j.direction = DIRECCIONES.NONE;
           }
-          // El anfitrión vuelve a decidir cuándo empieza la siguiente. Con
-          // `auto` o con un mínimo fijado, se encadena sola.
-          anfitrionId = juego.jugadoresActivos().length
-            ? Math.min(...juego.jugadoresActivos().map((j) => j.playerId))
-            : 0;
-          difundir(TIPOS.LOBBY_STATE, juego.serializarLobby());
-          const listos = juego.jugadoresActivos().length;
-          if (auto || (minJugadores > 0 && listos >= minJugadores)) {
-            arrancarCuenta();
+          // Cierra las conexiones activas al terminar la partida para que todos regresen limpios al menú
+          for (const [sock] of conexiones.entries()) {
+            try { enviar(sock, TIPOS.ERROR, { code: ERRORES.GAME_FINISHED, description: 'La partida ha finalizado.' }); } catch {}
+            try { sock.end(); } catch {}
           }
-        }, 5000);
+          conexiones.clear();
+        }, 4000);
       }
     });
   }
@@ -369,6 +366,7 @@ export function crearServidor({
       if (juego.estado === ESTADO_PARTIDA.WAITING || juego.estado === ESTADO_PARTIDA.STARTING) {
         const j = juego.jugadores.get(info.playerId);
         if (j) j.connected = false;
+        if (juego.jugadoresActivos().length === 0) anfitrionId = 0;
         difundir(TIPOS.LOBBY_STATE, juego.serializarLobby());
       }
     });
