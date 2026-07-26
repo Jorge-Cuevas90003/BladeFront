@@ -49,6 +49,14 @@ export const TIPOS = {
   // cliente se lo manda al servidor de otro equipo, ese responderá ERROR con
   // INVALID_MESSAGE y aquí simplemente se ignora: no rompe la interoperación.
   HOST_START: 0x7f,
+
+  // ¿Quién manda en esta partida? El cliente PREGUNTA y el servidor responde
+  // solo a quien preguntó. Ese detalle importa: mandar mensajes de extensión
+  // sin que nadie los pida podría confundir al cliente de otro equipo, que no
+  // conoce el tipo. Preguntando primero, un cliente ajeno nunca recibe nada
+  // fuera de la tabla oficial.
+  HOST_QUERY: 0x7e,   // cliente → servidor
+  HOST_INFO: 0x7d,    // servidor → cliente (solo como respuesta)
 };
 
 // Nombre legible a partir del código, para logs y depuración (§37).
@@ -231,7 +239,12 @@ export function codificar(tipo, c = {}) {
     case TIPOS.INTERACT:
     case TIPOS.LEAVE:
     case TIPOS.HOST_START:
+    case TIPOS.HOST_QUERY:
       w.u16(c.playerId);
+      break;
+
+    case TIPOS.HOST_INFO:
+      w.u16(c.hostId).bool(c.puedesEmpezar);
       break;
 
     // ---- servidor → cliente ----------------------------------------------
@@ -338,7 +351,13 @@ export function decodificar(payload) {
     case TIPOS.INTERACT:
     case TIPOS.LEAVE:
     case TIPOS.HOST_START:
+    case TIPOS.HOST_QUERY:
       m.playerId = r.u16();
+      break;
+
+    case TIPOS.HOST_INFO:
+      m.hostId = r.u16();
+      m.puedesEmpezar = r.bool();
       break;
 
     case TIPOS.JOIN_ACCEPTED:

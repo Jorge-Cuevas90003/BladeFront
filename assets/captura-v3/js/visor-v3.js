@@ -329,7 +329,10 @@ on(TIPOS.LOBBY_STATE, (m) => {
 function pintarSala(jugadores) {
   if (cliente.modo !== 'red' || terminada) return;
   const ul = $('salaJugadores');
-  const anfitrion = jugadores.length ? Math.min(...jugadores.map((p) => p.playerId)) : 0;
+  // Quién manda lo dice el SERVIDOR (cliente.hostId), no el id más bajo: el
+  // anfitrión es quien aloja la partida en su máquina, y puede haber entrado
+  // después que un compañero.
+  const anfitrion = cliente.hostId;
   ul.innerHTML = jugadores.map((p) => {
     const etiquetas = [];
     if (p.playerId === anfitrion) etiquetas.push('<span class="tag anfitrion">ANFITRIÓN</span>');
@@ -337,11 +340,18 @@ function pintarSala(jugadores) {
     return `<li><span>${p.name}</span><span>${etiquetas.join(' ')}</span></li>`;
   }).join('') || '<li><span>nadie todavía…</span><span></span></li>';
 
-  const soyYo = miId && miId === anfitrion;
+  const soyYo = cliente.soyAnfitrion;
   $('salaEmpezar').style.display = soyYo ? '' : 'none';
+  const nombreAnfitrion = anfitrion
+    ? (jugadores.find((p) => p.playerId === anfitrion)?.name ?? `#${anfitrion}`)
+    : null;
   $('salaAviso').textContent = soyYo
     ? `Cuando estén todos, empieza tú. Ahora mismo sois ${jugadores.length}.`
-    : 'Esperando a que el anfitrión empiece la partida…';
+    : nombreAnfitrion
+      ? `Esperando a que ${nombreAnfitrion} empiece la partida…`
+      // Sin anfitrión conectado nadie puede dar la salida: el dueño de la
+      // partida tiene que entrar desde su propia máquina.
+      : 'El anfitrión no está conectado. La partida no puede empezar hasta que entre.';
   $('sala').classList.remove('oculto');
 }
 
@@ -356,6 +366,10 @@ $('salaEmpezar')?.addEventListener('click', () => {
   setTimeout(() => { $('salaEmpezar').disabled = false; }, 2500);
 });
 $('salaSalir')?.addEventListener('click', () => { cerrarSala(); alMenu(); });
+
+on(0x7d, () => {   // HOST_INFO: el servidor dice quién manda
+  if (cliente._lobby?.players) pintarSala(cliente._lobby.players);
+});
 
 on(TIPOS.GAME_COUNTDOWN, (m) => {
   bandera(`Comienza en ${m.secondsRemaining}…`);

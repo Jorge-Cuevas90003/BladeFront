@@ -35,6 +35,15 @@ import { MotorV3 } from '../../assets/captura-v3/js/motor-v3.js';
 import { publicarServidor } from './descubrimiento.js';
 import { crearReloj } from './reloj.js';
 
+// Loopback en cualquiera de sus formas. Node entrega las IPv4 por un socket
+// dual-stack como "::ffff:127.0.0.1", así que no basta con comparar con
+// "127.0.0.1".
+function esDeEstaMaquina(dir) {
+  if (!dir) return false;
+  const limpia = String(dir).replace(/^::ffff:/i, '');
+  return limpia === '::1' || limpia === '127.0.0.1' || limpia.startsWith('127.');
+}
+
 export function crearServidor({
   puerto = PARAMS_DEFECTO.serverPort,
   host = undefined,
@@ -50,7 +59,9 @@ export function crearServidor({
 } = {}) {
   const juego = new MotorV3(params);
   const conexiones = new Map(); // socket -> { playerId, acc }
-  let anfitrionId = 0; // el primero que entró: decide cuándo empieza
+  // playerId del anfitrión: el jugador que entró desde esta misma máquina.
+  // Vale 0 mientras el dueño no se haya unido a su propia partida.
+  let anfitrionId = 0;
   let cuenta = null;   // temporizador de la cuenta atrás
   let bucle = null;    // temporizador del ciclo de juego
   let discovery = null;
@@ -125,8 +136,13 @@ export function crearServidor({
         log(`  JOIN ${jugador.playerId} "${jugador.name}"`);
         difundir(TIPOS.LOBBY_STATE, juego.serializarLobby());
 
-        // El primero en entrar es el anfitrión: es quien decide cuándo empieza.
-        if (!anfitrionId) anfitrionId = jugador.playerId;
+        // Anfitrión es quien juega desde la máquina que aloja la partida. Si
+        // ya hay uno no se reemplaza: abrir una segunda pestaña en local no
+        // debe robarle el mando al que ya estaba.
+        if (info.esLocal && !anfitrionId) {
+          anfitrionId = jugador.playerId;
+          log(`  ${jugador.playerId} es el anfitrión (juega desde esta máquina)`);
+        }
 
         // Con `auto` la cuenta arranca con el primer jugador. Eso deja al
         // anfitrión jugando SOLO, porque a partir de STARTING el servidor
@@ -144,9 +160,14 @@ export function crearServidor({
       // nuestra, no una desviación del protocolo.
       case TIPOS.HOST_START: {
         if (!duenoValido(socket, info, msg)) return;
-        if (info.playerId !== anfitrionId) {
+        // Doble comprobación: el id tiene que ser el del anfitrión Y la
+        // conexión tiene que venir de esta máquina. Con solo lo primero, si el
+        // anfitrión se fuera y otro heredara su número podría dar la salida en
+        // una partida que no es suya.
+        if (!info.esLocal || info.playerId !== anfitrionId) {
           return enviar(socket, TIPOS.ERROR, {
-            code: ERRORES.UNKNOWN_PLAYER, description: 'solo el anfitrión puede empezar la partida',
+            code: ERRORES.UNKNOWN_PLAYER,
+            description: 'solo el anfitrión, desde la máquina que aloja la partida, puede empezarla',
           });
         }
         if (juego.estado !== ESTADO_PARTIDA.WAITING) {
@@ -157,6 +178,16 @@ export function crearServidor({
         log(`  el anfitrión (${info.playerId}) pide empezar con ${juego.jugadoresActivos().length} jugadores`);
         arrancarCuenta();
         return;
+      }
+
+      // Solo se contesta a quien pregunta: ver la nota en protocolo-v3.js.
+      case TIPOS.HOST_QUERY: {
+        if (!duenoValido(socket, info, msg)) return;
+        return enviar(socket, TIPOS.HOST_INFO, {
+          hostId: anfitrionId,
+          puedesEmpezar: !!(info.esLocal && info.playerId === anfitrionId
+                            && juego.estado === ESTADO_PARTIDA.WAITING),
+        });
       }
 
       case TIPOS.INPUT: {
@@ -281,8 +312,17 @@ export function crearServidor({
         if (verboso) log('  ! marco inválido:', detalle);
       }
     );
-    conexiones.set(socket, { playerId: 0, acc });
-    log('+ conexión desde', socket.remoteAddress);
+    // ¿Viene de esta misma máquina? Es lo que identifica al ANFITRIÓN: quien
+    // levantó la partida juega a través de su propio bridge, que corre aquí, y
+    // por eso su conexión llega por loopback. Los compañeros llegan desde sus
+    // direcciones de la VPN.
+    //
+    // Se decide por el origen del socket y NO por "el primero que entró": el
+    // dueño de la partida es el dueño de la máquina, y eso no cambia porque se
+    // salga un momento, ni se le puede pasar a otro sin querer.
+    const esLocal = esDeEstaMaquina(socket.remoteAddress);
+    conexiones.set(socket, { playerId: 0, acc, esLocal });
+    log(`+ conexión desde ${socket.remoteAddress}${esLocal ? '  (anfitrión)' : ''}`);
 
     socket.on('data', (d) => acc.alimentar(d));
     socket.on('error', () => {}); // un reset no debe tumbar el proceso
@@ -296,14 +336,24 @@ export function crearServidor({
       juego.desconectar(info.playerId);
       log('- se fue el jugador', info.playerId);
 
-      // Si el Host (Jugador 1) se desconecta, se cancela la partida activa y se resetea el lobby
-      if (info.playerId === 1) {
-        log('== El Host (Jugador 1) se ha desconectado: cancelando partida activa ==');
+      // Si se va el ANFITRIÓN se cancela la partida y la sala vuelve a esperar.
+      //
+      // Antes esto miraba si el jugador era el número 1, pero el 1 es
+      // simplemente el primero que entró: si un compañero se conecta antes de
+      // que el dueño abra su navegador, el 1 es el compañero. Ahora se compara
+      // con el anfitrión de verdad, que es quien juega desde esta máquina.
+      //
+      // El puesto queda LIBRE, no se hereda: la partida vive en este equipo, y
+      // que su dueño salga un momento no convierte a un invitado en dueño. Al
+      // volver a entrar lo recupera.
+      if (anfitrionId && info.playerId === anfitrionId) {
+        anfitrionId = 0;
+        log('== se fue el anfitrión: se cancela la partida y la sala queda esperando a que vuelva ==');
         if (bucle) { bucle.detener(); bucle = null; }
         if (cuenta) { cuenta.detener(); cuenta = null; }
         difundir(TIPOS.ERROR, {
           code: ERRORES.GAME_FINISHED,
-          description: 'El Host abandonó la partida. La sesión ha finalizado.',
+          description: 'El anfitrión salió. La partida se cancela; podéis esperar a que vuelva.',
         });
         juego.estado = ESTADO_PARTIDA.WAITING;
         juego.tick = 0;

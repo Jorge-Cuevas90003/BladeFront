@@ -41,6 +41,11 @@ export class ClienteV3 extends EventTarget {
     this._bots = [];
     this._ultimoTick = -1;
     this._cerrandoAdrede = false;
+
+    // Lo dice el servidor, no se adivina. En local siempre mandas tú.
+    this.hostId = 0;
+    this.soyAnfitrion = false;
+    this.puedoEmpezar = false;
   }
 
   // --- emisión interna -------------------------------------------------------
@@ -97,6 +102,9 @@ export class ClienteV3 extends EventTarget {
     }
 
     this.conectado = true;
+    this.hostId = this.playerId;
+    this.soyAnfitrion = true;
+    this.puedoEmpezar = false;   // en local arranca sola, no hay a quién esperar
     this._emitir(TIPOS.JOIN_ACCEPTED, { playerId: this.playerId, gameId: this.gameId });
     this._lobby = motor.serializarLobby();
     this._emitir(TIPOS.LOBBY_STATE, this._lobby);
@@ -196,9 +204,19 @@ export class ClienteV3 extends EventTarget {
       case TIPOS.JOIN_ACCEPTED:
         this.playerId = msg.playerId;
         this.gameId = msg.gameId;
+        this.consultarAnfitrion();
         break;
       case TIPOS.LOBBY_STATE:
         this._lobby = msg;
+        // Entrar o salir alguien puede cambiar quién manda: se vuelve a
+        // preguntar en vez de suponer que sigue igual.
+        this.consultarAnfitrion();
+        break;
+
+      case TIPOS.HOST_INFO:
+        this.hostId = msg.hostId;
+        this.soyAnfitrion = msg.hostId !== 0 && msg.hostId === this.playerId;
+        this.puedoEmpezar = msg.puedesEmpezar;
         break;
     }
     this._emitir(msg.type, msg);
@@ -259,12 +277,18 @@ export class ClienteV3 extends EventTarget {
     }
   }
 
-  // ¿Soy quien decide cuándo empieza? Es el jugador con el id más bajo de los
-  // que siguen conectados: el primero que entró.
-  get soyAnfitrion() {
-    const lista = this._lobby?.players ?? this.inicio?.players ?? [];
-    if (!lista.length || !this.playerId) return false;
-    return this.playerId === Math.min(...lista.map((p) => p.playerId));
+  // Preguntar quién manda. La respuesta llega en HOST_INFO y actualiza
+  // `soyAnfitrion` y `hostId`.
+  //
+  // Se pregunta en vez de deducirlo del id más bajo: el anfitrión es quien
+  // aloja la partida en su máquina, no quien llegó primero. Si un compañero se
+  // conecta antes de que el dueño abra su navegador, el id más bajo es el del
+  // compañero y la deducción daría el mando a quien no le toca.
+  consultarAnfitrion() {
+    if (this.modo !== 'red' || !this.playerId) return;
+    if (this._ws?.readyState === WebSocket.OPEN) {
+      this._ws.send(enmarcar(TIPOS.HOST_QUERY, { playerId: this.playerId }));
+    }
   }
 
   interactuar() {
@@ -297,6 +321,9 @@ export class ClienteV3 extends EventTarget {
     this.inicio = null;
     this._lobby = null;
     this.conectado = false;
+    this.hostId = 0;
+    this.soyAnfitrion = false;
+    this.puedoEmpezar = false;
     this._ultimoTick = -1;
   }
 }

@@ -96,6 +96,26 @@ try {
   const lobby = anfitrion.ultimo(TIPOS.LOBBY_STATE);
   check(lobby?.players.length === 3, `la sala los lista a los 3 (${lobby?.players.length})`);
 
+  // ── 2b. Quién manda lo dice el SERVIDOR ───────────────────────────────────
+  // Que el cliente lo dedujera del id más bajo era el error: el anfitrión es
+  // quien aloja la partida en su máquina, y puede haber entrado después que un
+  // compañero. Aquí todos vienen por loopback, así que manda el primero, pero
+  // lo que se comprueba es que la respuesta venga del servidor.
+  console.log('\n== 2b. El servidor dice quién manda ==');
+  {
+    anfitrion.recibidos.length = 0;
+    anfitrion.manda(TIPOS.HOST_QUERY, { playerId: 1 });
+    const info = await anfitrion.espera(TIPOS.HOST_INFO);
+    check(info?.hostId === 1, `el anfitrión es el #1 (${info?.hostId})`);
+    check(info?.puedesEmpezar === true, 'y a él sí le toca empezar');
+
+    b.recibidos.length = 0;
+    b.manda(TIPOS.HOST_QUERY, { playerId: aceptaB.playerId });
+    const infoB = await b.espera(TIPOS.HOST_INFO);
+    check(infoB?.hostId === 1, 'a los demás se les dice el mismo anfitrión');
+    check(infoB?.puedesEmpezar === false, 'pero a ellos no les toca');
+  }
+
   // ── 3. Solo el anfitrión puede empezar ────────────────────────────────────
   console.log('\n== 3. Solo el anfitrión empieza ==');
   b.recibidos.length = 0;
@@ -133,7 +153,27 @@ try {
   check(err2?.code === ERRORES.GAME_ALREADY_STARTED, 'se responde que ya está en marcha, sin reiniciarla');
   check(servidor.juego.estado === ESTADO_PARTIDA.RUNNING, 'y la partida sigue corriendo');
 
-  anfitrion.cierra(); b.cierra(); c.cierra();
+  // ── 7. El papel de anfitrión NO se hereda ─────────────────────────────────
+  // La partida vive en la máquina del anfitrión. Que salga un momento no puede
+  // convertir a un invitado en dueño de una partida que no es suya.
+  console.log('\n== 7. Si se va el anfitrión, nadie hereda ==');
+  {
+    anfitrion.cierra();
+    await dormir(400);
+
+    b.recibidos.length = 0;
+    b.manda(TIPOS.HOST_QUERY, { playerId: aceptaB.playerId });
+    const info = await b.espera(TIPOS.HOST_INFO);
+    check(info?.hostId === 0, `sin anfitrión conectado no hay quien mande (${info?.hostId})`);
+    check(info?.puedesEmpezar === false, 'y el que quedó no puede empezar la partida');
+
+    b.recibidos.length = 0;
+    b.manda(TIPOS.HOST_START, { playerId: aceptaB.playerId });
+    const err = await b.espera(TIPOS.ERROR);
+    check(err?.code === ERRORES.UNKNOWN_PLAYER, 'si lo intenta, se le rechaza');
+  }
+
+  b.cierra(); c.cierra();
   await dormir(150);
   await terminar(fail ? 1 : 0);
 } catch (e) {
