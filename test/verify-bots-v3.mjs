@@ -78,17 +78,69 @@ for (let i = 0; i < 5; i++) {
 // opuestos. Que sea INTERMITENTE lo empeora, no lo mejora — una partida
 // oficial puede colgarse o no según la suerte del reparto inicial.
 console.log('\n== 2. Bloqueo por falta de inmunidad (§14) ==');
+
+// 2a. Demostración DETERMINISTA, sin depender del spawn ni de los bots: dos
+// jugadores en el mismo punto, ambos corriendo hacia el mismo lado a la misma
+// velocidad, ambos pulsando interactuar cada ciclo. Es exactamente lo que §14
+// permite. Devuelve quién gana y cuántos robos hubo.
+function duelo({ x0 = 0 } = {}) {
+  const m = new MotorV3(); // protectionTimeMs = 0, el valor oficial
+  const a = m.agregarJugador('Portador').jugador;
+  const b = m.agregarJugador('Perseguidor').jugador;
+  m.iniciar();
+  Object.assign(m.jugadores.get(a.playerId), { x: x0, y: 0, hasFlag: true });
+  Object.assign(m.jugadores.get(b.playerId), { x: x0, y: 0 });
+  m.bandera = { x: x0, y: 0, status: ESTADO_BANDERA.CARRIED, carrierId: a.playerId };
+
+  let robos = 0, ciclos = 0;
+  while (m.estado === ESTADO_PARTIDA.RUNNING && ciclos < 400) {
+    m.encolarInput(a.playerId, DIRECCIONES.RIGHT);
+    m.encolarInput(b.playerId, DIRECCIONES.RIGHT);
+    m.encolarInteract(a.playerId);
+    m.encolarInteract(b.playerId);
+    const { eventos } = m.ciclo();
+    robos += eventos.filter((e) => e.type === 0x27).length;
+    ciclos++;
+  }
+  const ja = m.jugadores.get(a.playerId), jb = m.jugadores.get(b.playerId);
+  return { motor: m, robos, ciclos, separacion: Math.hypot(ja.x - jb.x, ja.y - jb.y) };
+}
+{
+  const d = duelo();
+  check(d.robos >= d.ciclos - 1,
+    `la bandera cambia de dueño en CADA ciclo: ${d.robos} robos en ${d.ciclos} ciclos`);
+  check(d.separacion < 1,
+    `nadie logra separarse nunca (distancia final ${d.separacion.toFixed(2)})`);
+  console.log(`     → duelo: ${d.robos} robos / ${d.ciclos} ciclos, gana #${d.motor.ganadorId}`);
+
+  // Y lo más grave: como la posesión alterna cada ciclo, quien gana depende de
+  // la PARIDAD del ciclo en que se cruza el borde. Arrancar un solo paso más
+  // atrás (11 unidades, lo que avanza un ciclo) le da la victoria al otro, sin
+  // que ninguno de los dos haya jugado distinto.
+  const cerca = duelo({ x0: 0 });
+  const unPasoAtras = duelo({ x0: -11 });
+  check(cerca.ciclos !== unPasoAtras.ciclos, `un paso atrás cambia la duración: ${cerca.ciclos} vs ${unPasoAtras.ciclos} ciclos`);
+  check(cerca.motor.ganadorId !== unPasoAtras.motor.ganadorId,
+    `y con ello cambia el GANADOR: #${cerca.motor.ganadorId} vs #${unPasoAtras.motor.ganadorId}`);
+  console.log(`     → el ganador lo decide la paridad del ciclo, no el juego`);
+}
+
+// 2b. Con qué frecuencia pasa en partidas reales. Es estadístico porque el
+// ángulo de aparición es aleatorio (§9), así que se toman muchos intentos y se
+// afirma sobre el agregado, no sobre una partida concreta.
 for (const n of [2, 5]) {
-  const INTENTOS = 8;
+  const INTENTOS = 20;
   let bloqueadas = 0, robosTotales = 0, ciclosTotales = 0;
   for (let i = 0; i < INTENTOS; i++) {
-    const r = partidaDeBots(n, 1500);
+    const r = partidaDeBots(n, 1200);
     if (r.motor.estado !== ESTADO_PARTIDA.FINISHED) bloqueadas++;
     robosTotales += r.robos;
     ciclosTotales += r.ciclos;
   }
+  // Con 20 intentos y una tasa de bloqueo observada del 35-60%, que salgan
+  // CERO es prácticamente imposible; la prueba ya no es intermitente.
   check(bloqueadas > 0,
-    `con ${n} jugadores y protectionTimeMs=0 se cuelgan ${bloqueadas}/${INTENTOS} partidas`);
+    `con ${n} jugadores se cuelgan ${bloqueadas}/${INTENTOS} partidas`);
   console.log(`     → ${n} jugadores: ${bloqueadas}/${INTENTOS} colgadas · ${robosTotales} robos en ${ciclosTotales} ciclos`);
 }
 
