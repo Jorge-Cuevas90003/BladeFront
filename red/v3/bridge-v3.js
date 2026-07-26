@@ -29,7 +29,7 @@ import {
   direccionesRadminLocales, combinarHallazgos, colapsarPropias, LIMITE_SONDEO,
 } from './descubrimiento.js';
 import { PARAMS_DEFECTO } from './protocolo-v3.js';
-import { vecinosVivos, prefijosRadminLocales } from './vecinos.js';
+import { vecinosVivos, prefijosRadminLocales, conServidorEscuchando } from './vecinos.js';
 
 export function crearBridge({
   puertoWs = 8146,
@@ -147,6 +147,7 @@ export function crearBridge({
         // mano, y si el barrido de subred llenara el cupo antes, se quedarían
         // fuera sin que nadie se lo dijera.
         const candidatas = [];
+        let ipsVecinas = [];
 
         // VECINOS DE LA RED VIRTUAL. Radmin ya sabe quién está conectado, y el
         // sistema operativo se entera solo: cualquier paquete intercambiado deja
@@ -159,8 +160,9 @@ export function crearBridge({
         if (url.searchParams.get('vecinos') !== '0') {
           try {
             const vecinos = await vecinosVivos({ prefijos: prefijosRadminLocales() });
+            ipsVecinas = vecinos.map((v) => v.ip);
             if (vecinos.length) {
-              candidatas.push(...vecinos.map((v) => v.ip));
+              candidatas.push(...ipsVecinas);
               exploracion.vias.push('vecinos-de-la-vpn');
               exploracion.vecinos = vecinos.length;
             } else {
@@ -216,6 +218,51 @@ export function crearBridge({
         // partida alojada aquí mismo responde por cada interfaz y por cada vía:
         // el jugador vería su propio servidor repetido cuatro veces.
         const servidores = colapsarPropias(combinarHallazgos(b, d));
+
+        // SERVIDORES QUE NO SE ANUNCIAN.
+        //
+        // El descubrimiento de §19 supone que todos los equipos lo implementan,
+        // y en la red del curso se comprobó que no es así: un compañero tenía su
+        // servidor aceptando conexiones TCP y no contestaba a ningún
+        // DISCOVER_REQUEST. Con solo UDP, ese servidor es invisible aunque esté
+        // a un paso y se pueda jugar contra él perfectamente.
+        //
+        // Así que a los vecinos que NO respondieron se les mira el puerto del
+        // juego. Se abre el socket y se cierra: ni un byte del protocolo, para
+        // no meter a nadie en la partida de otro. De ellos solo se sabe la
+        // dirección — ni nombre ni jugadores — y así se marcan.
+        // Se miran los vecinos Y las direcciones que el usuario pegó: si
+        // escribe la IP de un compañero a mano es porque quiere jugar con él, y
+        // sería absurdo no encontrarlo solo porque su servidor no se anuncia.
+        if (url.searchParams.get('tcp') !== '0' && candidatas.length) {
+          const yaVistos = new Set(servidores.map((s) => s.host));
+          const mudos = [...new Set(candidatas)].filter((ip) => !yaVistos.has(ip));
+          if (mudos.length) {
+            try {
+              const abiertos = await conServidorEscuchando(mudos, tcpPort, 900);
+              const setAbiertos = new Set(abiertos);
+              for (const host of abiertos) {
+                servidores.push({
+                  host, tcpPort, gameId: 0, serverName: '(no se anuncia)',
+                  state: 0, playerCount: 0, maximumPlayers: 0,
+                  via: 'tcp', anuncia: false,
+                });
+              }
+              const cerrados = mudos.filter((h) => !setAbiertos.has(h));
+              for (const host of cerrados) {
+                servidores.push({
+                  host, tcpPort, gameId: 0, serverName: `Compañero Radmin`,
+                  state: 'SIN_SERVICIO', playerCount: 0, maximumPlayers: 0,
+                  via: 'sin-servicio', anuncia: false, sinServicio: true,
+                });
+              }
+              if (abiertos.length) exploracion.vias.push('puerto-tcp');
+              exploracion.tcpProbados = mudos.length;
+            } catch (e) {
+              avisos.push(`sondeo del puerto de juego: ${e.message}`);
+            }
+          }
+        }
 
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
         return res.end(JSON.stringify(

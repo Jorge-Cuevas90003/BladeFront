@@ -339,6 +339,35 @@ try {
     console.log(`  · ${lista.length} IPs pegadas: ${ms} ms`);
     check(ms < 2000, `31 IPs cuestan UNA espera, no 31 (${ms} ms < 2000)`);
 
+    // ── Servidores que NO se anuncian ────────────────────────────────────
+    // El descubrimiento de §19 supone que todos lo implementan, y en la red
+    // del curso se comprobó que no: un compañero tenía el servidor aceptando
+    // conexiones y no contestaba a ningún DISCOVER_REQUEST. Con solo UDP era
+    // invisible. Aquí el servidor de pruebas corre con udp:false, así que
+    // representa exactamente ese caso.
+    {
+      // Se pregunta por UDP en un puerto MUERTO: así el servidor de pruebas,
+      // que sí se anuncia en el suyo, se comporta como uno que no lo hace y se
+      // aísla la vía del puerto TCP.
+      const mudo = await (await fetch(
+        `http://127.0.0.1:${PUERTO_WS}/servidores?puerto=15899&espera=400&vecinos=0&direccion=169.254.240.7&ips=127.0.0.1`
+      )).json();
+      const hallado = mudo.servidores?.find((s) => s.host === '127.0.0.1');
+      check(!!hallado, 'un servidor que no se anuncia se encuentra por el puerto TCP');
+      check(hallado?.via === 'tcp' && hallado?.anuncia === false,
+        'y se marca como tal, para no fingir que respondió al descubrimiento');
+      check(hallado?.tcpPort === PUERTO_TCP, `con el puerto al que conectarse (${hallado?.tcpPort})`);
+      check(mudo.exploracion?.vias?.includes('puerto-tcp'), 'la vía se declara en la exploración');
+    }
+    {
+      // Y no debe inventarse nada donde no hay nadie escuchando.
+      const vacio = await (await fetch(
+        `http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=400&vecinos=0&direccion=169.254.240.7&ips=169.254.240.9`
+      )).json();
+      check((vacio.servidores?.length ?? 0) === 0, 'una IP sin servidor no aparece por sondear el puerto');
+      check(vacio.exploracion?.tcpProbados === 1, 'pero se declara que se miró');
+    }
+
     // Pegar de Radmin arrastra saltos de línea y espacios, no solo comas.
     const sucia = await (await fetch(
       `http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&vecinos=0&direccion=169.254.240.7&ips=${encodeURIComponent('26.43.87.248\n 127.0.0.1 ;26.94.87.242')}`

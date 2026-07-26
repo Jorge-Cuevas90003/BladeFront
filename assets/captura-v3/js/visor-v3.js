@@ -691,22 +691,24 @@ function pintarServidores() {
         seleccionado = clave;
         $('host').value = s.host;
         $('puerto').value = s.tcpPort;
+        try { $('puerto').focus(); $('puerto').select(); } catch {}
         for (const otro of lista.children) otro.classList.toggle('on', otro === li);
       });
       lista.appendChild(li);
     }
 
+    const esSinServicio = s.sinServicio || s.state === 'SIN_SERVICIO';
     const lleno = s.playerCount >= s.maximumPlayers;
-    const cls = lleno ? 'llena' : (s.state === ESTADO_PARTIDA.WAITING ? 'abierta' : 'jugando');
-    const txt = lleno ? 'LLENA' : (s.state === ESTADO_PARTIDA.WAITING ? 'ABIERTA' : 'EN JUEGO');
-    // `via` dice si respondió al broadcast o si hubo que preguntarle directo.
-    // Es información de diagnóstico real: si todos aparecen como "directo", el
-    // broadcast no está atravesando la VPN.
-    const via = s.via === 'directo'
-      ? '<span class="via" title="respondió a un sondeo dirigido, no al broadcast">⇢</span>'
-      : '<span class="via" title="respondió al broadcast de la red">◎</span>';
+    const cls = esSinServicio ? 'sin-servicio' : (lleno ? 'llena' : (s.state === ESTADO_PARTIDA.WAITING ? 'abierta' : 'jugando'));
+    const txt = esSinServicio ? 'SIN SERVICIO EN 5000' : (lleno ? 'LLENA' : (s.state === ESTADO_PARTIDA.WAITING ? 'ABIERTA' : 'EN JUEGO'));
+    // `via` dice si respondió al broadcast, sondeo directo o vecino Radmin sin servicio.
+    const via = s.via === 'sin-servicio'
+      ? '<span class="via" title="Compañero activo en Radmin VPN (sin servicio en puerto 5000)">◌</span>'
+      : (s.via === 'directo'
+        ? '<span class="via" title="respondió a un sondeo dirigido, no al broadcast">⇢</span>'
+        : '<span class="via" title="respondió al broadcast de la red">◎</span>');
     li.innerHTML = `<b>${s.serverName}</b>` + via +
-      `<span>${s.host}:${s.tcpPort} · ${s.playerCount}/${s.maximumPlayers}</span>` +
+      `<span>${s.host}:${s.tcpPort}${esSinServicio ? '' : ` · ${s.playerCount}/${s.maximumPlayers}`}</span>` +
       `<span class="estado ${cls}">${txt}</span>`;
     li.classList.toggle('on', clave === seleccionado);
   }

@@ -22,6 +22,7 @@
 // ============================================================================
 
 import { execFile } from 'node:child_process';
+import net from 'node:net';
 import os from 'node:os';
 
 const MAC_NULA = /^[0:.-]*$/;              // 00-00-00-00-00-00 y variantes
@@ -96,6 +97,44 @@ function esPropia(ip) {
     }
   }
   return false;
+}
+
+// ---------------------------------------------------------------------------
+//  ¿Hay alguien escuchando en el puerto del juego?
+//
+//  El descubrimiento por UDP (§19) supone que todos los equipos lo implementan.
+//  En la práctica no es así: se comprobó en la red del curso que un compañero
+//  tenía su servidor perfectamente levantado y aceptando conexiones TCP, pero
+//  no contestaba a ningún DISCOVER_REQUEST. Con solo UDP, ese servidor es
+//  invisible aunque esté a un paso.
+//
+//  Abrir el TCP y cerrarlo enseguida responde a la única pregunta que importa
+//  para poder jugar: ¿hay algo escuchando ahí? No se manda ni un byte del
+//  protocolo, así que no se mete a nadie en la partida de otro.
+// ---------------------------------------------------------------------------
+export function puertoAbierto(host, puerto, esperaMs = 900) {
+  return new Promise((resolve) => {
+    const s = new net.Socket();
+    let hecho = false;
+    const fin = (abierto) => {
+      if (hecho) return;
+      hecho = true;
+      s.destroy();
+      resolve(abierto);
+    };
+    s.setTimeout(esperaMs);
+    s.once('connect', () => fin(true));
+    s.once('timeout', () => fin(false));   // filtrado o apagado
+    s.once('error', () => fin(false));     // rechazado: nadie escucha
+    s.connect(puerto, host);
+  });
+}
+
+// Cuáles de esos equipos tienen el puerto del juego abierto. Todos a la vez:
+// la espera es una sola.
+export async function conServidorEscuchando(ips, puerto, esperaMs = 900) {
+  const res = await Promise.all(ips.map((ip) => puertoAbierto(ip, puerto, esperaMs)));
+  return ips.filter((_, i) => res[i]);
 }
 
 // Prefijos de las interfaces locales que parecen de Radmin, para no limitar la
