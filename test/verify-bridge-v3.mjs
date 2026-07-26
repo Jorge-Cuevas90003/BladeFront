@@ -296,7 +296,7 @@ try {
   // encontraba a nadie Y hacía creer que ya se había buscado en la VPN.
   console.log('\n== 4d. escanear=1 ya no finge un barrido inútil ==');
   {
-    const r = await (await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&escanear=1`)).json();
+    const r = await (await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&escanear=1&vecinos=0`)).json();
     check(!r.exploracion?.vias?.includes('sondeo-subred-propia'), 'escanear=1 no barre la subred propia');
     check(r.exploracion?.sondeadas === 0, `no se sondea ninguna dirección a ciegas (${r.exploracion?.sondeadas})`);
     check(r.avisos?.some((a) => a.includes('26.0.0.0/8')),
@@ -304,7 +304,7 @@ try {
     check(r.servidores?.some((s) => s.tcpPort === PUERTO_TCP), 'sin dejar de encontrar lo que sí se puede encontrar');
 
     // Quien lo quiera de verdad lo pide explícito, y entonces sí se declara.
-    const sub = await (await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&escanear=subred`)).json();
+    const sub = await (await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&escanear=subred&vecinos=0`)).json();
     check(sub.exploracion?.vias?.includes('sondeo-subred-propia'),
       'escanear=subred sí lo hace, y lo declara');
     check(sub.exploracion?.sondeadas === 254,
@@ -341,7 +341,7 @@ try {
 
     // Pegar de Radmin arrastra saltos de línea y espacios, no solo comas.
     const sucia = await (await fetch(
-      `http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&direccion=169.254.240.7&ips=${encodeURIComponent('26.43.87.248\n 127.0.0.1 ;26.94.87.242')}`
+      `http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&vecinos=0&direccion=169.254.240.7&ips=${encodeURIComponent('26.43.87.248\n 127.0.0.1 ;26.94.87.242')}`
     )).json();
     check(sucia.exploracion?.sondeadas === 3, `saltos de línea y ';' también separan (${sucia.exploracion?.sondeadas})`);
     check(sucia.servidores?.some((s) => s.tcpPort === PUERTO_TCP), 'y la IP buena de la lista sucia se sondea igual');

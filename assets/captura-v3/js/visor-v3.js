@@ -771,16 +771,27 @@ function pintarExploracion(exploracion, avisos) {
   const nota = $('avisoBusqueda');
 
   const difusiones = exploracion?.difusiones ?? [];
-  if (!difusiones.length) { caja.style.display = 'none'; }
+  const trozos = [];
+
+  // Vecinos que el sistema ya vio vivos en la VPN. Es la vía que mejor funciona
+  // sobre Radmin, así que se enseña primero y con su cuenta.
+  if (typeof exploracion?.vecinos === 'number') {
+    const n = exploracion.vecinos;
+    trozos.push(`<span class="${n ? 'via-radmin' : ''}" title="equipos que el sistema ya vio responder en la red virtual; se les preguntó uno a uno">`
+      + `${n ? '✓' : '·'} ${n} vecino${n === 1 ? '' : 's'} en la VPN</span>`);
+  }
+
+  if (!difusiones.length && !trozos.length) { caja.style.display = 'none'; }
   else {
     // La de Radmin primero: es la que importa para jugar contra los compañeros.
     const orden = [...difusiones].sort((a, b) => (b.radmin ? 1 : 0) - (a.radmin ? 1 : 0));
-    caja.innerHTML = orden.map((d) => {
+    trozos.push(...orden.map((d) => {
       const marca = d.ok ? '✓' : '✕';
       const clase = d.ok ? (d.radmin ? 'via-radmin' : 'via-ok') : 'via-mal';
       const etiqueta = d.radmin ? 'Radmin VPN' : d.nombre;
       return `<span class="${clase}" title="${d.local} → ${d.difusion}${d.error ? ' · ' + d.error : ''}">${marca} ${etiqueta}</span>`;
-    }).join('');
+    }));
+    caja.innerHTML = trozos.join('');
     caja.style.display = '';
   }
 

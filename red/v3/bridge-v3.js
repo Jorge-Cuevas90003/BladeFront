@@ -29,6 +29,7 @@ import {
   direccionesRadminLocales, combinarHallazgos, colapsarPropias, LIMITE_SONDEO,
 } from './descubrimiento.js';
 import { PARAMS_DEFECTO } from './protocolo-v3.js';
+import { vecinosVivos, prefijosRadminLocales } from './vecinos.js';
 
 export function crearBridge({
   puertoWs = 8146,
@@ -146,6 +147,30 @@ export function crearBridge({
         // mano, y si el barrido de subred llenara el cupo antes, se quedarían
         // fuera sin que nadie se lo dijera.
         const candidatas = [];
+
+        // VECINOS DE LA RED VIRTUAL. Radmin ya sabe quién está conectado, y el
+        // sistema operativo se entera solo: cualquier paquete intercambiado deja
+        // al otro equipo apuntado en la tabla de vecinos con su dirección
+        // física. Los que tienen dirección física de verdad están vivos.
+        //
+        // Es la vía que mejor funciona sobre la VPN, porque no depende de que
+        // el adaptador virtual reenvíe difusiones ni de barrer un /8 imposible:
+        // pregunta exactamente a quien el sistema ya vio responder.
+        if (url.searchParams.get('vecinos') !== '0') {
+          try {
+            const vecinos = await vecinosVivos({ prefijos: prefijosRadminLocales() });
+            if (vecinos.length) {
+              candidatas.push(...vecinos.map((v) => v.ip));
+              exploracion.vias.push('vecinos-de-la-vpn');
+              exploracion.vecinos = vecinos.length;
+            } else {
+              exploracion.vecinos = 0;
+            }
+          } catch (e) {
+            avisos.push(`vecinos: ${e.message}`);
+          }
+        }
+
         const ips = url.searchParams.get('ips');
         if (ips) {
           // Se acepta lo que salga de pegar una lista de Radmin: comas, saltos
