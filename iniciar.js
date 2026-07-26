@@ -68,7 +68,7 @@ if (flag('ayuda') || flag('help') || args.includes('-h')) {
 const V1 = flag('v1');
 
 const PUERTO_WEB = 8145;
-const PUERTO_TCP = num('puerto-tcp', 5000);
+const PUERTO_TCP = num('puerto-tcp', 5005);
 const PUERTO_BRIDGE = num('puerto-bridge', V1 ? 8140 : 8146);
 const PUERTO_UDP_PEDIDO = num('puerto-descubrimiento', 5101);
 const NOMBRE = val('nombre', 'BladeFront');

@@ -79,8 +79,8 @@ export const PARAMS_DEFECTO = {
   tickIntervalMs: 50,
   countdownSeconds: 5,
   maximumPlayers: 100,
-  serverPort: 5000,
-  discoveryPort: 5001,
+  serverPort: 5005,
+  discoveryPort: 5101,
 
   // ── FUERA DE LA SPEC — por defecto en 0, que es el comportamiento oficial ──
   // §14 dice literalmente "no existe inmunidad, el robo es instantáneo". Con

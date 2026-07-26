@@ -205,6 +205,22 @@ export function crearServidor({
         bucle = null;
         const g = juego.jugadores.get(juego.ganadorId);
         log(`== fin: gana ${juego.ganadorId} "${g?.name ?? '?'}" en el tick ${juego.tick} ==`);
+
+        setTimeout(() => {
+          log('== reiniciando partida para nuevo juego ==');
+          juego.estado = ESTADO_PARTIDA.WAITING;
+          juego.tick = 0;
+          juego.bandera = { x: 0, y: 0, status: ESTADO_BANDERA.AVAILABLE, carrierId: 0 };
+          juego.ganadorId = 0;
+          for (const j of juego.jugadores.values()) {
+            j.hasFlag = false;
+            j.direction = DIRECCIONES.NONE;
+          }
+          difundir(TIPOS.LOBBY_STATE, juego.serializarLobby());
+          if (autoArrancar && juego.jugadoresActivos().length >= 1) {
+            arrancarCuenta();
+          }
+        }, 5000);
       }
     });
   }

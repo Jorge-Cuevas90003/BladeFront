@@ -239,16 +239,22 @@ export function crearBridge({
           const mudos = [...new Set(candidatas)].filter((ip) => !yaVistos.has(ip));
           if (mudos.length) {
             try {
-              const abiertos = await conServidorEscuchando(mudos, tcpPort, 900);
-              const setAbiertos = new Set(abiertos);
-              for (const host of abiertos) {
-                servidores.push({
-                  host, tcpPort, gameId: 0, serverName: nombreDeRadmin(host),
-                  state: 0, playerCount: 0, maximumPlayers: 0,
-                  via: 'tcp', anuncia: false,
-                });
+              const puertosASondear = [...new Set([tcpPort, 5005, 5000, 5002])];
+              const encontradosHosts = new Set();
+              for (const pt of puertosASondear) {
+                const pend = mudos.filter((h) => !encontradosHosts.has(h));
+                if (!pend.length) break;
+                const abiertos = await conServidorEscuchando(pend, pt, 700);
+                for (const host of abiertos) {
+                  encontradosHosts.add(host);
+                  servidores.push({
+                    host, tcpPort: pt, gameId: 0, serverName: nombreDeRadmin(host),
+                    state: 0, playerCount: 0, maximumPlayers: 0,
+                    via: 'tcp', anuncia: false,
+                  });
+                }
               }
-              const cerrados = mudos.filter((h) => !setAbiertos.has(h));
+              const cerrados = mudos.filter((h) => !encontradosHosts.has(h));
               for (const host of cerrados) {
                 servidores.push({
                   host, tcpPort, gameId: 0, serverName: nombreDeRadmin(host),
@@ -256,7 +262,7 @@ export function crearBridge({
                   via: 'sin-servicio', anuncia: false, sinServicio: true,
                 });
               }
-              if (abiertos.length) exploracion.vias.push('puerto-tcp');
+              if (encontradosHosts.size) exploracion.vias.push('puerto-tcp');
               exploracion.tcpProbados = mudos.length;
             } catch (e) {
               avisos.push(`sondeo del puerto de juego: ${e.message}`);
