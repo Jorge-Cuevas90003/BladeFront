@@ -27,6 +27,7 @@ import { createTitans } from '../../arena-vacio/js/titans.js';
 import { createKnight } from '../../caballero-templario/js/knight.js';
 import { KnightAnimator } from '../../caballero-templario/js/knight-anim.js';
 import { createCyberBanner } from '../../modo-juggernaut/js/flag.js';
+import { crearMonumentos } from '../../arena-vacio/js/monumentos.js';
 
 import { ClienteV3 } from './cliente-v3.js';
 import { TIPOS, DIRECCIONES, ESTADO_BANDERA, PARAMS_DEFECTO } from '../../../red/v3/protocolo-v3.js';
@@ -184,85 +185,28 @@ haz.position.y = SUELO_Y + 5.5;
 scene.add(haz);
 
 // ---------------------------------------------------------------------------
-//  Monolitos ceremoniales
+//  Los Doce Testigos
 //
-//  El PRFC v3 no tiene obstáculos, así que estos NO son parte del juego: se
-//  colocan FUERA del círculo central para que no estorben la vista de la zona
-//  donde todo ocurre. Están solo para que la arena no quede pelada, que es lo
-//  que pasaba al quitar la rejilla y los obstáculos de la versión anterior.
+//  Efigies de mármol de campeones caídos. El PRFC v3 no tiene obstáculos, así
+//  que NO son parte del juego: van en un anillo fuera del círculo de victoria,
+//  donde no estorban la vista de la zona donde ocurre todo, pero dan escala y
+//  referencia de profundidad justo al cruzar el borde.
+//
+//  Se generan con semilla fija: las mismas doce estatuas en cada recarga.
 // ---------------------------------------------------------------------------
-const MAT_BASALTO = new THREE.MeshPhysicalMaterial({
-  color: 0x141820, metalness: 0.88, roughness: 0.35, clearcoat: 0.5, clearcoatRoughness: 0.25,
-});
-const MAT_LATON = new THREE.MeshStandardMaterial({ color: 0x96742f, metalness: 1.0, roughness: 0.38 });
-
-function crearMonolito(indice) {
-  const g = new THREE.Group();
-  const dorado = indice % 2 === 0;
-  const brillo = dorado ? 0xffb638 : 0x49e6ff;
-  const matBrillo = new THREE.MeshStandardMaterial({
-    color: 0x05080d, emissive: brillo, emissiveIntensity: 3.2, roughness: 0.2, metalness: 0.9,
-  });
-
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.56, 0.24, 8), MAT_BASALTO);
-  base.position.y = 0.12;
-  base.castShadow = base.receiveShadow = true;
-  g.add(base);
-
-  const alto = 2.4 + (indice % 3) * 0.5;
-  const col = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.44, alto, 8), MAT_BASALTO);
-  col.position.y = 0.24 + alto / 2;
-  col.rotation.y = Math.PI / 8;
-  col.castShadow = col.receiveShadow = true;
-  g.add(col);
-
-  const aro = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.028, 8, 24), MAT_LATON);
-  aro.rotation.x = Math.PI / 2;
-  aro.position.y = 0.24 + alto * 0.58;
-  g.add(aro);
-
-  const franja = new THREE.BoxGeometry(0.032, alto * 0.8, 0.032);
-  for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * Math.PI * 2 + Math.PI / 8;
-    const f = new THREE.Mesh(franja, matBrillo);
-    f.position.set(Math.cos(a) * 0.4, 0.24 + alto / 2, Math.sin(a) * 0.4);
-    g.add(f);
-  }
-
-  const cristal = new THREE.Mesh(new THREE.OctahedronGeometry(0.24), matBrillo);
-  const yCristal = 0.24 + alto + 0.34;
-  cristal.position.y = yCristal;
-  cristal.castShadow = true;
-  g.add(cristal);
-
-  const semilla = indice * 1.37;
-  g.userData.update = (dt, t) => {
-    cristal.rotation.y += dt * 1.4;
-    cristal.rotation.x += dt * 0.4;
-    cristal.position.y = yCristal + Math.sin(t * 2.2 + semilla) * 0.08;
-  };
-  return g;
-}
-
-const monolitos = [];
-function colocarMonolitos() {
-  for (const m of monolitos) scene.remove(m);
-  monolitos.length = 0;
-  // En un anillo entre el círculo de victoria y el borde de la arena: marcan
-  // el exterior sin taparlo, y de paso dan referencia de profundidad al cruzar.
+let testigos = null;
+function colocarMonumentos() {
+  if (testigos) scene.remove(testigos.group);
   const rc = cfg.circleRadius * ESCALA;
-  const radio = Math.min(R * 0.86, rc + (R - rc) * 0.55);
-  const n = 12;
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2 + Math.PI / n;
-    const m = crearMonolito(i);
-    m.position.set(Math.cos(a) * radio, SUELO_Y, Math.sin(a) * radio);
-    m.rotation.y = -a;
-    scene.add(m);
-    monolitos.push(m);
-  }
+  const radio = Math.min(R * 0.88, rc + (R - rc) * 0.6);
+  // La estatua se dimensiona contra el hueco disponible entre el círculo y el
+  // borde: en mapas con un círculo enorme deben encoger o se saldrían del disco.
+  const escala = Math.max(0.5, Math.min(1.15, (R - rc) * 0.16));
+  testigos = crearMonumentos({ cantidad: 12, radio, escala });
+  testigos.group.position.y = SUELO_Y;
+  scene.add(testigos.group);
 }
-colocarMonolitos();
+colocarMonumentos();
 
 const knights = new Map(); // playerId -> { group, anim, target, yaw, ... }
 
@@ -370,7 +314,7 @@ on(TIPOS.GAME_STARTED, (m) => {
   cfg = { ...cfg, ...m };
   recalcularEscala();
   colocarGeometriaDelMapa();
-  colocarMonolitos(); // el anillo depende de circleRadius, que llega en §29.5
+  colocarMonumentos(); // el anillo depende de circleRadius, que llega en §29.5
   limpiarKnights();
   $('modalFin')?.classList.add('oculto');
   banner.scale.setScalar(Math.max(0.4, ESCALA_KNIGHT * 1.3));
@@ -563,7 +507,7 @@ function frame(dtForzado) {
 
   cosmos.update(dt, t);
   titans.update(dt, t);
-  for (const m of monolitos) m.userData.update(dt, t);
+  testigos.update(dt, t);
   if (arena.userData.update) arena.userData.update(dt, t);
   if (banner?.userData?.update) banner.userData.update(dt, t);
 
