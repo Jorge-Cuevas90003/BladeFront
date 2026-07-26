@@ -153,7 +153,7 @@ export function crearServidor({
         // Anfitrión es quien juega desde la máquina que aloja la partida. Si
         // ya hay uno no se reemplaza: abrir una segunda pestaña en local no
         // debe robarle el mando al que ya estaba.
-        if (info.esLocal && !anfitrionId) {
+        if (info.esLocal && (!anfitrionId || !juego.jugadores.get(anfitrionId)?.connected)) {
           anfitrionId = jugador.playerId;
           log(`  ${jugador.playerId} es el anfitrión (juega desde esta máquina)`);
         }
