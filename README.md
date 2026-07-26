@@ -13,8 +13,8 @@ geometría generada en tiempo de ejecución y **Web Audio API** para el sonido.
 
 Ese es el **Modo Juggernaut**, el juego original. Con el mismo motor y los
 mismos assets corre además **Captura la Bandera**, que juega en red contra los
-equipos del resto del curso hablando un protocolo binario acordado entre
-todos — misma arena, mismos caballeros, reglas distintas.
+equipos del resto del curso hablando un protocolo binario propio, diseñado
+entre todos — misma arena, mismos caballeros, reglas distintas.
 
 Proyecto para **Computer Science 8 — Proyecto 1 (Juego)**.
 
@@ -30,8 +30,12 @@ Proyecto para **Computer Science 8 — Proyecto 1 (Juego)**.
 
 Hay dos juegos aquí. El **Modo Juggernaut** es el original: arena flotante,
 placajes y un jefe. **Captura la Bandera** es el que habla el protocolo
-acordado con los demás equipos del curso, y con el que se juega entre
+propio del curso, diseñado entre todos los equipos, y con el que se juega entre
 computadoras distintas.
+
+Lo más rápido es doble clic en **`iniciar.bat`**: levanta el servidor, el
+bridge y la web, abre el navegador y te dice cuál de tus IPs pasarles a los
+demás. O a mano:
 
 ```bash
 npx http-server . -p 8145 -c-1
@@ -55,11 +59,13 @@ npx http-server . -p 8145 -c-1
 
 | Tecla | Acción |
 |---|---|
-| `WASD` | Moverse (cuatro direcciones, sin diagonales) |
-| `E` / `Espacio` | Tomar la bandera, o robársela a quien la lleve |
+| `WASD` / flechas | Moverse, relativo a la cámara |
+| `E` / `Espacio` | Tomar la bandera o robarla — se puede dejar pulsado |
 | `M` | Vista 2D cruda, para depurar |
+| Ratón | Orbitar la cámara |
 
-Se gana sacando la bandera del círculo dorado del centro.
+Se gana sacando la bandera del círculo dorado del centro. No hay diagonales:
+el protocolo solo admite cuatro direcciones, así que se avanza en zigzag.
 
 ## Cómo está armado
 
@@ -92,6 +98,8 @@ red/v3/                   El protocolo, compartido por servidor y navegador
     servidor-v3.js           Servidor autoritativo
     bridge-v3.js             Traductor WebSocket ↔ TCP para el navegador
     descubrimiento.js        Anuncio y búsqueda de servidores por UDP
+    reloj.js                 Reloj de ciclo que corrige la deriva del sistema
+iniciar.js / iniciar.bat  Lanzador de un clic: servidor + bridge + web
 test/                     Pruebas de regresión (node test/verify-*.mjs)
 ```
 
@@ -115,14 +123,19 @@ apuntando a un CDN. Se abre el HTML y ya está corriendo.
 
 ## Multijugador
 
-Un jugador por computadora, hablando el protocolo **PRFC-CC8-2026 v3** que
-acordamos entre los equipos del curso. No es un protocolo nuestro: la gracia
-es que el servidor de cualquier grupo funcione con el cliente de cualquier
+Un jugador por computadora, hablando el **PRFC-CC8-2026 v3**: un protocolo
+**propio**, escrito desde cero y negociado entre los equipos del curso. No hay
+ningún estándar de terceros de por medio — el formato de los mensajes, el orden
+del ciclo y las reglas del juego se discutieron y acordaron en clase. La gracia
+está en que el servidor de cualquier grupo funcione con el cliente de cualquier
 otro, aunque uno esté escrito en C# y el otro en JavaScript.
 
 Va en binario sobre TCP, con un prefijo de longitud por mensaje y las
 coordenadas como enteros ×100 para que ningún lenguaje redondee distinto. Los
 servidores se anuncian por UDP, así que no hay que ir preguntando direcciones.
+
+Las partidas entre equipos se juegan sobre **Radmin VPN**, que mete a todo el
+mundo en la misma red virtual (rango `26.x.x.x`).
 
 ```bash
 node red/v3/servidor-v3.js --auto     # la partida
@@ -135,7 +148,7 @@ el cable viaja exactamente lo que espera cualquier otro equipo.
 
 **Verificación.** El protocolo trae una prueba de compatibilidad —un `INPUT`
 concreto que debe dar los bytes `11 03 00 07 01`— y sobre eso montamos el
-resto. Son 264 comprobaciones que van desde esos bytes sueltos hasta partidas
+resto. Son 320 comprobaciones que van desde esos bytes sueltos hasta partidas
 completas jugadas por sockets reales:
 
 ```bash

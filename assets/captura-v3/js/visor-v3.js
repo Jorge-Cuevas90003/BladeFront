@@ -418,19 +418,53 @@ on(TIPOS.ERROR, (m) => {
 //  así que repetirla cada frame solo sería ruido en la red.
 // ---------------------------------------------------------------------------
 const teclas = new Set();
-const MAPA_TECLAS = {
-  KeyW: DIRECCIONES.UP, ArrowUp: DIRECCIONES.UP,
-  KeyS: DIRECCIONES.DOWN, ArrowDown: DIRECCIONES.DOWN,
-  KeyA: DIRECCIONES.LEFT, ArrowLeft: DIRECCIONES.LEFT,
-  KeyD: DIRECCIONES.RIGHT, ArrowRight: DIRECCIONES.RIGHT,
+
+// Intención en el marco de la CÁMARA, no del mundo: [lateral, frontal].
+// W siempre es "hacia donde miro", pase lo que pase con la órbita.
+const INTENCION = {
+  KeyW: [0, 1],  ArrowUp: [0, 1],
+  KeyS: [0, -1], ArrowDown: [0, -1],
+  KeyA: [-1, 0], ArrowLeft: [-1, 0],
+  KeyD: [1, 0],  ArrowRight: [1, 0],
 };
 let ultimaDireccion = DIRECCIONES.NONE;
+let interactuando = false;
+
+const _adelante = new THREE.Vector3();
+
+// Convierte la intención relativa a la cámara en una de las cuatro direcciones
+// cardinales del protocolo (§10, sin diagonales).
+//
+// Antes WASD apuntaba directamente a ejes del MUNDO, y como la cámara orbita
+// libremente bastaba girarla media vuelta para que W moviera al caballero
+// hacia el jugador. Los controles parecían rotos sin estarlo. Ahora se
+// proyecta la intención sobre el suelo usando hacia dónde mira la cámara y se
+// ajusta al eje dominante, que es lo máximo que permite el protocolo.
+function direccionDesdeCamara(lateral, frontal) {
+  camera.getWorldDirection(_adelante);
+  _adelante.y = 0;
+  if (_adelante.lengthSq() < 1e-6) _adelante.set(0, 0, -1); // cámara cenital pura
+  _adelante.normalize();
+
+  // "Derecha" es "adelante" girado un cuarto de vuelta sobre el plano del suelo.
+  const dx = _adelante.x * frontal + (-_adelante.z) * lateral;
+  const dz = _adelante.z * frontal + (_adelante.x) * lateral;
+
+  if (Math.abs(dx) >= Math.abs(dz)) return dx >= 0 ? DIRECCIONES.RIGHT : DIRECCIONES.LEFT;
+  // La z del mundo es la y del juego, que crece hacia abajo (§5).
+  return dz >= 0 ? DIRECCIONES.DOWN : DIRECCIONES.UP;
+}
 
 function recalcularDireccion() {
-  // Gana la última tecla pulsada que siga presionada: si el jugador mantiene W
-  // y luego pulsa D, va a la derecha, y al soltar D vuelve a subir.
-  let dir = DIRECCIONES.NONE;
-  for (const code of teclas) if (MAPA_TECLAS[code]) dir = MAPA_TECLAS[code];
+  // Gana la última tecla pulsada que siga presionada: si se mantiene W y luego
+  // se pulsa D, va a la derecha, y al soltar D vuelve a subir.
+  let intencion = null;
+  for (const code of teclas) if (INTENCION[code]) intencion = INTENCION[code];
+
+  const dir = intencion
+    ? direccionDesdeCamara(intencion[0], intencion[1])
+    : DIRECCIONES.NONE;
+
   if (dir !== ultimaDireccion) {
     ultimaDireccion = dir;
     cliente.mandarDireccion(dir);
@@ -438,8 +472,8 @@ function recalcularDireccion() {
 }
 
 window.addEventListener('keydown', (e) => {
-  if (e.repeat) return;
   if (e.code === 'KeyM') {
+    if (e.repeat) return;
     const p = document.getElementById('panel2d');
     p.classList.toggle('oculto');
     if (!p.classList.contains('oculto')) visor2D.ajustar();
@@ -447,24 +481,38 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.code === 'KeyE' || e.code === 'Space') {
     e.preventDefault();
-    cliente.interactuar();
-    const k = knights.get(miId);
-    if (k) k.accion = 0.4;
+    // Mantener pulsado sigue interactuando. El servidor descarta las repetidas
+    // dentro del mismo ciclo (§30.2), así que no cuesta nada y evita el juego
+    // de precisión de acertar el instante exacto en que entras en rango.
+    interactuando = true;
+    if (!e.repeat) {
+      cliente.interactuar();
+      const k = knights.get(miId);
+      if (k) k.accion = 0.4;
+    }
     return;
   }
-  if (!MAPA_TECLAS[e.code]) return;
+  if (!INTENCION[e.code]) return;
   e.preventDefault();
+  if (e.repeat) return;
   teclas.add(e.code);
   recalcularDireccion();
 });
 
 window.addEventListener('keyup', (e) => {
-  if (!MAPA_TECLAS[e.code]) return;
+  if (e.code === 'KeyE' || e.code === 'Space') { interactuando = false; return; }
+  if (!INTENCION[e.code]) return;
   teclas.delete(e.code);
   recalcularDireccion();
 });
 
-window.addEventListener('blur', () => { teclas.clear(); recalcularDireccion(); });
+// Al perder el foco se sueltan todas: si no, el caballero seguiría caminando
+// solo mientras el jugador está en otra ventana.
+window.addEventListener('blur', () => {
+  teclas.clear();
+  interactuando = false;
+  recalcularDireccion();
+});
 
 // ---------------------------------------------------------------------------
 //  Bucle de render
@@ -516,6 +564,11 @@ function frame(dtForzado) {
     controls.target.add(_tmp);
     camera.position.add(_tmp);
   }
+
+  // La cámara puede girar con una tecla de movimiento pulsada; hay que
+  // reevaluar para que "adelante" siga siendo adelante mientras se orbita.
+  if (teclas.size) recalcularDireccion();
+  if (interactuando) cliente.interactuar();
 
   cosmos.update(dt, t);
   titans.update(dt, t);
