@@ -911,22 +911,17 @@ $('ipManual')?.addEventListener('keydown', (e) => {
   e.stopPropagation(); // que WASD no mueva al caballero mientras se escribe
 });
 
-$('finOtra')?.addEventListener('click', () => {
+function salirYLimpiarAMenu() {
   $('modalFin')?.classList.add('oculto');
-  terminada = false;
-  if ($('modo').value === 'red') {
-    conectarRed();
-  } else {
-    iniciarLocal();
-  }
-});
-
-$('finMenu')?.addEventListener('click', () => {
-  $('modalFin')?.classList.add('oculto');
+  $('modalEspera')?.classList.add('oculto');
   $('menu')?.classList.remove('oculto');
   terminada = false;
   if (cliente.conectado) cliente.desconectar();
-});
+  setTimeout(sondearServidores, 50);
+}
+
+$('finOtra')?.addEventListener('click', salirYLimpiarAMenu);
+$('finMenu')?.addEventListener('click', salirYLimpiarAMenu);
 
 setInterval(sondearServidores, INTERVALO_BUSQUEDA);
 // Al cambiar a modo red se sondea ya, sin esperar al siguiente ciclo.
