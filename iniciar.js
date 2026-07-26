@@ -167,6 +167,19 @@ async function elegirPuertoTcp(pedido) {
   return pedido;
 }
 
+// Prueba el puerto pedido y, si no, salta de 100 en 100: 5101, 5201...
+async function elegirPuertoUdp(pedido) {
+  let motivoOriginal = null;
+  for (let i = 0; i < 12; i++) {
+    const puerto = pedido + i * 100;
+    if (puerto > 65535) break;
+    const fallo = await motivoOcupado(puerto);
+    if (!fallo) return { puerto, cambiado: i > 0, motivo: motivoOriginal };
+    if (i === 0) motivoOriginal = fallo;
+  }
+  return { puerto: pedido, cambiado: false, motivo: motivoOriginal, sinAlternativa: true };
+}
+
 // ----------------------------------------------------------------------------
 
 // ----------------------------------------------------------------------------
