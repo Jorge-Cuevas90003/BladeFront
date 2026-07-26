@@ -18,6 +18,7 @@
 // ============================================================================
 
 import http from 'node:http';
+import net from 'node:net';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -69,7 +70,7 @@ const V1 = flag('v1');
 const PUERTO_WEB = 8145;
 const PUERTO_TCP = num('puerto-tcp', 5000);
 const PUERTO_BRIDGE = num('puerto-bridge', V1 ? 8140 : 8146);
-const PUERTO_UDP_PEDIDO = num('puerto-descubrimiento', 5001);
+const PUERTO_UDP_PEDIDO = num('puerto-descubrimiento', 5101);
 const NOMBRE = val('nombre', 'BladeFront');
 const SIN_NAVEGADOR = flag('sin-navegador');
 
@@ -147,19 +148,26 @@ async function motivoOcupado(puerto) {
   return (await atarUdp(puerto, false)) ?? (await atarUdp(puerto, true));
 }
 
-// Prueba el puerto pedido y, si no, salta de 100 en 100: 5001, 5101, 5201...
-async function elegirPuertoUdp(pedido) {
-  let motivoOriginal = null;
-  for (let i = 0; i < 12; i++) {
-    const puerto = pedido + i * 100;
-    if (puerto > 65535) break;
-    const fallo = await motivoOcupado(puerto);
-    if (!fallo) return { puerto, cambiado: i > 0, motivo: motivoOriginal };
-    if (i === 0) motivoOriginal = fallo;
-  }
-  // Nadie libre: se sigue con el pedido y que el servidor avise por su cuenta.
-  return { puerto: pedido, cambiado: false, motivo: motivoOriginal, sinAlternativa: true };
+// Prueba si un puerto TCP está libre.
+function probarPuertoTcp(puerto) {
+  return new Promise((resolve) => {
+    const s = net.createServer();
+    s.once('error', () => resolve(false));
+    s.once('listening', () => { s.close(() => resolve(true)); });
+    try { s.listen(puerto, '0.0.0.0'); } catch { resolve(false); }
+  });
 }
+
+// Elige el puerto TCP pedido, o busca automáticamente el siguiente libre si está ocupado.
+async function elegirPuertoTcp(pedido) {
+  if (await probarPuertoTcp(pedido)) return pedido;
+  for (let p = 5002; p <= 5050; p++) {
+    if (await probarPuertoTcp(p)) return p;
+  }
+  return pedido;
+}
+
+// ----------------------------------------------------------------------------
 
 // ----------------------------------------------------------------------------
 //  2. Servidor HTTP estático de la raíz del proyecto (sin dependencias)
@@ -385,6 +393,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => cerrarTodo(0));
 //  Arranque
 // ----------------------------------------------------------------------------
 let udp = { puerto: PUERTO_UDP_PEDIDO, cambiado: false, motivo: null };
+const puertoTcpFinal = await elegirPuertoTcp(PUERTO_TCP);
 
 if (MODO.descubrimiento) {
   udp = await elegirPuertoUdp(PUERTO_UDP_PEDIDO);
@@ -392,15 +401,6 @@ if (MODO.descubrimiento) {
     aviso(
       `no encontré ningún puerto UDP libre desde el ${PUERTO_UDP_PEDIDO}; ` +
       `sigo con el ${udp.puerto}, pero puede que la partida no aparezca en la búsqueda automática.`
-    );
-  } else if (udp.cambiado) {
-    aviso(
-      `el puerto UDP ${PUERTO_UDP_PEDIDO} está ocupado (${udp.motivo}) por otro proceso del sistema; ` +
-      `sin cambiarlo el servidor arrancaría pero NADIE lo vería en la búsqueda automática.`
-    );
-    aviso(
-      `uso el ${udp.puerto} para el servidor Y el bridge. ` +
-      `Tus compañeros deben usar ese mismo puerto (o conectarse escribiendo tu IP a mano).`
     );
   }
 }
@@ -418,15 +418,15 @@ try {
 log(`web sirviendo la raíz del proyecto en http://localhost:${PUERTO_WEB}`);
 
 if (V1) {
-  lanzar('servidor', C.verde, MODO.servidor, ['--port', String(PUERTO_TCP), '--auto']);
+  lanzar('servidor', C.verde, MODO.servidor, ['--port', String(puertoTcpFinal), '--auto']);
   lanzar('bridge', C.magenta, MODO.bridge, [
     '--ws', String(PUERTO_BRIDGE),
     '--tcp-host', '127.0.0.1',
-    '--tcp-port', String(PUERTO_TCP),
+    '--tcp-port', String(puertoTcpFinal),
   ]);
 } else {
   lanzar('servidor', C.verde, MODO.servidor, [
-    '--port', String(PUERTO_TCP),
+    '--port', String(puertoTcpFinal),
     '--discovery-port', String(udp.puerto),
     '--name', NOMBRE,
     '--auto',
@@ -436,7 +436,7 @@ if (V1) {
   lanzar('bridge', C.magenta, MODO.bridge, [
     '--ws', String(PUERTO_BRIDGE),
     '--tcp-host', '127.0.0.1',
-    '--tcp-port', String(PUERTO_TCP),
+    '--tcp-port', String(puertoTcpFinal),
     '--discovery-port', String(udp.puerto),
   ]);
 }
