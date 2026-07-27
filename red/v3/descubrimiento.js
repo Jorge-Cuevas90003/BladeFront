@@ -78,33 +78,31 @@ export function publicarServidor({
   };
 
   const intentarAtarEspecificas = () => {
-    let exito = false;
+    let creados = 0;
     for (const it of interfacesLocales()) {
       if (it.interna) continue;
       try {
         const s = crearRespondedor(it.address);
-        s.on('error', () => {});
+        s.on('error', (err) => log(`error en socket especifico ${it.address}:${puerto}:`, err.message));
         s.bind(puerto, it.address, () => {
           try { s.setBroadcast(true); } catch {}
           atado = true;
-          exito = true;
           log(`descubrimiento UDP escuchando en ${it.address}:${puerto}`);
         });
         sockets.push(s);
-      } catch {}
+        creados++;
+      } catch (err) {
+        log(`no se pudo atar ${it.address}:${puerto}:`, err.message);
+      }
     }
-    return exito;
+    return creados > 0;
   };
 
   const principal = crearRespondedor();
   principal.on('error', (e) => {
-    if (!atado && (e.code === 'EADDRINUSE' || e.code === 'EACCES')) {
-      if (intentarAtarEspecificas()) return;
-      alFallar(
-        `⚠ No se pudo usar el puerto UDP ${puerto} (${e.code}): lo tiene otro ` +
-        `proceso o el sistema lo reserva. Este servidor NO aparecerá en la ` +
-        `búsqueda automática.`
-      );
+    if (e.code === 'EADDRINUSE' || e.code === 'EACCES') {
+      log(`puerto global ${puerto} ocupado (${e.code}), intentando atar por IP especifica...`);
+      intentarAtarEspecificas();
     } else if (!atado) {
       alFallar(`⚠ Descubrimiento UDP caído (${e.code || e.message}): este servidor no se anunciará.`);
     }
