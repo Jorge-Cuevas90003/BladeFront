@@ -210,10 +210,41 @@ function colocarMonumentos() {
 }
 colocarMonumentos();
 
-const knights = new Map(); // playerId -> { group, anim, target, yaw, ... }
+const knights = new Map(); // playerId -> { group, anim, target, yaw, etiqueta, ... }
 
-function asegurarKnight(id) {
+function crearEtiquetaNombre(texto, esPropio = false) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = esPropio ? 'rgba(12, 40, 55, 0.85)' : 'rgba(12, 16, 26, 0.8)';
+  ctx.strokeStyle = esPropio ? '#49e6ff' : '#ffb638';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(8, 8, 240, 48, 12);
+  else ctx.rect(8, 8, 240, 48);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.font = 'bold 24px "Outfit", sans-serif, system-ui';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = esPropio ? '#49e6ff' : '#ffffff';
+  ctx.fillText(texto, 128, 32);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.minFilter = THREE.LinearFilter;
+  const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+  const sprite = new THREE.Sprite(spriteMat);
+  sprite.scale.set(3.6, 0.9, 1);
+  sprite.position.set(0, 4.2, 0);
+  return sprite;
+}
+
+function asegurarKnight(id, nombreManual = null) {
   let k = knights.get(id);
+  const nombre = nombreManual || cliente.nombreDe(id) || `Jugador #${id}`;
   if (!k) {
     const group = createKnight();
     group.scale.setScalar(ESCALA_KNIGHT);
@@ -230,12 +261,21 @@ function asegurarKnight(id) {
     marca.position.y = SUELO_Y + 0.03;
     scene.add(marca);
 
+    const etiqueta = crearEtiquetaNombre(nombre, id === miId);
+    group.add(etiqueta);
+
     k = {
-      group, marca, anim: new KnightAnimator(group),
+      group, marca, etiqueta, anim: new KnightAnimator(group),
       target: new THREE.Vector3(), yaw: 0,
-      colocado: false, accion: 0,
+      colocado: false, accion: 0, nombre,
     };
     knights.set(id, k);
+  } else if (nombre && k.nombre !== nombre) {
+    k.group.remove(k.etiqueta);
+    try { k.etiqueta.material.map.dispose(); k.etiqueta.material.dispose(); } catch {}
+    k.etiqueta = crearEtiquetaNombre(nombre, id === miId);
+    k.group.add(k.etiqueta);
+    k.nombre = nombre;
   }
   return k;
 }
@@ -243,6 +283,9 @@ function asegurarKnight(id) {
 function quitarKnight(id) {
   const k = knights.get(id);
   if (!k) return;
+  if (k.etiqueta) {
+    try { k.etiqueta.material.map.dispose(); k.etiqueta.material.dispose(); } catch {}
+  }
   scene.remove(k.group, k.marca);
   knights.delete(id);
 }
