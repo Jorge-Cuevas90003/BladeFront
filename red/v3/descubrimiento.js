@@ -64,17 +64,19 @@ export function publicarServidor({
     const s = dgram.createSocket({ type: 'udp4', reuseAddr: true });
     s.on('message', (datos, origen) => {
       let esJson = false;
+      let reqVersion = "2.0";
       let msg = null;
 
-      // 1. Decodificar JSON texto (para clientes Java/C#/Python de los compañeros)
+      // 1. Decodificar JSON / Texto (para clientes Java/C#/Python de los compañeros)
       try {
         const texto = new TextDecoder('utf-8').decode(datos).trim();
-        if (texto.startsWith('{') && texto.endsWith('}')) {
-          const obj = JSON.parse(texto);
-          if (obj.type === 'DISCOVER_REQUEST' || obj.type === 0x01 || obj.type === 1) {
-            esJson = true;
-            msg = { type: TIPOS.DISCOVER_REQUEST, ver: VERSION };
+        if (texto.includes('DISCOVER_REQUEST') || texto.includes('DISCOVER') || texto.startsWith('{')) {
+          if (texto.startsWith('{')) {
+            const obj = JSON.parse(texto);
+            if (obj.protocolVersion) reqVersion = String(obj.protocolVersion);
           }
+          esJson = true;
+          msg = { type: TIPOS.DISCOVER_REQUEST, ver: VERSION };
         }
       } catch {}
 
@@ -91,29 +93,47 @@ export function publicarServidor({
 
       const info = describir();
 
-      // Enviar respuesta BINARIA v3
+      // Respuesta 1: BINARIA v3
       try {
         const respBinaria = codificar(TIPOS.DISCOVER_RESPONSE, info);
         s.send(respBinaria, origen.port, origen.address, () => {});
       } catch {}
 
-      // Enviar TAMBIÉN respuesta JSON texto (para Java / C# / Python)
+      // Respuesta 2: JSON Texto con protocolVersion igual a la pedida (v2.0 o v3.0)
       try {
         const jsonObj = {
           type: "DISCOVER_RESPONSE",
-          protocolVersion: "2.0",
-          gameId: info.gameId || 1,
+          protocolVersion: reqVersion,
+          gameId: typeof info.gameId === 'string' ? info.gameId : `GAME-${info.gameId || 1}`,
           serverName: info.serverName || "BladeFront",
-          tcpPort: info.tcpPort || 5000,
-          state: info.state === 1 || info.state === 'WAITING' ? "WAITING" : "RUNNING",
-          playerCount: info.playerCount || 0,
-          maximumPlayers: info.maximumPlayers || 100,
+          tcpPort: Number(info.tcpPort) || 5000,
+          state: (info.state === 1 || info.state === 'WAITING') ? "WAITING" : "RUNNING",
+          playerCount: Number(info.playerCount) || 0,
+          maximumPlayers: Number(info.maximumPlayers) || 100,
         };
         const respJson = new TextEncoder().encode(JSON.stringify(jsonObj) + "\n");
         s.send(respJson, origen.port, origen.address, () => {});
       } catch {}
 
-      log(`descubrimiento UDP ← ${origen.address}:${origen.port} (${esJson ? 'JSON' : 'Binario'})`);
+      // Respuesta 3: JSON Texto v3.0 si difiere de v2.0
+      if (reqVersion !== "3.0") {
+        try {
+          const jsonObj3 = {
+            type: "DISCOVER_RESPONSE",
+            protocolVersion: "3.0",
+            gameId: typeof info.gameId === 'string' ? info.gameId : `GAME-${info.gameId || 1}`,
+            serverName: info.serverName || "BladeFront",
+            tcpPort: Number(info.tcpPort) || 5000,
+            state: (info.state === 1 || info.state === 'WAITING') ? "WAITING" : "RUNNING",
+            playerCount: Number(info.playerCount) || 0,
+            maximumPlayers: Number(info.maximumPlayers) || 100,
+          };
+          const respJson3 = new TextEncoder().encode(JSON.stringify(jsonObj3) + "\n");
+          s.send(respJson3, origen.port, origen.address, () => {});
+        } catch {}
+      }
+
+      log(`descubrimiento UDP ← ${origen.address}:${origen.port} (${esJson ? 'JSON v' + reqVersion : 'Binario'})`);
     });
     return s;
   };
@@ -149,31 +169,64 @@ export function publicarServidor({
     }
   });
 
+  principal.bind(puerto, () => {
+    try { principal.setBroadcast(true); } catch {}
+    atado = true;
+    sockets.push(principal);
+    log(`descubrimiento UDP activo escuchando en 0.0.0.0:${puerto}`);
+  });
+
   const anunciarActivamente = () => {
     try {
       const info = describir();
       const respBinaria = codificar(TIPOS.DISCOVER_RESPONSE, info);
-      const jsonObj = {
+
+      const jsonObj2 = {
         type: "DISCOVER_RESPONSE",
         protocolVersion: "2.0",
-        gameId: info.gameId || 1,
+        gameId: typeof info.gameId === 'string' ? info.gameId : `GAME-${info.gameId || 1}`,
         serverName: info.serverName || "BladeFront",
-        tcpPort: info.tcpPort || 5000,
-        state: info.state === 1 || info.state === 'WAITING' ? "WAITING" : "RUNNING",
-        playerCount: info.playerCount || 0,
-        maximumPlayers: info.maximumPlayers || 100,
+        tcpPort: Number(info.tcpPort) || 5000,
+        state: (info.state === 1 || info.state === 'WAITING') ? "WAITING" : "RUNNING",
+        playerCount: Number(info.playerCount) || 0,
+        maximumPlayers: Number(info.maximumPlayers) || 100,
       };
-      const respJson = new TextEncoder().encode(JSON.stringify(jsonObj) + "\n");
+      const respJson2 = new TextEncoder().encode(JSON.stringify(jsonObj2) + "\n");
+
+      const jsonObj3 = {
+        type: "DISCOVER_RESPONSE",
+        protocolVersion: "3.0",
+        gameId: typeof info.gameId === 'string' ? info.gameId : `GAME-${info.gameId || 1}`,
+        serverName: info.serverName || "BladeFront",
+        tcpPort: Number(info.tcpPort) || 5000,
+        state: (info.state === 1 || info.state === 'WAITING') ? "WAITING" : "RUNNING",
+        playerCount: Number(info.playerCount) || 0,
+        maximumPlayers: Number(info.maximumPlayers) || 100,
+      };
+      const respJson3 = new TextEncoder().encode(JSON.stringify(jsonObj3) + "\n");
 
       for (const s of sockets) {
         try {
           s.send(respBinaria, puerto, '255.255.255.255', () => {});
           s.send(respBinaria, puerto, '26.255.255.255', () => {});
-          s.send(respJson, puerto, '255.255.255.255', () => {});
-          s.send(respJson, puerto, '26.255.255.255', () => {});
+          s.send(respJson2, puerto, '255.255.255.255', () => {});
+          s.send(respJson2, puerto, '26.255.255.255', () => {});
+          s.send(respJson3, puerto, '255.255.255.255', () => {});
+          s.send(respJson3, puerto, '26.255.255.255', () => {});
         } catch {}
       }
     } catch {}
+  };
+
+  const timerAnuncio = setInterval(anunciarActivamente, 1000);
+
+  return {
+    cerrar() {
+      clearInterval(timerAnuncio);
+      for (const s of sockets) {
+        try { s.close(); } catch {}
+      }
+    },
   };
 
   try {
