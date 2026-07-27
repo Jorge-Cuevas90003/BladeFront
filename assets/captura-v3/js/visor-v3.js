@@ -460,15 +460,32 @@ on(TIPOS.GAME_STATE, (m) => {
   $('iJugadores').textContent = m.players.length;
 
   const vistos = new Set();
+  const _vTarget = new THREE.Vector3();
   for (const p of m.players) {
     vistos.add(p.playerId);
     const k = asegurarKnight(p.playerId);
-    aMundo(p.x, p.y, k.target);
-    if (!k.colocado) { k.group.position.copy(k.target); k.colocado = true; }
-    // Un salto enorme solo puede venir de un reinicio o de un estado perdido:
-    // interpolar eso haría cruzar la arena flotando.
-    else if (k.group.position.distanceTo(k.target) > cfg.circleRadius * ESCALA) {
-      k.group.position.copy(k.target);
+    aMundo(p.x, p.y, _vTarget);
+    if (!k.colocado) {
+      k.group.position.copy(_vTarget);
+      k.target.copy(_vTarget);
+      k.colocado = true;
+    } else if (p.playerId === miId) {
+      // Reconciliación del servidor para el anfitrión/jugador local:
+      // Si la diferencia es pequeña, suavizamos suavemente el target local para mantener respuesta instantánea sin lag.
+      if (k.target.distanceTo(_vTarget) > cfg.circleRadius * ESCALA) {
+        k.group.position.copy(_vTarget);
+        k.target.copy(_vTarget);
+      } else {
+        k.target.lerp(_vTarget, 0.4);
+      }
+    } else {
+      // Para los compañeros se sigue la posición autoritativa del servidor
+      if (k.group.position.distanceTo(_vTarget) > cfg.circleRadius * ESCALA) {
+        k.group.position.copy(_vTarget);
+        k.target.copy(_vTarget);
+      } else {
+        k.target.copy(_vTarget);
+      }
     }
     k.llevaBandera = p.hasFlag;
     if (p.playerId === miId) k.marca.material.opacity = 0.55;
@@ -671,16 +688,28 @@ function frame(dtForzado) {
   const dt = dtForzado != null ? dtForzado : Math.min(reloj.getDelta(), 0.05);
   const t = reloj.elapsedTime;
 
+  // Predicción local instantánea (0ms delay) para el jugador propio mientras mantenga teclas pulsadas
+  const yoLocal = knights.get(miId);
+  if (yoLocal && ultimaDireccion !== DIRECCIONES.NONE && !terminada) {
+    const velPaso = velocidadMaxima() * dt;
+    // DIRECCIONES: UP=1, DOWN=2, LEFT=3, RIGHT=4 (§10)
+    // En las coordenadas del mundo (Three.js): -Z es UP, +Z es DOWN, -X es LEFT, +X es RIGHT (§5)
+    if (ultimaDireccion === DIRECCIONES.UP) yoLocal.target.z -= velPaso;
+    else if (ultimaDireccion === DIRECCIONES.DOWN) yoLocal.target.z += velPaso;
+    else if (ultimaDireccion === DIRECCIONES.LEFT) yoLocal.target.x -= velPaso;
+    else if (ultimaDireccion === DIRECCIONES.RIGHT) yoLocal.target.x += velPaso;
+  }
+
   for (const k of knights.values()) {
     const p = k.group.position;
     _v.subVectors(k.target, p); _v.y = 0;
     const d = _v.length();
     if (d > 0.0005) {
-      const paso = Math.min(d, velocidadMaxima() * dt);
+      const paso = Math.min(d, velocidadMaxima() * dt * 1.5);
       p.addScaledVector(_v.normalize(), paso);
       k.yaw = Math.atan2(_v.x, _v.z);
     }
-    k.group.rotation.y += (k.yaw - k.group.rotation.y) * Math.min(1, dt * 8);
+    k.group.rotation.y += (k.yaw - k.group.rotation.y) * Math.min(1, dt * 12);
     k.marca.position.set(p.x, SUELO_Y + 0.03, p.z);
 
     if (k.accion > 0) {
