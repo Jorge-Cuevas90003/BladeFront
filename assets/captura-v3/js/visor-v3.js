@@ -470,13 +470,12 @@ on(TIPOS.GAME_STATE, (m) => {
       k.target.copy(_vTarget);
       k.colocado = true;
     } else if (p.playerId === miId) {
-      // Reconciliación del servidor para el anfitrión/jugador local:
-      // Si la diferencia es pequeña, suavizamos suavemente el target local para mantener respuesta instantánea sin lag.
-      if (k.target.distanceTo(_vTarget) > cfg.circleRadius * ESCALA) {
+      // Reconciliación limpia para el jugador local:
+      // Solo corregimos si la desviación con el servidor es mayor a un umbral (por ejemplo al chocar contra un borde),
+      // evitando cualquier tiron o snap hacia atrás durante el movimiento continuo.
+      if (k.group.position.distanceTo(_vTarget) > 1.8 * ESCALA * cfg.playerSpeed) {
         k.group.position.copy(_vTarget);
         k.target.copy(_vTarget);
-      } else {
-        k.target.lerp(_vTarget, 0.4);
       }
     } else {
       // Para los compañeros se sigue la posición autoritativa del servidor
@@ -702,14 +701,23 @@ function frame(dtForzado) {
 
   for (const k of knights.values()) {
     const p = k.group.position;
-    _v.subVectors(k.target, p); _v.y = 0;
-    const d = _v.length();
-    if (d > 0.0005) {
-      const paso = Math.min(d, velocidadMaxima() * dt * 1.5);
-      p.addScaledVector(_v.normalize(), paso);
-      k.yaw = Math.atan2(_v.x, _v.z);
+    // Si es el jugador propio y se está moviendo, aplicamos la posición objetivo directamente (0ms lag)
+    if (k === yoLocal && ultimaDireccion !== DIRECCIONES.NONE && !terminada) {
+      p.copy(k.target);
+      if (ultimaDireccion === DIRECCIONES.UP) k.yaw = Math.PI;
+      else if (ultimaDireccion === DIRECCIONES.DOWN) k.yaw = 0;
+      else if (ultimaDireccion === DIRECCIONES.LEFT) k.yaw = -Math.PI / 2;
+      else if (ultimaDireccion === DIRECCIONES.RIGHT) k.yaw = Math.PI / 2;
+    } else {
+      _v.subVectors(k.target, p); _v.y = 0;
+      const d = _v.length();
+      if (d > 0.0005) {
+        const paso = Math.min(d, velocidadMaxima() * dt * 2.0);
+        p.addScaledVector(_v.normalize(), paso);
+        k.yaw = Math.atan2(_v.x, _v.z);
+      }
     }
-    k.group.rotation.y += (k.yaw - k.group.rotation.y) * Math.min(1, dt * 12);
+    k.group.rotation.y += (k.yaw - k.group.rotation.y) * Math.min(1, dt * 16);
     k.marca.position.set(p.x, SUELO_Y + 0.03, p.z);
 
     if (k.accion > 0) {
