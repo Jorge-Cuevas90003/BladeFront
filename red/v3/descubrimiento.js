@@ -110,23 +110,41 @@ export function publicarServidor({
     }
   });
 
+  const anunciarActivamente = () => {
+    try {
+      const info = describir();
+      const respuesta = codificar(TIPOS.DISCOVER_RESPONSE, info);
+      for (const s of sockets) {
+        try {
+          s.send(respuesta, puerto, '255.255.255.255', () => {});
+          s.send(respuesta, puerto, '26.255.255.255', () => {});
+        } catch {}
+      }
+    } catch {}
+  };
+
   try {
     principal.bind(puerto, () => {
       atado = true;
       try { principal.setBroadcast(true); } catch {}
       log(`descubrimiento UDP escuchando en el puerto ${puerto}`);
+      anunciarActivamente();
     });
     sockets.push(principal);
   } catch {
     intentarAtarEspecificas();
   }
 
+  const rAnuncio = setInterval(anunciarActivamente, 3000);
+
   return {
     cerrar: () => {
+      clearInterval(rAnuncio);
       for (const s of sockets) {
         try { s.close(); } catch {}
       }
     },
+    anunciar: anunciarActivamente,
     get atado() { return atado; }
   };
 }
