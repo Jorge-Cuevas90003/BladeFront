@@ -93,34 +93,17 @@ export function publicarServidor({
 
       const info = describir();
 
-      // Respuesta 1: BINARIA v3
-      try {
-        const respBinaria = codificar(TIPOS.DISCOVER_RESPONSE, info);
-        s.send(respBinaria, origen.port, origen.address, () => {});
-      } catch {}
-
-      // Respuesta 2: JSON Texto con protocolVersion igual a la pedida (v2.0 o v3.0)
-      try {
-        const jsonObj = {
-          type: "DISCOVER_RESPONSE",
-          protocolVersion: reqVersion,
-          gameId: typeof info.gameId === 'string' ? info.gameId : `GAME-${info.gameId || 1}`,
-          serverName: info.serverName || "BladeFront",
-          tcpPort: Number(info.tcpPort) || 5000,
-          state: (info.state === 1 || info.state === 'WAITING') ? "WAITING" : "RUNNING",
-          playerCount: Number(info.playerCount) || 0,
-          maximumPlayers: Number(info.maximumPlayers) || 100,
-        };
-        const respJson = new TextEncoder().encode(JSON.stringify(jsonObj) + "\n");
-        s.send(respJson, origen.port, origen.address, () => {});
-      } catch {}
-
-      // Respuesta 3: JSON Texto v3.0 si difiere de v2.0
-      if (reqVersion !== "3.0") {
+      // Enviar respuestas a origen.port, a 5001 y a 5000 en todos los formatos
+      const enviarEnTodosFormatos = (targetHost, targetPort) => {
         try {
-          const jsonObj3 = {
+          const respBinaria = codificar(TIPOS.DISCOVER_RESPONSE, info);
+          s.send(respBinaria, targetPort, targetHost, () => {});
+        } catch {}
+
+        try {
+          const jsonObj = {
             type: "DISCOVER_RESPONSE",
-            protocolVersion: "3.0",
+            protocolVersion: reqVersion,
             gameId: typeof info.gameId === 'string' ? info.gameId : `GAME-${info.gameId || 1}`,
             serverName: info.serverName || "BladeFront",
             tcpPort: Number(info.tcpPort) || 5000,
@@ -128,10 +111,31 @@ export function publicarServidor({
             playerCount: Number(info.playerCount) || 0,
             maximumPlayers: Number(info.maximumPlayers) || 100,
           };
-          const respJson3 = new TextEncoder().encode(JSON.stringify(jsonObj3) + "\n");
-          s.send(respJson3, origen.port, origen.address, () => {});
+          const respJson = new TextEncoder().encode(JSON.stringify(jsonObj) + "\n");
+          s.send(respJson, targetPort, targetHost, () => {});
         } catch {}
-      }
+
+        if (reqVersion !== "3.0") {
+          try {
+            const jsonObj3 = {
+              type: "DISCOVER_RESPONSE",
+              protocolVersion: "3.0",
+              gameId: typeof info.gameId === 'string' ? info.gameId : `GAME-${info.gameId || 1}`,
+              serverName: info.serverName || "BladeFront",
+              tcpPort: Number(info.tcpPort) || 5000,
+              state: (info.state === 1 || info.state === 'WAITING') ? "WAITING" : "RUNNING",
+              playerCount: Number(info.playerCount) || 0,
+              maximumPlayers: Number(info.maximumPlayers) || 100,
+            };
+            const respJson3 = new TextEncoder().encode(JSON.stringify(jsonObj3) + "\n");
+            s.send(respJson3, targetPort, targetHost, () => {});
+          } catch {}
+        }
+      };
+
+      enviarEnTodosFormatos(origen.address, origen.port);
+      if (origen.port !== 5001) enviarEnTodosFormatos(origen.address, 5001);
+      if (origen.port !== 5000) enviarEnTodosFormatos(origen.address, 5000);
 
       log(`descubrimiento UDP ← ${origen.address}:${origen.port} (${esJson ? 'JSON v' + reqVersion : 'Binario'})`);
     });
