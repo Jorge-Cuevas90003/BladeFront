@@ -3,8 +3,17 @@ rem UTF-8: el lanzador imprime acentos y un cuadro de resumen; sin esto salen ro
 chcp 65001 >nul
 title BladeFront - Captura la Bandera (v3)
 cd /d "%~dp0"
+
+:: Solicitar permisos de Administrador automáticamente si no se tienen
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [i] Solicitando permisos de Administrador para liberar puertos de sistema (5000/5001)...
+    powershell -NoProfile -Command "Start-Process '%~f0' -ArgumentList '%*' -Verb RunAs"
+    exit /b
+)
+
 echo ===========================================================
-echo   Iniciando BladeFront / Captura la Bandera - PRFC v3
+echo   Iniciando BladeFront / Captura la Bandera - PRFC v3 (ADMIN)
 echo.
 echo   [+] Liberando automáticamente los puertos 5000 (TCP) y 5001 (UDP)...
 powershell -NoProfile -Command "Get-Process -Name lktsrv, nidmsrv -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue" >nul 2>&1
