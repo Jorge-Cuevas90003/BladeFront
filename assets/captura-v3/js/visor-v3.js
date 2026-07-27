@@ -968,6 +968,19 @@ const IP_EXACTA = /^\d{1,3}(?:\.\d{1,3}){3}$/;
 // "26.230.5.152" y "6.169.238.102" — dos direcciones que nadie escribió y que
 // además pasan cualquier validación por rango. Partiendo y anclando, ese caso
 // se rechaza en vez de inventar destinos.
+$('btnCopiarRadmin')?.addEventListener('click', () => {
+  const ipInfo = '26.11.206.94:5000';
+  navigator.clipboard.writeText(ipInfo).then(() => {
+    aviso('📋 IP copiada al portapapeles: ' + ipInfo);
+    $('btnCopiarRadmin').textContent = '✅ ¡Copiado! (26.11.206.94:5000)';
+    setTimeout(() => {
+      $('btnCopiarRadmin').textContent = '📋 Copiar datos de conexión para mis compañeros (26.11.206.94:5000)';
+    }, 2500);
+  }).catch(() => {
+    aviso('IP de Radmin: ' + ipInfo);
+  });
+});
+
 function anadirIpManual() {
   const campo = $('ipManual');
   const trozos = campo.value.split(/[\s,;]+/).filter(Boolean);
