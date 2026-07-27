@@ -6,8 +6,13 @@ cd /d "%~dp0"
 echo ===========================================================
 echo   Iniciando BladeFront / Captura la Bandera - PRFC v3
 echo.
-echo   Servidor TCP + Bridge WebSocket + web en el puerto 8145.
-echo   Se abre solo el navegador. Ctrl+C aqui cierra todo.
+echo   [+] Liberando automáticamente los puertos 5000 (TCP) y 5001 (UDP)...
+powershell -NoProfile -Command "Get-Process -Name lktsrv, nidmsrv -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue" >nul 2>&1
+powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }" >nul 2>&1
+powershell -NoProfile -Command "Get-NetUDPEndpoint -LocalPort 5001 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }" >nul 2>&1
+
+echo   [+] Servidor TCP + Bridge WebSocket + web en el puerto 8145.
+echo   [+] Se abre solo el navegador. Ctrl+C aqui cierra todo.
 echo.
 echo   Para la version antigua (rejilla):  iniciar.bat --v1
 echo   Todas las opciones:                 iniciar.bat --ayuda
