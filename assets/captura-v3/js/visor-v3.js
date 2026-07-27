@@ -423,12 +423,14 @@ on(0x7d, () => {   // HOST_INFO: el servidor dice quién manda
 });
 
 on(TIPOS.GAME_COUNTDOWN, (m) => {
+  console.log('%c[JUEGO]%c ⏳ Conteo regresivo: ' + m.secondsRemaining + 's...', 'background: #ec4899; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;', 'color: inherit');
   bandera(`Comienza en ${m.secondsRemaining}…`);
   $('salaAviso').textContent = `Comienza en ${m.secondsRemaining}…`;
   try { renderer.compile(scene, camera); } catch {}
 });
 
 on(TIPOS.GAME_STARTED, (m) => {
+  console.log('%c[JUEGO]%c 🚀 ¡Partida iniciada! Configuración y jugadores:', 'background: #22c55e; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;', 'color: inherit', m);
   terminada = false;
   cerrarSala();
   cfg = { ...cfg, ...m };
@@ -486,6 +488,7 @@ on(TIPOS.GAME_STATE, (m) => {
 });
 
 on(TIPOS.FLAG_PICKED_UP, (m) => {
+  console.log('%c[BANDERA]%c 🚩 Bandera tomada por: ' + cliente.nombreDe(m.playerId) + ' (#' + m.playerId + ')', 'background: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;', 'color: inherit');
   const k = knights.get(m.playerId);
   if (k) k.accion = 0.55;
   aviso(`${cliente.nombreDe(m.playerId)} toma la bandera`);
@@ -493,6 +496,7 @@ on(TIPOS.FLAG_PICKED_UP, (m) => {
 });
 
 on(TIPOS.FLAG_STOLEN, (m) => {
+  console.log('%c[BANDERA]%c ⚔️ Bandera ROBADA por ' + cliente.nombreDe(m.newCarrierId) + ' a ' + cliente.nombreDe(m.previousCarrierId), 'background: #dc2626; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;', 'color: inherit');
   const k = knights.get(m.previousCarrierId);
   if (k) k.accion = 0.45;
   aviso(`${cliente.nombreDe(m.newCarrierId)} se la roba a ${cliente.nombreDe(m.previousCarrierId)}`);
@@ -501,11 +505,13 @@ on(TIPOS.FLAG_STOLEN, (m) => {
 });
 
 on(TIPOS.PLAYER_DISCONNECTED, (m) => {
+  console.log('%c[RED]%c 🚪 Jugador desconectado: #' + m.playerId, 'background: #64748b; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;', 'color: inherit');
   aviso(`${cliente.nombreDe(m.playerId)} abandona`);
   quitarKnight(m.playerId);
 });
 
 on(TIPOS.GAME_OVER, (m) => {
+  console.log('%c[JUEGO]%c 🏆 ¡PARTIDA FINALIZADA! Ganador: ' + m.winnerName + ' (ID #' + m.winnerId + ')', 'background: #eab308; color: black; padding: 2px 6px; border-radius: 4px; font-weight: bold;', 'color: inherit', m);
   terminada = true;
   const gane = m.winnerId === miId;
   bandera(gane ? '¡VICTORIA!' : `Gana ${m.winnerName}`);
@@ -516,6 +522,10 @@ on(TIPOS.GAME_OVER, (m) => {
   $('finId').textContent = `#${m.winnerId}`;
   $('finTick').textContent = cliente.estado?.tick ?? '—';
   $('modalFin')?.classList.remove('oculto');
+});
+
+on(TIPOS.ERROR, (m) => {
+  console.warn('%c[ERROR]%c 🚨 Error reportado por el servidor:', 'background: #dc2626; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;', 'color: inherit', m);
 });
 
 on(TIPOS.ERROR, (m) => {

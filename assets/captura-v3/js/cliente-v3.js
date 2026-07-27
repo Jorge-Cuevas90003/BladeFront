@@ -166,6 +166,7 @@ export class ClienteV3 extends EventTarget {
     if (host) q.set('host', host);
     if (port) q.set('port', String(port));
     const destino = q.toString() ? `${url}?${q}` : url;
+    console.log('%c[RED-WS]%c 🔌 Conectando WebSocket ->', 'background: #0284c7; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;', 'color: inherit', destino);
 
     const ws = new WebSocket(destino);
     ws.binaryType = 'arraybuffer';
@@ -178,16 +179,19 @@ export class ClienteV3 extends EventTarget {
 
     ws.onopen = () => {
       this.conectado = true;
+      console.log('%c[RED-WS]%c ✅ Conexión establecida. Enviando JOIN:', 'background: #16a34a; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;', 'color: inherit', { name: nombre });
       ws.send(enmarcar(TIPOS.JOIN, { name: nombre }));
     };
     ws.onmessage = (ev) => this._acc.alimentar(new Uint8Array(ev.data));
-    ws.onerror = () => {
+    ws.onerror = (e) => {
+      console.warn('%c[RED-WS]%c ⚠️ Error en socket WebSocket', 'background: #dc2626; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;', 'color: inherit', e);
       if (!this._cerrandoAdrede) {
         this._emitir(TIPOS.ERROR, { code: 0, description: 'no se pudo hablar con el bridge' });
       }
     };
     ws.onclose = (ev) => {
       this.conectado = false;
+      console.log('%c[RED-WS]%c 🔌 Conexión cerrada (code ' + ev.code + ')', 'background: #64748b; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;', 'color: inherit');
       if (this._cerrandoAdrede) return;
       // 4001 lo pone el bridge cuando el servidor de juego no responde: así se
       // distingue "no hay servidor" de "se cayó el bridge".
@@ -200,16 +204,26 @@ export class ClienteV3 extends EventTarget {
 
   _recibir(msg) {
     if (msg.ver !== VERSION) return;
+    const nombresTipo = {
+      0x02: 'DISCOVER_RESPONSE', 0x20: 'JOIN_ACCEPTED', 0x21: 'JOIN_REJECTED',
+      0x22: 'LOBBY_STATE', 0x23: 'GAME_COUNTDOWN', 0x24: 'GAME_STARTED',
+      0x25: 'GAME_STATE', 0x26: 'FLAG_PICKED_UP', 0x27: 'FLAG_DROPPED',
+      0x28: 'GAME_OVER', 0x29: 'HOST_INFO', 0x00: 'ERROR',
+    };
+    const tNombre = nombresTipo[msg.type] || ('0x' + msg.type.toString(16));
+    if (msg.type !== TIPOS.GAME_STATE) {
+      console.log('%c[RED-RECV]%c 📥 ' + tNombre, 'background: #9333ea; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;', 'color: inherit', msg);
+    }
+
     switch (msg.type) {
       case TIPOS.JOIN_ACCEPTED:
         this.playerId = msg.playerId;
         this.gameId = msg.gameId;
+        console.log('%c[RED]%c 🎉 JOIN_ACCEPTED -> Asignado ID #' + msg.playerId + ', Partida #' + msg.gameId, 'background: #16a34a; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;', 'color: inherit');
         this.consultarAnfitrion();
         break;
       case TIPOS.LOBBY_STATE:
         this._lobby = msg;
-        // Entrar o salir alguien puede cambiar quién manda: se vuelve a
-        // preguntar en vez de suponer que sigue igual.
         this.consultarAnfitrion();
         break;
 
@@ -217,6 +231,7 @@ export class ClienteV3 extends EventTarget {
         this.hostId = msg.hostId;
         this.soyAnfitrion = msg.hostId !== 0 && msg.hostId === this.playerId;
         this.puedoEmpezar = msg.puedesEmpezar;
+        console.log('%c[RED-HOST]%c 👑 Anfitrión ID #' + msg.hostId + ' | ¿Soy Anfitrión?: ' + (this.soyAnfitrion ? 'SÍ' : 'NO') + ' | ¿Puedo Empezar?: ' + (this.puedoEmpezar ? 'SÍ' : 'NO'), 'background: #d97706; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;', 'color: inherit');
         break;
     }
     this._emitir(msg.type, msg);
