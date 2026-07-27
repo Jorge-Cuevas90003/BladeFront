@@ -101,11 +101,45 @@ export class MotorV3 {
 
   // Marca una desconexión. NO se aplica al instante: se procesa en el paso 8
   // del ciclo (§30), para que la baja y su evento caigan en un tick definido.
+  //
+  // Mientras la partida no está corriendo no hay ciclo que la procese, así que
+  // ahí se aplica en el acto: si no, el jugador se quedaría marcado como
+  // conectado para siempre y ocuparía sitio en una sala en la que ya no está.
   desconectar(playerId) {
     const j = this.jugadores.get(playerId);
     if (!j || !j.connected) return false;
-    this._desconexiones.add(playerId);
+    if (this.estado === ESTADO_PARTIDA.RUNNING) {
+      this._desconexiones.add(playerId);
+    } else {
+      j.connected = false;
+      j.hasFlag = false;
+      this.jugadores.delete(playerId);
+    }
     return true;
+  }
+
+  // Deja la sala como recién arrancada: sin jugadores, sin bandera en manos de
+  // nadie y sin ganador. Es lo que hay que hacer al terminar una partida.
+  //
+  // Vaciar el censo es la parte que importa. Antes solo se marcaba
+  // `connected = false`, y el jugador seguía dentro del Map para siempre: la
+  // sala siguiente lo listaba, contaba para el aforo y, tras unas cuantas
+  // partidas, el servidor rechazaba con GAME_FULL sin nadie dentro.
+  //
+  // Los identificadores NO se reinician: _seq sigue creciendo. Reutilizarlos
+  // haría que un mensaje rezagado de la partida anterior —uno que aún viaja por
+  // la red cuando ya empezó la siguiente— cayera sobre un jugador distinto que
+  // resulta tener el mismo número.
+  reiniciarSala() {
+    this.jugadores.clear();
+    this.estado = ESTADO_PARTIDA.WAITING;
+    this.tick = 0;
+    this.ganadorId = 0;
+    this.bandera = { x: 0, y: 0, status: ESTADO_BANDERA.AVAILABLE, carrierId: 0 };
+    this._protegidaHasta = -1;
+    this._inputs.clear();
+    this._interacts.clear();
+    this._desconexiones.clear();
   }
 
   // --- intención del cliente (§28) ------------------------------------------

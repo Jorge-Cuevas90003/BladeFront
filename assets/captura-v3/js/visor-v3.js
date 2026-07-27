@@ -31,7 +31,7 @@ import { crearMonumentos } from '../../arena-vacio/js/monumentos.js';
 
 import { ClienteV3 } from './cliente-v3.js';
 import { crearVisor2D } from './visor-2d.js';
-import { TIPOS, DIRECCIONES, ESTADO_BANDERA, ESTADO_PARTIDA, PARAMS_DEFECTO } from '../../../red/v3/protocolo-v3.js';
+import { TIPOS, DIRECCIONES, ESTADO_BANDERA, ESTADO_PARTIDA, ERRORES, PARAMS_DEFECTO } from '../../../red/v3/protocolo-v3.js';
 
 // ---------------------------------------------------------------------------
 //  Render, escena y cámara
@@ -365,7 +365,7 @@ $('salaEmpezar')?.addEventListener('click', () => {
   // botón muerto para siempre.
   setTimeout(() => { $('salaEmpezar').disabled = false; }, 2500);
 });
-$('salaSalir')?.addEventListener('click', () => { cerrarSala(); alMenu(); });
+$('salaSalir')?.addEventListener('click', volverAlMenu);
 
 on(0x7d, () => {   // HOST_INFO: el servidor dice quién manda
   if (cliente._lobby?.players) pintarSala(cliente._lobby.players);
@@ -467,6 +467,18 @@ on(TIPOS.GAME_OVER, (m) => {
 });
 
 on(TIPOS.ERROR, (m) => {
+  // Al acabar la partida el servidor avisa con GAME_FINISHED y cierra la
+  // conexión: eso NO es un fallo, es el final previsto. Si se pinta como error
+  // el jugador ve "Error: se perdió la conexión" justo encima del cartel de
+  // victoria y parece que se ha roto algo.
+  if (terminada || m.code === ERRORES.GAME_FINISHED) {
+    $('iConn').textContent = 'Partida cerrada';
+    aviso('La partida ha terminado');
+    // Si el modal de resultado no llegó a salir (por ejemplo, porque el
+    // anfitrión canceló), al menos que quede claro por qué se cortó.
+    if (!terminada) bandera(m.description || 'La partida ha terminado');
+    return;
+  }
   aviso('Error: ' + (m.description || m.code));
   $('iConn').textContent = 'Error';
   bandera(m.description || 'Error de red');
@@ -692,20 +704,36 @@ function entrar() {
   }
 }
 
-function alMenu() {
-  $('sala')?.classList.add('oculto');
+// Un ÚNICO camino de vuelta al menú, y deja el cliente en el mismo estado en
+// que arrancó la página.
+//
+// Antes había dos funciones registradas a la vez sobre los mismos botones.
+// "Otra partida" llamaba a entrar() y acto seguido la otra volvía a sacar el
+// menú: reconectaba y se quedaba en el menú al mismo tiempo. Y esa segunda
+// llamaba a cliente.desconectar(), que no existe — el método se llama
+// detener(). Solo no reventaba de milagro, porque para cuando le tocaba el
+// turno `conectado` ya era false y la línea se saltaba.
+function volverAlMenu() {
+  cerrarSala();
   cliente.detener();
   limpiarKnights();
   miId = 0;
+  terminada = false;
   $('menu').classList.remove('oculto');
   $('modalFin')?.classList.add('oculto');
+  $('modalEspera')?.classList.add('oculto');
   $('iConn').textContent = '—';
+  // Al terminar una partida el servidor echa a todo el mundo y su sala queda
+  // libre; volver a sondear enseguida hace que aparezca ya vacía en la lista.
+  setTimeout(sondearServidores, 50);
 }
 
 $('jugar').addEventListener('click', entrar);
-$('reset').addEventListener('click', alMenu);
-$('finMenu')?.addEventListener('click', alMenu);
-$('finOtra')?.addEventListener('click', () => { $('modalFin').classList.add('oculto'); entrar(); });
+$('reset').addEventListener('click', volverAlMenu);
+$('finMenu')?.addEventListener('click', volverAlMenu);
+// "Otra partida" es volver al menú y entrar de nuevo: el servidor cerró la
+// conexión al acabar, así que hay que rehacerla entera, no solo tapar el modal.
+$('finOtra')?.addEventListener('click', () => { volverAlMenu(); entrar(); });
 
 // ---------------------------------------------------------------------------
 //  Descubrimiento automático de partidas
@@ -911,17 +939,8 @@ $('ipManual')?.addEventListener('keydown', (e) => {
   e.stopPropagation(); // que WASD no mueva al caballero mientras se escribe
 });
 
-function salirYLimpiarAMenu() {
-  $('modalFin')?.classList.add('oculto');
-  $('modalEspera')?.classList.add('oculto');
-  $('menu')?.classList.remove('oculto');
-  terminada = false;
-  if (cliente.conectado) cliente.desconectar();
-  setTimeout(sondearServidores, 50);
-}
-
-$('finOtra')?.addEventListener('click', salirYLimpiarAMenu);
-$('finMenu')?.addEventListener('click', salirYLimpiarAMenu);
+// (Aquí vivía una segunda salida al menú, registrada además de la de arriba
+//  sobre los mismos dos botones. Está en volverAlMenu(), que es la única.)
 
 setInterval(sondearServidores, INTERVALO_BUSQUEDA);
 // Al cambiar a modo red se sondea ya, sin esperar al siguiente ciclo.

@@ -59,6 +59,9 @@ export function crearServidor({
   udp = true,
   puertoUdp = PARAMS_DEFECTO.discoveryPort,
   keepAliveMs = 10000,
+  // Margen de cortesía entre el GAME_OVER y el desalojo: el tiempo que se les
+  // deja a todos para ver quién ganó antes de cortarles la conexión.
+  msTrasFinal = 4000,
   verboso = false,
   log = () => {},
 } = {}) {
@@ -279,26 +282,47 @@ export function crearServidor({
         const g = juego.jugadores.get(juego.ganadorId);
         log(`== fin: gana ${juego.ganadorId} "${g?.name ?? '?'}" en el tick ${juego.tick} ==`);
 
-        setTimeout(() => {
-          log('== finalizando conexiones de partida terminada y reseteando sala ==');
-          juego.estado = ESTADO_PARTIDA.WAITING;
-          juego.tick = 0;
-          juego.bandera = { x: 0, y: 0, status: ESTADO_BANDERA.AVAILABLE, carrierId: 0 };
-          juego.ganadorId = 0;
-          anfitrionId = 0;
-          for (const j of juego.jugadores.values()) {
-            j.hasFlag = false;
-            j.direction = DIRECCIONES.NONE;
-          }
-          // Cierra las conexiones activas al terminar la partida para que todos regresen limpios al menú
-          for (const [sock] of conexiones.entries()) {
-            try { enviar(sock, TIPOS.ERROR, { code: ERRORES.GAME_FINISHED, description: 'La partida ha finalizado.' }); } catch {}
-            try { sock.end(); } catch {}
-          }
-          conexiones.clear();
-        }, 4000);
+        // Margen de cortesía para que a todos les dé tiempo a ver el resultado
+        // antes de que se les eche.
+        setTimeout(desalojarYReiniciar, msTrasFinal);
       }
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  //  Desalojo y vuelta a empezar.
+  //
+  //  Cerrar los sockets NO basta y ese fue el fallo: el mapa `conexiones` se
+  //  vaciaba en el acto, pero Node emite los 'close' de los sockets en el
+  //  siguiente turno del bucle de eventos. Cuando el manejador de 'close'
+  //  llegaba, ya no encontraba su entrada, se salía por la primera línea y no
+  //  daba de baja a nadie. Los jugadores se quedaban dentro del motor marcados
+  //  como conectados: la sala siguiente los listaba, contaban para el aforo y
+  //  tras unas partidas el servidor rechazaba con GAME_FULL sin nadie dentro.
+  //
+  //  Ahora el orden es al revés: primero se vacía el motor —que es la fuente de
+  //  la verdad— y luego se cierran los sockets. Los 'close' que lleguen tarde
+  //  encuentran una sala ya limpia y no tienen nada que deshacer, así que da
+  //  igual cuándo lleguen.
+  // ---------------------------------------------------------------------------
+  function desalojarYReiniciar(motivo = 'La partida ha finalizado.') {
+    if (bucle) { bucle.detener(); bucle = null; }
+    if (cuenta) { cuenta.detener(); cuenta = null; }
+
+    const cuantos = juego.jugadores.size;
+    juego.reiniciarSala();
+    anfitrionId = 0;
+
+    // Marcar la conexión como "ya desalojada" antes de cerrarla: así el 'close'
+    // que llegue después sabe que su baja ya está hecha y no toca nada.
+    for (const [sock, info] of conexiones.entries()) {
+      info.playerId = 0;
+      info.desalojado = true;
+      try { enviar(sock, TIPOS.ERROR, { code: ERRORES.GAME_FINISHED, description: motivo }); } catch {}
+      try { sock.end(); } catch {}
+    }
+    conexiones.clear();
+    log(`== sala vaciada: ${cuantos} jugador(es) desalojado(s), esperando una partida nueva ==`);
   }
 
   // --- socket TCP ------------------------------------------------------------
@@ -340,11 +364,11 @@ export function crearServidor({
     socket.on('close', () => {
       const info = conexiones.get(socket);
       conexiones.delete(socket);
-      if (!info?.playerId) return;
+      // Sin playerId no había jugador al que dar de baja. `desalojado` marca a
+      // quien ya se limpió al terminar la partida: su 'close' llega después de
+      // que la sala se vaciara y no queda nada que deshacer.
+      if (!info?.playerId || info.desalojado) return;
 
-      // La baja se ENCOLA: el motor la aplica en el paso 8 de su ciclo (§30.8),
-      // así que el evento cae en un tick definido y no en un instante suelto.
-      juego.desconectar(info.playerId);
       log('- se fue el jugador', info.playerId);
 
       // Si se va el ANFITRIÓN se cancela la partida y la sala vuelve a esperar.
@@ -370,10 +394,22 @@ export function crearServidor({
         juego.tick = 0;
         juego.bandera = { x: 0, y: 0, status: ESTADO_BANDERA.AVAILABLE, carrierId: 0 };
         juego.ganadorId = 0;
+        for (const j of juego.jugadores.values()) j.hasFlag = false;
       }
 
-      const j = juego.jugadores.get(info.playerId);
-      if (j) j.connected = false;
+      // La baja va DESPUÉS de decidir si la partida se cancela, y no antes: el
+      // motor la aplica en el acto si la sala está parada y la encola para el
+      // paso 8 del ciclo (§30.8) si sigue corriendo. Al revés, la baja del
+      // anfitrión se encolaba y acto seguido se paraba el bucle que tenía que
+      // procesarla, y se quedaba dentro para siempre.
+      //
+      // Y aquí NO se toca `connected` a mano. Ponerlo a false justo después de
+      // encolar hacía que el paso 8 se saltara la baja —comprueba
+      // `if (!j.connected) continue`—, así que no se emitía
+      // PLAYER_DISCONNECTED y, si el que se iba llevaba la bandera, no la
+      // soltaba: se quedaba pegada a alguien que ya no estaba y la partida no
+      // podía terminar nunca.
+      juego.desconectar(info.playerId);
       if (juego.jugadoresActivos().length === 0) anfitrionId = 0;
 
       if (juego.estado === ESTADO_PARTIDA.WAITING || juego.estado === ESTADO_PARTIDA.STARTING) {
