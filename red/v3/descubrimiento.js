@@ -63,16 +63,57 @@ export function publicarServidor({
   const crearRespondedor = (ip = undefined) => {
     const s = dgram.createSocket({ type: 'udp4', reuseAddr: true });
     s.on('message', (datos, origen) => {
-      let msg;
-      try { msg = decodificar(datos); } catch { return; }
-      if (msg.type !== TIPOS.DISCOVER_REQUEST || msg.ver !== VERSION) return;
+      let esJson = false;
+      let msg = null;
+
+      // 1. Decodificar JSON texto (para clientes Java/C#/Python de los compañeros)
+      try {
+        const texto = new TextDecoder('utf-8').decode(datos).trim();
+        if (texto.startsWith('{') && texto.endsWith('}')) {
+          const obj = JSON.parse(texto);
+          if (obj.type === 'DISCOVER_REQUEST' || obj.type === 0x01 || obj.type === 1) {
+            esJson = true;
+            msg = { type: TIPOS.DISCOVER_REQUEST, ver: VERSION };
+          }
+        }
+      } catch {}
+
+      // 2. Decodificar Binario v3 si no fue JSON
+      if (!msg) {
+        try {
+          msg = decodificar(datos);
+        } catch {
+          return;
+        }
+      }
+
+      if (msg.type !== TIPOS.DISCOVER_REQUEST) return;
 
       const info = describir();
-      const respuesta = codificar(TIPOS.DISCOVER_RESPONSE, info);
-      s.send(respuesta, origen.port, origen.address, (err) => {
-        if (err) log('error respondiendo descubrimiento:', err.message);
-      });
-      log(`descubrimiento ← ${origen.address}:${origen.port}${ip ? ' (interfaz ' + ip + ')' : ''}`);
+
+      // Enviar respuesta BINARIA v3
+      try {
+        const respBinaria = codificar(TIPOS.DISCOVER_RESPONSE, info);
+        s.send(respBinaria, origen.port, origen.address, () => {});
+      } catch {}
+
+      // Enviar TAMBIÉN respuesta JSON texto (para Java / C# / Python)
+      try {
+        const jsonObj = {
+          type: "DISCOVER_RESPONSE",
+          protocolVersion: "2.0",
+          gameId: info.gameId || 1,
+          serverName: info.serverName || "BladeFront",
+          tcpPort: info.tcpPort || 5000,
+          state: info.state === 1 || info.state === 'WAITING' ? "WAITING" : "RUNNING",
+          playerCount: info.playerCount || 0,
+          maximumPlayers: info.maximumPlayers || 100,
+        };
+        const respJson = new TextEncoder().encode(JSON.stringify(jsonObj) + "\n");
+        s.send(respJson, origen.port, origen.address, () => {});
+      } catch {}
+
+      log(`descubrimiento UDP ← ${origen.address}:${origen.port} (${esJson ? 'JSON' : 'Binario'})`);
     });
     return s;
   };
@@ -111,11 +152,25 @@ export function publicarServidor({
   const anunciarActivamente = () => {
     try {
       const info = describir();
-      const respuesta = codificar(TIPOS.DISCOVER_RESPONSE, info);
+      const respBinaria = codificar(TIPOS.DISCOVER_RESPONSE, info);
+      const jsonObj = {
+        type: "DISCOVER_RESPONSE",
+        protocolVersion: "2.0",
+        gameId: info.gameId || 1,
+        serverName: info.serverName || "BladeFront",
+        tcpPort: info.tcpPort || 5000,
+        state: info.state === 1 || info.state === 'WAITING' ? "WAITING" : "RUNNING",
+        playerCount: info.playerCount || 0,
+        maximumPlayers: info.maximumPlayers || 100,
+      };
+      const respJson = new TextEncoder().encode(JSON.stringify(jsonObj) + "\n");
+
       for (const s of sockets) {
         try {
-          s.send(respuesta, puerto, '255.255.255.255', () => {});
-          s.send(respuesta, puerto, '26.255.255.255', () => {});
+          s.send(respBinaria, puerto, '255.255.255.255', () => {});
+          s.send(respBinaria, puerto, '26.255.255.255', () => {});
+          s.send(respJson, puerto, '255.255.255.255', () => {});
+          s.send(respJson, puerto, '26.255.255.255', () => {});
         } catch {}
       }
     } catch {}
