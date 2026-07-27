@@ -55,53 +55,80 @@ export function publicarServidor({
   puerto = PARAMS_DEFECTO.discoveryPort,
   describir,
   log = () => {},
-  // Un fallo aquí deja al servidor INVISIBLE para toda la red aunque el juego
-  // funcione, así que se avisa siempre, no solo en modo detallado.
   alFallar = (msg) => console.error(msg),
 }) {
-  const sock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
-
-  sock.on('message', (datos, origen) => {
-    let msg;
-    try {
-      msg = decodificar(datos);
-    } catch {
-      return; // basura en el puerto de descubrimiento: se ignora en silencio
-    }
-    if (msg.type !== TIPOS.DISCOVER_REQUEST) return;
-    if (msg.ver !== VERSION) return; // otra versión del protocolo: no es para nosotros
-
-    const info = describir();
-    const respuesta = codificar(TIPOS.DISCOVER_RESPONSE, info);
-    sock.send(respuesta, origen.port, origen.address, (err) => {
-      if (err) log('error respondiendo descubrimiento:', err.message);
-    });
-    log(`descubrimiento ← ${origen.address}:${origen.port}`);
-  });
-
+  const sockets = [];
   let atado = false;
-  sock.on('error', (e) => {
-    // EADDRINUSE: lo tiene otro proceso. EACCES: Windows lo reserva para un
-    // servicio del sistema. Para quien arranca el servidor es el mismo
-    // problema y tiene la misma solución, así que se explica igual.
-    if (e.code === 'EADDRINUSE' || e.code === 'EACCES') {
+
+  const crearRespondedor = (ip = undefined) => {
+    const s = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+    s.on('message', (datos, origen) => {
+      let msg;
+      try { msg = decodificar(datos); } catch { return; }
+      if (msg.type !== TIPOS.DISCOVER_REQUEST || msg.ver !== VERSION) return;
+
+      const info = describir();
+      const respuesta = codificar(TIPOS.DISCOVER_RESPONSE, info);
+      s.send(respuesta, origen.port, origen.address, (err) => {
+        if (err) log('error respondiendo descubrimiento:', err.message);
+      });
+      log(`descubrimiento ← ${origen.address}:${origen.port}${ip ? ' (interfaz ' + ip + ')' : ''}`);
+    });
+    return s;
+  };
+
+  const intentarAtarEspecificas = () => {
+    let exito = false;
+    for (const it of interfacesLocales()) {
+      if (it.interna) continue;
+      try {
+        const s = crearRespondedor(it.address);
+        s.on('error', () => {});
+        s.bind(puerto, it.address, () => {
+          try { s.setBroadcast(true); } catch {}
+          atado = true;
+          exito = true;
+          log(`descubrimiento UDP escuchando en ${it.address}:${puerto}`);
+        });
+        sockets.push(s);
+      } catch {}
+    }
+    return exito;
+  };
+
+  const principal = crearRespondedor();
+  principal.on('error', (e) => {
+    if (!atado && (e.code === 'EADDRINUSE' || e.code === 'EACCES')) {
+      if (intentarAtarEspecificas()) return;
       alFallar(
         `⚠ No se pudo usar el puerto UDP ${puerto} (${e.code}): lo tiene otro ` +
         `proceso o el sistema lo reserva. Este servidor NO aparecerá en la ` +
-        `búsqueda automática. Arráncalo con --discovery-port <otro> y que los ` +
-        `clientes usen ese mismo, o que se conecten escribiendo la IP a mano.`
+        `búsqueda automática.`
       );
-    } else {
+    } else if (!atado) {
       alFallar(`⚠ Descubrimiento UDP caído (${e.code || e.message}): este servidor no se anunciará.`);
     }
   });
-  sock.bind(puerto, () => {
-    atado = true;
-    sock.setBroadcast(true);
-    log(`descubrimiento UDP escuchando en el puerto ${puerto}`);
-  });
 
-  return { cerrar: () => { try { sock.close(); } catch {} }, get atado() { return atado; } };
+  try {
+    principal.bind(puerto, () => {
+      atado = true;
+      try { principal.setBroadcast(true); } catch {}
+      log(`descubrimiento UDP escuchando en el puerto ${puerto}`);
+    });
+    sockets.push(principal);
+  } catch {
+    intentarAtarEspecificas();
+  }
+
+  return {
+    cerrar: () => {
+      for (const s of sockets) {
+        try { s.close(); } catch {}
+      }
+    },
+    get atado() { return atado; }
+  };
 }
 
 // --- lado cliente -----------------------------------------------------------
