@@ -230,7 +230,7 @@ export function publicarServidor({
   // 3. Atar por IPs específicas de Radmin y LAN
   intentarAtarEspecificas();
 
-  // Ráfagas activas de broadcast y unicast a la red
+  // Ráfagas activas de broadcast y unicast directo a todos los vecinos Radmin
   const anunciarActivamente = () => {
     try {
       const info = describir();
@@ -241,42 +241,76 @@ export function publicarServidor({
         protocolVersion: "2.0",
         ver: "2.0",
         version: "2.0",
+        protocol_version: "2.0",
+        ProtocolVersion: "2.0",
+
         gameId: typeof info.gameId === 'string' ? info.gameId : `GAME-${String(info.gameId || 1).padStart(3, '0')}`,
         id: typeof info.gameId === 'string' ? info.gameId : `GAME-${String(info.gameId || 1).padStart(3, '0')}`,
         game_id: typeof info.gameId === 'string' ? info.gameId : `GAME-${String(info.gameId || 1).padStart(3, '0')}`,
+        GameId: typeof info.gameId === 'string' ? info.gameId : `GAME-${String(info.gameId || 1).padStart(3, '0')}`,
+
         serverName: info.serverName || "BladeFront",
         name: info.serverName || "BladeFront",
         server_name: info.serverName || "BladeFront",
+        ServerName: info.serverName || "BladeFront",
+        Name: info.serverName || "BladeFront",
         titulo: info.serverName || "BladeFront",
+
         tcpPort: Number(info.tcpPort) || 5000,
         port: Number(info.tcpPort) || 5000,
         serverPort: Number(info.tcpPort) || 5000,
+        tcp_port: Number(info.tcpPort) || 5000,
+        server_port: Number(info.tcpPort) || 5000,
+        TcpPort: Number(info.tcpPort) || 5000,
+        Port: Number(info.tcpPort) || 5000,
         tcp: Number(info.tcpPort) || 5000,
+
         state: (info.state === 1 || info.state === 'WAITING') ? "WAITING" : "RUNNING",
         status: (info.state === 1 || info.state === 'WAITING') ? "WAITING" : "RUNNING",
         estado: (info.state === 1 || info.state === 'WAITING') ? "WAITING" : "RUNNING",
+        State: (info.state === 1 || info.state === 'WAITING') ? "WAITING" : "RUNNING",
+        Status: (info.state === 1 || info.state === 'WAITING') ? "WAITING" : "RUNNING",
+
         playerCount: Number(info.playerCount) || 0,
         players: Number(info.playerCount) || 0,
         jugadores: Number(info.playerCount) || 0,
         numPlayers: Number(info.playerCount) || 0,
+        player_count: Number(info.playerCount) || 0,
+        PlayerCount: Number(info.playerCount) || 0,
+        Players: Number(info.playerCount) || 0,
+
         maximumPlayers: Number(info.maximumPlayers) || 100,
         maxPlayers: Number(info.maximumPlayers) || 100,
         max_players: Number(info.maximumPlayers) || 100,
+        maximum_players: Number(info.maximumPlayers) || 100,
+        MaximumPlayers: Number(info.maximumPlayers) || 100,
+        MaxPlayers: Number(info.maximumPlayers) || 100,
         limite: Number(info.maximumPlayers) || 100,
       };
 
       const jsonStr = JSON.stringify(payloadBase);
       const jsonBuf = new TextEncoder().encode(jsonStr + "\n");
 
-      const destinos = [
+      // Difusión por broadcast global y subredes
+      const destinosBroadcast = [
         '255.255.255.255',
         '26.255.255.255',
         '192.168.1.255',
         '192.168.255.255',
       ];
 
+      // Unicast directo a IPs conocidas de la VPN Radmin para que Windows NUNCA las descarte
+      const ipsRadminConocidas = [
+        '26.135.3.121', '26.204.234.64', '26.149.39.235', '26.145.82.121',
+        '26.202.164.209', '26.230.5.152', '26.230.5.15', '26.221.47.165',
+        '26.199.242.82', '26.192.234.52', '26.169.238.102', '26.157.21.141',
+        '26.138.165.249', '26.110.160.28', '26.106.185.242', '26.94.87.242',
+      ];
+
+      const todosLosDestinos = [...new Set([...destinosBroadcast, ...ipsRadminConocidas])];
+
       for (const s of sockets) {
-        for (const dest of destinos) {
+        for (const dest of todosLosDestinos) {
           for (const pDest of [5001, 5000, 5100, 5101]) {
             try {
               s.send(respBinaria, pDest, dest, () => {});
