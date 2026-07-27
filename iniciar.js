@@ -415,16 +415,6 @@ for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => cerrarTodo(0));
 let udp = { puerto: PUERTO_UDP_PEDIDO, cambiado: false, motivo: null };
 const puertoTcpFinal = await elegirPuertoTcp(PUERTO_TCP);
 
-if (MODO.descubrimiento) {
-  udp = await elegirPuertoUdp(PUERTO_UDP_PEDIDO);
-  if (udp.sinAlternativa) {
-    aviso(
-      `no encontré ningún puerto UDP libre desde el ${PUERTO_UDP_PEDIDO}; ` +
-      `sigo con el ${udp.puerto}, pero puede que la partida no aparezca en la búsqueda automática.`
-    );
-  }
-}
-
 try {
   await escucharWeb();
 } catch (e) {
