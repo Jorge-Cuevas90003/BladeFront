@@ -7,7 +7,7 @@ cd /d "%~dp0"
 :: Solicitar permisos de Administrador automáticamente si no se tienen
 net session >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [i] Solicitando permisos de Administrador para liberar puertos de sistema (5000/5001)...
+    echo [i] Solicitando permisos de Administrador para liberar puertos y habilitar Firewall...
     powershell -NoProfile -Command "Start-Process '%~f0' -ArgumentList '%*' -Verb RunAs"
     exit /b
 )
@@ -19,6 +19,10 @@ echo   [+] Liberando automáticamente los puertos 5000 (TCP) y 5001 (UDP)...
 powershell -NoProfile -Command "Get-Process -Name lktsrv, nidmsrv -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue" >nul 2>&1
 powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }" >nul 2>&1
 powershell -NoProfile -Command "Get-NetUDPEndpoint -LocalPort 5001 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }" >nul 2>&1
+
+echo   [+] Habilitando reglas de Firewall para TCP 5000 y UDP 5001...
+powershell -NoProfile -Command "New-NetFirewallRule -DisplayName 'BladeFront TCP 5000' -Direction Inbound -LocalPort 5000 -Protocol TCP -Action Allow -ErrorAction SilentlyContinue" >nul 2>&1
+powershell -NoProfile -Command "New-NetFirewallRule -DisplayName 'BladeFront UDP 5001' -Direction Inbound -LocalPort 5001 -Protocol UDP -Action Allow -ErrorAction SilentlyContinue" >nul 2>&1
 
 echo   [+] Servidor TCP + Bridge WebSocket + web en el puerto 8145.
 echo   [+] Se abre solo el navegador. Ctrl+C aqui cierra todo.
