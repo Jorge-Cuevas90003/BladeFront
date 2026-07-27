@@ -197,12 +197,13 @@ scene.add(haz);
 // ---------------------------------------------------------------------------
 let testigos = null;
 function colocarMonumentos() {
-  if (testigos) scene.remove(testigos.group);
   const rc = cfg.circleRadius * ESCALA;
   const radio = Math.min(R * 0.88, rc + (R - rc) * 0.6);
-  // La estatua se dimensiona contra el hueco disponible entre el círculo y el
-  // borde: en mapas con un círculo enorme deben encoger o se saldrían del disco.
   const escala = Math.max(0.5, Math.min(1.15, (R - rc) * 0.16));
+  if (testigos) {
+    testigos.group.scale.setScalar(escala);
+    return;
+  }
   testigos = crearMonumentos({ cantidad: 12, radio, escala });
   testigos.group.position.y = SUELO_Y;
   scene.add(testigos.group);
@@ -352,6 +353,13 @@ function pintarSala(jugadores) {
       // Sin anfitrión conectado nadie puede dar la salida: el dueño de la
       // partida tiene que entrar desde su propia máquina.
       : 'El anfitrión no está conectado. La partida no puede empezar hasta que entre.';
+  // Precargar modelos 3D y compilar WebGL shaders durante la espera
+  for (const p of jugadores) {
+    const k = asegurarKnight(p.playerId);
+    if (!k.colocado) k.group.position.set(0, -999, 0);
+  }
+  try { renderer.compile(scene, camera); } catch {}
+
   $('sala').classList.remove('oculto');
 }
 
@@ -374,6 +382,7 @@ on(0x7d, () => {   // HOST_INFO: el servidor dice quién manda
 on(TIPOS.GAME_COUNTDOWN, (m) => {
   bandera(`Comienza en ${m.secondsRemaining}…`);
   $('salaAviso').textContent = `Comienza en ${m.secondsRemaining}…`;
+  try { renderer.compile(scene, camera); } catch {}
 });
 
 on(TIPOS.GAME_STARTED, (m) => {
