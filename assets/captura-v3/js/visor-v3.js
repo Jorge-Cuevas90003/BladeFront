@@ -820,20 +820,26 @@ function pintarServidores() {
   const lista = $('listaServidores');
   const estado = $('estadoBusqueda');
 
-  if (servidoresVistos.size === 0) {
-    if (!lista.querySelector('.vacio')) lista.innerHTML = '';
-    if (!lista.children.length) {
-      const li = document.createElement('li');
-      li.className = 'vacio';
-      li.textContent = 'Ninguna partida abierta todavía';
-      lista.appendChild(li);
-    }
-    return;
+  // Asegurar entrada de "Mi Propio Servidor (Host Local)" al inicio de la lista
+  const claveLocal = '127.0.0.1:5000';
+  if (!lista.querySelector(`[data-clave="${claveLocal}"]`)) {
+    const liLocal = document.createElement('li');
+    liLocal.dataset.clave = claveLocal;
+    liLocal.innerHTML = `<b>🏠 Mi Propio Servidor (Host Local)</b><span class="via">◎</span><span>127.0.0.1:5000</span><span class="estado abierta">HOST</span>`;
+    liLocal.addEventListener('click', () => {
+      seleccionado = claveLocal;
+      $('host').value = '127.0.0.1';
+      $('puerto').value = '5000';
+      for (const otro of lista.children) otro.classList.toggle('on', otro === liLocal);
+    });
+    lista.prepend(liLocal);
   }
+
   lista.querySelector('.vacio')?.remove();
 
-  const claves = new Set();
+  const claves = new Set([claveLocal]);
   for (const [clave, s] of servidoresVistos) {
+    if (clave === claveLocal || s.host === '127.0.0.1' || s.host === 'localhost') continue;
     claves.add(clave);
     let li = lista.querySelector(`[data-clave="${CSS.escape(clave)}"]`);
     const nuevo = !li;
@@ -855,30 +861,23 @@ function pintarServidores() {
     const lleno = s.playerCount >= s.maximumPlayers;
     const cls = esSinServicio ? 'sin-servicio' : (lleno ? 'llena' : (s.state === ESTADO_PARTIDA.WAITING ? 'abierta' : 'jugando'));
     const txt = esSinServicio ? 'SIN SERVICIO EN 5000' : (lleno ? 'LLENA' : (s.state === ESTADO_PARTIDA.WAITING ? 'ABIERTA' : 'EN JUEGO'));
-    // `via` dice si respondió al broadcast, sondeo directo o vecino Radmin sin servicio.
     const via = s.via === 'sin-servicio'
       ? '<span class="via" title="Compañero activo en Radmin VPN (sin servicio en puerto 5000)">◌</span>'
       : (s.via === 'directo'
-        ? '<span class="via" title="respondió a un sondeo dirigido, no al broadcast">⇢</span>'
-        : '<span class="via" title="respondió al broadcast de la red">◎</span>');
+        ? '<span class="via" title="respondió a un sondeo dirigido">⇢</span>'
+        : '<span class="via" title="respondió al broadcast">◎</span>');
     li.innerHTML = `<b>${s.serverName}</b>` + via +
       `<span>${s.host}:${s.tcpPort}${esSinServicio ? '' : ` · ${s.playerCount}/${s.maximumPlayers}`}</span>` +
       `<span class="estado ${cls}">${txt}</span>`;
     li.classList.toggle('on', clave === seleccionado);
   }
 
-  // Fuera los que dejaron de responder.
+  // Fuera los que dejaron de responder
   for (const li of [...lista.children]) {
     if (li.dataset.clave && !claves.has(li.dataset.clave)) {
       if (li.dataset.clave === seleccionado) seleccionado = null;
       li.remove();
     }
-  }
-
-  // Con una sola partida a la vista, se preselecciona: es lo que casi siempre
-  // se quiere y ahorra un clic.
-  if (!seleccionado && servidoresVistos.size === 1) {
-    lista.children[0]?.click();
   }
 }
 
