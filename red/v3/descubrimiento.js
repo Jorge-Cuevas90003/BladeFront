@@ -104,12 +104,17 @@ export function publicarServidor({
           const jsonObj = {
             type: "DISCOVER_RESPONSE",
             protocolVersion: reqVersion,
-            gameId: typeof info.gameId === 'string' ? info.gameId : `GAME-${info.gameId || 1}`,
+            gameId: typeof info.gameId === 'string' ? info.gameId : `GAME-${String(info.gameId || 1).padStart(3, '0')}`,
             serverName: info.serverName || "BladeFront",
+            name: info.serverName || "BladeFront",
             tcpPort: Number(info.tcpPort) || 5000,
+            port: Number(info.tcpPort) || 5000,
             state: (info.state === 1 || info.state === 'WAITING') ? "WAITING" : "RUNNING",
+            status: (info.state === 1 || info.state === 'WAITING') ? "WAITING" : "RUNNING",
             playerCount: Number(info.playerCount) || 0,
+            players: Number(info.playerCount) || 0,
             maximumPlayers: Number(info.maximumPlayers) || 100,
+            maxPlayers: Number(info.maximumPlayers) || 100,
           };
           const respJson = new TextEncoder().encode(JSON.stringify(jsonObj) + "\n");
           s.send(respJson, targetPort, targetHost, () => {});
@@ -120,12 +125,17 @@ export function publicarServidor({
             const jsonObj3 = {
               type: "DISCOVER_RESPONSE",
               protocolVersion: "3.0",
-              gameId: typeof info.gameId === 'string' ? info.gameId : `GAME-${info.gameId || 1}`,
+              gameId: typeof info.gameId === 'string' ? info.gameId : `GAME-${String(info.gameId || 1).padStart(3, '0')}`,
               serverName: info.serverName || "BladeFront",
+              name: info.serverName || "BladeFront",
               tcpPort: Number(info.tcpPort) || 5000,
+              port: Number(info.tcpPort) || 5000,
               state: (info.state === 1 || info.state === 'WAITING') ? "WAITING" : "RUNNING",
+              status: (info.state === 1 || info.state === 'WAITING') ? "WAITING" : "RUNNING",
               playerCount: Number(info.playerCount) || 0,
+              players: Number(info.playerCount) || 0,
               maximumPlayers: Number(info.maximumPlayers) || 100,
+              maxPlayers: Number(info.maximumPlayers) || 100,
             };
             const respJson3 = new TextEncoder().encode(JSON.stringify(jsonObj3) + "\n");
             s.send(respJson3, targetPort, targetHost, () => {});
@@ -180,6 +190,17 @@ export function publicarServidor({
     log(`descubrimiento UDP activo escuchando en 0.0.0.0:${puerto}`);
   });
 
+  // Intentar escuchar en UDP 5000 además de UDP 5001 por si clientes buscan en UDP 5000
+  try {
+    const secundario5000 = crearRespondedor();
+    secundario5000.on('error', () => {});
+    secundario5000.bind(5000, () => {
+      try { secundario5000.setBroadcast(true); } catch {}
+      sockets.push(secundario5000);
+      log(`descubrimiento UDP secundario escuchando en 0.0.0.0:5000`);
+    });
+  } catch {}
+
   const anunciarActivamente = () => {
     try {
       const info = describir();
@@ -188,24 +209,34 @@ export function publicarServidor({
       const jsonObj2 = {
         type: "DISCOVER_RESPONSE",
         protocolVersion: "2.0",
-        gameId: typeof info.gameId === 'string' ? info.gameId : `GAME-${info.gameId || 1}`,
+        gameId: typeof info.gameId === 'string' ? info.gameId : `GAME-${String(info.gameId || 1).padStart(3, '0')}`,
         serverName: info.serverName || "BladeFront",
+        name: info.serverName || "BladeFront",
         tcpPort: Number(info.tcpPort) || 5000,
+        port: Number(info.tcpPort) || 5000,
         state: (info.state === 1 || info.state === 'WAITING') ? "WAITING" : "RUNNING",
+        status: (info.state === 1 || info.state === 'WAITING') ? "WAITING" : "RUNNING",
         playerCount: Number(info.playerCount) || 0,
+        players: Number(info.playerCount) || 0,
         maximumPlayers: Number(info.maximumPlayers) || 100,
+        maxPlayers: Number(info.maximumPlayers) || 100,
       };
       const respJson2 = new TextEncoder().encode(JSON.stringify(jsonObj2) + "\n");
 
       const jsonObj3 = {
         type: "DISCOVER_RESPONSE",
         protocolVersion: "3.0",
-        gameId: typeof info.gameId === 'string' ? info.gameId : `GAME-${info.gameId || 1}`,
+        gameId: typeof info.gameId === 'string' ? info.gameId : `GAME-${String(info.gameId || 1).padStart(3, '0')}`,
         serverName: info.serverName || "BladeFront",
+        name: info.serverName || "BladeFront",
         tcpPort: Number(info.tcpPort) || 5000,
+        port: Number(info.tcpPort) || 5000,
         state: (info.state === 1 || info.state === 'WAITING') ? "WAITING" : "RUNNING",
+        status: (info.state === 1 || info.state === 'WAITING') ? "WAITING" : "RUNNING",
         playerCount: Number(info.playerCount) || 0,
+        players: Number(info.playerCount) || 0,
         maximumPlayers: Number(info.maximumPlayers) || 100,
+        maxPlayers: Number(info.maximumPlayers) || 100,
       };
       const respJson3 = new TextEncoder().encode(JSON.stringify(jsonObj3) + "\n");
 
@@ -217,6 +248,13 @@ export function publicarServidor({
           s.send(respJson2, puerto, '26.255.255.255', () => {});
           s.send(respJson3, puerto, '255.255.255.255', () => {});
           s.send(respJson3, puerto, '26.255.255.255', () => {});
+
+          s.send(respBinaria, 5000, '255.255.255.255', () => {});
+          s.send(respBinaria, 5000, '26.255.255.255', () => {});
+          s.send(respJson2, 5000, '255.255.255.255', () => {});
+          s.send(respJson2, 5000, '26.255.255.255', () => {});
+          s.send(respJson3, 5000, '255.255.255.255', () => {});
+          s.send(respJson3, 5000, '26.255.255.255', () => {});
         } catch {}
       }
     } catch {}
