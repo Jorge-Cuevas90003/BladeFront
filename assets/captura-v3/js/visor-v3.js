@@ -701,21 +701,19 @@ function frame(dtForzado) {
 
   for (const k of knights.values()) {
     const p = k.group.position;
-    // Si es el jugador propio y se está moviendo, aplicamos la posición objetivo directamente (0ms lag)
+    _v.subVectors(k.target, p); _v.y = 0;
+    const d = _v.length();
+
     if (k === yoLocal && ultimaDireccion !== DIRECCIONES.NONE && !terminada) {
       p.copy(k.target);
       if (ultimaDireccion === DIRECCIONES.UP) k.yaw = Math.PI;
       else if (ultimaDireccion === DIRECCIONES.DOWN) k.yaw = 0;
       else if (ultimaDireccion === DIRECCIONES.LEFT) k.yaw = -Math.PI / 2;
       else if (ultimaDireccion === DIRECCIONES.RIGHT) k.yaw = Math.PI / 2;
-    } else {
-      _v.subVectors(k.target, p); _v.y = 0;
-      const d = _v.length();
-      if (d > 0.0005) {
-        const paso = Math.min(d, velocidadMaxima() * dt * 2.0);
-        p.addScaledVector(_v.normalize(), paso);
-        k.yaw = Math.atan2(_v.x, _v.z);
-      }
+    } else if (d > 0.0005) {
+      const paso = Math.min(d, velocidadMaxima() * dt * 2.0);
+      p.addScaledVector(_v.normalize(), paso);
+      k.yaw = Math.atan2(_v.x, _v.z);
     }
     k.group.rotation.y += (k.yaw - k.group.rotation.y) * Math.min(1, dt * 16);
     k.marca.position.set(p.x, SUELO_Y + 0.03, p.z);
@@ -724,7 +722,8 @@ function frame(dtForzado) {
       k.accion -= dt;
       k.anim.grab(dt, 1 - Math.max(0, k.accion / 0.55));
     } else {
-      k.anim.locomotion(dt, t, d > 0.02 ? 2.4 : 0);
+      const moviendose = (k === yoLocal && ultimaDireccion !== DIRECCIONES.NONE) || d > 0.02;
+      k.anim.locomotion(dt, t, moviendose ? 2.4 : 0);
     }
   }
 
