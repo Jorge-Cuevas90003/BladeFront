@@ -98,7 +98,43 @@ victoria).
 **Resultado**: `red/` (protocolo VOID-NET v0.1, servidor y cliente esqueleto),
 este registro, README y primer commit del repositorio.
 
+## 12 · Protocolo v3.0 y enmarcado binario TCP (PRFC-CC8-2026)
+
+> Estoy desarrollando un juego multijugador TCP/UDP en Node.js y navegador web (Three.js). Necesito implementar el protocolo PRFC-CC8-2026 v3.0. ¿Cómo estructuro un códec binario compartido con MessagePack y un acumulador TCP que lea el prefijo de longitud UInt16 Big Endian, de modo que funcione sin dependencias pesadas tanto en Node como en el navegador?
+
+**Resultado**: creación de `red/v3/protocolo-v3.js` con el protocolo binario oficial, `AcumuladorTCP` y enmarcado u16 portable.
+
+## 13 · Descubrimiento UDP multiformato e interoperabilidad en Radmin VPN
+
+> En Windows con Radmin VPN, los paquetes de broadcast UDP globales (255.255.255.255) a veces son bloqueados por el firewall o el adaptador virtual. ¿Cómo puedo diseñar un servicio de descubrimiento UDP que escuche en múltiples puertos (5001, 5000, 5100) y que responda tanto en binario MessagePack v3 como en texto JSON (v2.0/v1.0), enviando respuestas por broadcast y por ráfagas unicast directas a los vecinos de Radmin para asegurar que todos nos detecten?
+
+**Resultado**: módulo `red/v3/descubrimiento.js` con soporte multi-puerto (5001, 5000, 5100, 5101), respuestas duales JSON/MessagePack y ráfagas unicast dirigidas a IPs de Radmin.
+
+## 14 · Mapeo de loopback para eliminar ETIMEDOUT en Windows
+
+> Al conectarme por TCP a 127.0.0.1 en Windows teniendo activa la interfaz de Radmin VPN (26.x.x.x), la pila de red de Windows genera un retraso por timeout ETIMEDOUT. ¿Por qué ocurre esta resolución en la tabla de rutas de Windows y cómo puedo resolver la dirección en el WebSocket bridge para que conecte de forma instantánea en 0.01s?
+
+**Resultado**: parche en `red/v3/bridge-v3.js` que detecta conexiones a 127.0.0.1 y las redirige instantáneamente a la interfaz local de Radmin VPN.
+
+## 15 · Compatibilidad con deserializadores estrictos de Rust (serde_json)
+
+> Los clientes escritos en Rust usan serde y requieren nombres de campo específicos en JSON. ¿Puedes ayudarme a expandir el payload de respuesta de descubrimiento UDP agregando alias en snake_case y PascalCase (como tcp_port, server_name, protocol_version, player_count, maximum_players) sin romper la estructura de Java ni C#?
+
+**Resultado**: inclusión de alias de campos exhaustivos en `payloadBase` dentro de `descubrimiento.js` garantizando deserialización limpia en clientes de Rust, Java y C#.
+
+## 16 · Predicción en cliente y renderizado suave sin input lag
+
+> El servidor autoritativo corre a 10 Hz (100ms por tick). Aunque la posición oficial se valida en el servidor, quiero que la representación gráfica 3D en el navegador sea instantánea a 60-140 FPS sin esperar el paquete de red. ¿Cómo implemento Client-Side Prediction y reconciliación suave en Three.js para que la cámara y el caballero respondan en 0ms sin sufrir tirones de rubberband?
+
+**Resultado**: predicción de fotogramas e interpolación limpia en `assets/captura-v3/js/visor-v3.js`.
+
+## 17 · Estabilidad de sala de espera y nombres duplicados
+
+> Si un cliente se conecta a la sala de espera utilizando el mismo nombre que otro jugador ya conectado, ¿cómo manejamos la asignación de playerId de manera autoritativa en el servidor sin expulsar al anfitrión ni desordenar el estado WAITING?
+
+**Resultado**: suite de 26 pruebas en `test/verify-lobby-v3.mjs` con resolución autoritativa de IDs de jugador.
+
 ---
 
-*Nota: dos prompts largos (nº 5 y nº 7) se reenviaron idénticos por errores
-transitorios de herramienta; se documentan una sola vez.*
+*Nota: la cronología se mantiene sincronizada con los commits del repositorio Git.*
+
