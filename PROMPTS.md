@@ -134,7 +134,26 @@ este registro, README y primer commit del repositorio.
 
 **Resultado**: suite de 26 pruebas en `test/verify-lobby-v3.mjs` con resolución autoritativa de IDs de jugador.
 
+## 18 · Auditoría y verificación de reglas oficiales de robo de bandera
+
+> ¿Según el código actual quién puede quitar la bandera? ¿Y sin presionar la tecla puede robar? ¿Y según las instrucciones del PDF oficial de la materia cómo debería de ser?
+
+**Resultado**: verificación estricta de las secciones §13 y §14 del protocolo PRFC-CC8-2026 y la guía del proyecto. Confirmación de que el robo exige cercanía (<60 unidades) y envío explícito de `INTERACT` (`E` / `Espacio`).
+
+## 19 · Verificación punto por punto contra el PDF de reglamento de la materia
+
+> Haz un análisis minucioso punto por punto de las 5 páginas del PDF del proyecto y verifica si cumplimos estrictamente con todas las limitaciones, entregables y recomendaciones.
+
+**Resultado**: auditoría de 14 puntos (objetivo, spawn aleatorio, $100$ conexiones máximas, visualizador 3D/2D, broadcast UDP, tabla de desempate `playerId`, victoria fuera del círculo central) confirmando 100% de cumplimiento.
+
+## 20 · Consolidación final de la bitácora de documentación e IA
+
+> Agrega la bitácora completa de prompts e interacción con IA para documentar el proceso de desarrollo en el repositorio Git.
+
+**Resultado**: actualización de `PROMPTS.md` y `README.md` alineados con la cronología de commits en GitHub.
+
 ---
 
 *Nota: la cronología se mantiene sincronizada con los commits del repositorio Git.*
+
 
