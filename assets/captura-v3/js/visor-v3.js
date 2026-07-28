@@ -703,17 +703,20 @@ function frame(dtForzado) {
 
   for (const k of knights.values()) {
     const p = k.group.position;
-    // La proyección siempre parte de la última posición oficial; nunca se
-    // acumula sobre el fotograma anterior. Así responde rápido sin alejarse
-    // del servidor ni regresar bruscamente al recibir GAME_STATE.
+    // Todos parten de la posición oficial. Solo los compañeros remotos se
+    // extrapolan brevemente para ocultar el jitter de la VPN. El jugador
+    // propio no se predice: nunca puede separarse del servidor ni quedar
+    // atrapado dentro de una corrección visual.
     if (k.serverStateAt) {
+      k.target.copy(k.serverPosition);
+    }
+    if (k !== yoLocal && k.serverStateAt) {
       const edadMs = Math.min(
         200,
         performance.now() - k.serverStateAt + cfg.tickIntervalMs,
       );
-      k.target.copy(k.serverPosition);
       const adelanto = velocidadMaxima() * edadMs / 1000;
-      const dir = k === yoLocal ? ultimaDireccion : k.serverDirection;
+      const dir = k.serverDirection;
       if (dir === DIRECCIONES.UP) k.target.z -= adelanto;
       else if (dir === DIRECCIONES.DOWN) k.target.z += adelanto;
       else if (dir === DIRECCIONES.LEFT) k.target.x -= adelanto;
