@@ -336,6 +336,49 @@ function ipsLocales() {
 }
 
 // ----------------------------------------------------------------------------
+//  4b. Aviso de cortafuegos — SOLO LECTURA, nunca toca la configuración.
+//
+//  Por qué existe: se diagnosticó que el anuncio y el sondeo llegan bien a la
+//  IP de cada compañero (se comprobó a nivel de socket, sin error, con ruta
+//  correcta por el adaptador de Radmin), pero ninguno responde. La explicación
+//  más probable en Windows es el cortafuegos: Radmin VPN se clasifica como red
+//  "Pública", y ahí Windows bloquea por defecto las conexiones ENTRANTES salvo
+//  que exista una regla explícita para el programa — exactamente la regla que
+//  esta misma máquina ya tenía creada (se comprobó con Get-NetFirewallRule) y
+//  que un compañero con una instalación de Node más nueva puede no tener.
+//
+//  Esto se limita a AVISAR con el comando exacto para que el propio usuario
+//  (o el compañero) lo corra si quiere: crear una regla de cortafuegos es un
+//  cambio de seguridad del sistema, y eso lo tiene que decidir y ejecutar la
+//  persona dueña de esa máquina, nunca este script por su cuenta.
+// ----------------------------------------------------------------------------
+function avisarFirewallWindows() {
+  if (process.platform !== 'win32') return;
+  try {
+    const ps = spawn('powershell', [
+      '-NoProfile', '-NonInteractive', '-Command',
+      "(Get-NetFirewallRule -Direction Inbound -Enabled True -Action Allow -ErrorAction SilentlyContinue | " +
+      "Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue | " +
+      "Where-Object { $_.Program -match 'node\\.exe$' } | Measure-Object).Count",
+    ], { stdio: ['ignore', 'pipe', 'ignore'] });
+    let salida = '';
+    ps.stdout.on('data', (d) => { salida += d; });
+    ps.on('error', () => {}); // sin PowerShell disponible: no se avisa nada, no es motivo de fallo
+    ps.on('close', () => {
+      const reglas = Number(String(salida).trim()) || 0;
+      if (reglas > 0) return; // hay alguna regla; no se puede saber si es exactamente la correcta, pero no hay nada honesto que avisar de más
+      aviso('⚠ no encuentro ninguna regla de cortafuegos que permita conexiones entrantes a Node.js.');
+      aviso('  Si tus compañeros no te encuentran (ni por difusión ni por sondeo directo), suele ser esto:');
+      aviso('  Windows bloquea por defecto lo entrante en redes "Públicas", y así clasifica a Radmin VPN.');
+      aviso('  Este script NUNCA va a tocar tu cortafuegos por su cuenta. Si quieres arreglarlo, corre esto');
+      aviso('  en PowerShell COMO ADMINISTRADOR una sola vez (y que tus compañeros hagan lo mismo):');
+      aviso(`    New-NetFirewallRule -DisplayName "BladeFront (Node.js TCP)" -Direction Inbound -Program "${process.execPath}" -Protocol TCP -Action Allow -Profile Any`);
+      aviso(`    New-NetFirewallRule -DisplayName "BladeFront (Node.js UDP)" -Direction Inbound -Program "${process.execPath}" -Protocol UDP -Action Allow -Profile Any`);
+    });
+  } catch {} // best-effort: cualquier fallo aquí no puede impedir que el juego arranque
+}
+
+// ----------------------------------------------------------------------------
 //  5. Resumen
 // ----------------------------------------------------------------------------
 function resumen(udp) {
@@ -426,6 +469,9 @@ try {
   process.exit(1);
 }
 log(`web sirviendo la raíz del proyecto en http://localhost:${PUERTO_WEB}`);
+// En paralelo, no bloquea el arranque: solo lee, tarda menos de un segundo y
+// el aviso puede llegar un poco después del cuadro de resumen.
+avisarFirewallWindows();
 
 if (V1) {
   // SIN --auto a propósito: con él la cuenta atrás arranca en cuanto entra el

@@ -28,9 +28,12 @@ import { WebSocketServer } from 'ws';
 import {
   buscarServidores, difundirPorInterfaces, sondearDirecciones,
   direccionesRadminLocales, combinarHallazgos, colapsarPropias, LIMITE_SONDEO,
+  interfacesLocales,
 } from './descubrimiento.js';
 import { PARAMS_DEFECTO } from './protocolo-v3.js';
-import { vecinosVivos, prefijosRadminLocales, conServidorEscuchando, nombreDeRadmin } from './vecinos.js';
+import {
+  vecinosVivos, prefijosRadminLocales, conServidorEscuchando, nombreDeRadmin, NOMBRES_RADMIN,
+} from './vecinos.js';
 
 export function crearBridge({
   puertoWs = 8146,
@@ -171,6 +174,31 @@ export function crearBridge({
             }
           } catch (e) {
             avisos.push(`vecinos: ${e.message}`);
+          }
+        }
+
+        // ROSTER CONOCIDO. Esta es la vía que de verdad puede obligar a que
+        // aparezca: la difusión dirigida depende de que el adaptador de Radmin
+        // reenvíe el broadcast entre compañeros, y eso es justo lo que a veces
+        // no hace (ver la cabecera de descubrimiento.js). Sin importar cuánto
+        // se insista por ese lado, un paquete que la VPN no reenvía no llega —
+        // no es cosa de intentarlo más fuerte, es que no hay por dónde.
+        //
+        // Lo que sí llega siempre que el compañero esté encendido y conectado a
+        // Radmin es el UNICAST directo a su IP: eso no depende de que nadie
+        // reenvíe nada, viaja como cualquier paquete normal de la VPN. Antes
+        // esta vía solo se usaba si alguien pegaba IPs a mano (`?ips=`); ahora
+        // se sondea TODO el roster de compañeros en cada búsqueda, sin que el
+        // usuario tenga que hacer nada. Es la misma lista que ya usa el
+        // anuncio activo del servidor (NOMBRES_RADMIN en vecinos.js) — una
+        // sola fuente de la verdad para las dos direcciones.
+        if (url.searchParams.get('roster') !== '0') {
+          const mias = new Set(interfacesLocales().map((it) => it.address));
+          const roster = Object.keys(NOMBRES_RADMIN).filter((ip) => !mias.has(ip));
+          if (roster.length) {
+            candidatas.push(...roster);
+            exploracion.vias.push('roster-conocido');
+            exploracion.roster = roster.length;
           }
         }
 

@@ -8,6 +8,7 @@
 //  ni un byte.
 // ============================================================================
 
+import dgram from 'node:dgram';
 import { WebSocket } from 'ws';
 import {
   TIPOS, ERRORES, ESTADO_BANDERA, DIRECCIONES,
@@ -15,6 +16,7 @@ import {
 } from '../red/v3/protocolo-v3.js';
 import { crearServidor } from '../red/v3/servidor-v3.js';
 import { crearBridge } from '../red/v3/bridge-v3.js';
+import { NOMBRES_RADMIN } from '../red/v3/vecinos.js';
 
 const PUERTO_TCP = 15801;
 const PUERTO_WS = 15802;
@@ -180,7 +182,7 @@ try {
   // ── 4. Descubrimiento delegado por HTTP ───────────────────────────────────
   console.log('\n== 4. Descubrimiento delegado (el navegador no puede UDP) ==');
   {
-    const r = await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?direccion=127.0.0.1&puerto=${PUERTO_UDP}&espera=700&vecinos=0`);
+    const r = await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?direccion=127.0.0.1&puerto=${PUERTO_UDP}&espera=700&vecinos=0&roster=0`);
     check(r.ok, 'responde /servidores');
     check(r.headers.get('access-control-allow-origin') === '*', 'con CORS, para que la página en otro puerto pueda leerlo');
     const { servidores } = await r.json();
@@ -200,7 +202,7 @@ try {
   console.log('\n== 4b. /servidores con sondeo dirigido ==');
   {
     const pide = async (query) =>
-      (await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&vecinos=0&${query}`)).json();
+      (await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&vecinos=0&roster=0&${query}`)).json();
 
     // ?ips= sin broadcast útil: se apunta el broadcast a una dirección donde no
     // hay nadie, así que todo lo que aparezca vino del sondeo dirigido.
@@ -240,7 +242,7 @@ try {
     // Si una vía se cae (aquí el broadcast, con un destino irresoluble), la
     // otra tiene que entregar igual lo que encontró: media lista es infinitamente
     // mejor que un 500 y una pantalla vacía.
-    const r = await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&vecinos=0&direccion=destino.que.no.existe.invalido&ips=127.0.0.1`);
+    const r = await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&vecinos=0&roster=0&direccion=destino.que.no.existe.invalido&ips=127.0.0.1`);
     check(r.ok, `con el broadcast roto la ruta sigue devolviendo 200 (${r.status})`);
     const roto = await r.json();
     check(roto.servidores?.length === 1, 'y entrega lo que sí encontró el sondeo dirigido');
@@ -264,7 +266,7 @@ try {
   console.log('\n== 4c. /servidores sin `direccion`: difusión por interfaz ==');
   {
     const t0 = Date.now();
-    const r = await (await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=800&vecinos=0`)).json();
+    const r = await (await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=800&vecinos=0&roster=0`)).json();
     const ms = Date.now() - t0;
 
     check(r.servidores?.some((s) => s.tcpPort === PUERTO_TCP),
@@ -307,7 +309,7 @@ try {
   // encontraba a nadie Y hacía creer que ya se había buscado en la VPN.
   console.log('\n== 4d. escanear=1 ya no finge un barrido inútil ==');
   {
-    const r = await (await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&escanear=1&vecinos=0`)).json();
+    const r = await (await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&escanear=1&vecinos=0&roster=0`)).json();
     check(!r.exploracion?.vias?.includes('sondeo-subred-propia'), 'escanear=1 no barre la subred propia');
     check(r.exploracion?.sondeadas === 0, `no se sondea ninguna dirección a ciegas (${r.exploracion?.sondeadas})`);
     check(r.avisos?.some((a) => a.includes('26.0.0.0/8')),
@@ -315,7 +317,7 @@ try {
     check(r.servidores?.some((s) => s.tcpPort === PUERTO_TCP), 'sin dejar de encontrar lo que sí se puede encontrar');
 
     // Quien lo quiera de verdad lo pide explícito, y entonces sí se declara.
-    const sub = await (await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&escanear=subred&vecinos=0`)).json();
+    const sub = await (await fetch(`http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&escanear=subred&vecinos=0&roster=0`)).json();
     check(sub.exploracion?.vias?.includes('sondeo-subred-propia'),
       'escanear=subred sí lo hace, y lo declara');
     check(sub.exploracion?.sondeadas === 254,
@@ -338,7 +340,7 @@ try {
 
     const t0 = Date.now();
     const r = await (await fetch(
-      `http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=800&vecinos=0&direccion=169.254.240.7&ips=${lista.join(',')}`
+      `http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=800&vecinos=0&roster=0&direccion=169.254.240.7&ips=${lista.join(',')}`
     )).json();
     const ms = Date.now() - t0;
 
@@ -361,7 +363,7 @@ try {
       // que sí se anuncia en el suyo, se comporta como uno que no lo hace y se
       // aísla la vía del puerto TCP.
       const mudo = await (await fetch(
-        `http://127.0.0.1:${PUERTO_WS}/servidores?puerto=15899&espera=400&vecinos=0&direccion=169.254.240.7&ips=127.0.0.1`
+        `http://127.0.0.1:${PUERTO_WS}/servidores?puerto=15899&espera=400&vecinos=0&roster=0&direccion=169.254.240.7&ips=127.0.0.1`
       )).json();
       const hallado = mudo.servidores?.find((s) => s.host === '127.0.0.1');
       check(!!hallado, 'un servidor que no se anuncia se encuentra por el puerto TCP');
@@ -373,7 +375,7 @@ try {
     {
       // Y no debe inventarse nada donde no hay nadie escuchando.
       const vacio = await (await fetch(
-        `http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=400&vecinos=0&direccion=169.254.240.7&ips=169.254.240.9`
+        `http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=400&vecinos=0&roster=0&direccion=169.254.240.7&ips=169.254.240.9`
       )).json();
       const jugables = (vacio.servidores ?? []).filter((s) => !s.sinServicio);
       check(jugables.length === 0, 'una IP sin servidor no ofrece partida al sondear el puerto');
@@ -382,10 +384,75 @@ try {
 
     // Pegar de Radmin arrastra saltos de línea y espacios, no solo comas.
     const sucia = await (await fetch(
-      `http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&vecinos=0&direccion=169.254.240.7&ips=${encodeURIComponent('26.43.87.248\n 127.0.0.1 ;26.94.87.242')}`
+      `http://127.0.0.1:${PUERTO_WS}/servidores?puerto=${PUERTO_UDP}&espera=700&vecinos=0&roster=0&direccion=169.254.240.7&ips=${encodeURIComponent('26.43.87.248\n 127.0.0.1 ;26.94.87.242')}`
     )).json();
     check(sucia.exploracion?.sondeadas === 3, `saltos de línea y ';' también separan (${sucia.exploracion?.sondeadas})`);
     check(sucia.servidores?.some((s) => s.tcpPort === PUERTO_TCP), 'y la IP buena de la lista sucia se sondea igual');
+  }
+
+  // ── 4d. Roster de compañeros conocidos ────────────────────────────────────
+  // El broadcast dirigido depende de que el adaptador de Radmin reenvíe los
+  // datagramas entre compañeros, y eso es justo lo que a veces NO hace (de ahí
+  // que un compañero no viera el servidor pese a que el broadcast por interfaz
+  // "salía bien"). Esta vía no depende de eso: pregunta directo, uno por uno, a
+  // toda la lista de vecinos.js — la misma que ya usa el anuncio activo del
+  // servidor. Se intercepta dgram para comprobarlo SIN mandar un solo paquete
+  // real a las máquinas de los compañeros.
+  console.log('\n== 4d. Sondeo directo al roster conocido ==');
+  {
+    const destinos = new Set();
+    const crearOriginal = dgram.createSocket;
+    dgram.createSocket = (opts) => {
+      const s = crearOriginal(opts);
+      const enviarOriginal = s.send.bind(s);
+      s.send = (msg, puerto, direccion, cb) => {
+        if (direccion) destinos.add(direccion);
+        return enviarOriginal(msg, puerto, direccion, cb);
+      };
+      return s;
+    };
+
+    let r;
+    try {
+      r = await (await fetch(
+        `http://127.0.0.1:${PUERTO_WS}/servidores?direccion=127.0.0.1&puerto=${PUERTO_UDP}&espera=300&vecinos=0`
+      )).json();
+    } finally {
+      dgram.createSocket = crearOriginal;
+    }
+
+    check(r.exploracion?.vias?.includes('roster-conocido'), 'por defecto se activa la vía del roster');
+    const rosterEsperado = Object.keys(NOMBRES_RADMIN).length;
+    check(r.exploracion?.roster > 0 && r.exploracion.roster <= rosterEsperado,
+      `se sondean compañeros del roster (${r.exploracion?.roster} de ${rosterEsperado})`);
+
+    let cubiertos = 0;
+    for (const ip of Object.keys(NOMBRES_RADMIN)) if (destinos.has(ip)) cubiertos++;
+    check(cubiertos === r.exploracion.roster,
+      `y cada uno recibe de verdad su propio datagrama (${cubiertos} confirmados por dgram)`);
+
+    // Con roster=0 la vía no debe aparecer ni mandarse un solo datagrama a esas IPs.
+    destinos.clear();
+    dgram.createSocket = (opts) => {
+      const s = crearOriginal(opts);
+      const enviarOriginal = s.send.bind(s);
+      s.send = (msg, puerto, direccion, cb) => {
+        if (direccion) destinos.add(direccion);
+        return enviarOriginal(msg, puerto, direccion, cb);
+      };
+      return s;
+    };
+    let r2;
+    try {
+      r2 = await (await fetch(
+        `http://127.0.0.1:${PUERTO_WS}/servidores?direccion=127.0.0.1&puerto=${PUERTO_UDP}&espera=300&vecinos=0&roster=0`
+      )).json();
+    } finally {
+      dgram.createSocket = crearOriginal;
+    }
+    check(!r2.exploracion?.vias?.includes('roster-conocido'), 'roster=0 desactiva la vía');
+    const alguno = Object.keys(NOMBRES_RADMIN).some((ip) => destinos.has(ip));
+    check(!alguno, 'y con roster=0 no sale ni un datagrama hacia esas IPs');
   }
 
   // ── 5. Destino elegible por query ─────────────────────────────────────────

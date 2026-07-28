@@ -32,6 +32,7 @@ import dgram from 'node:dgram';
 import net from 'node:net';
 import os from 'node:os';
 import { TIPOS, VERSION, codificar, decodificar, PARAMS_DEFECTO } from './protocolo-v3.js';
+import { NOMBRES_RADMIN } from './vecinos.js';
 
 // Tope de IPs por sondeo. Protege dos cosas: el tiempo de la petición y la red
 // (nadie debería poder pedir "escanea un /8" y soltar 16 millones de
@@ -233,6 +234,10 @@ export function publicarServidor({
   // Ráfagas activas de broadcast y unicast directo a todos los vecinos Radmin
   const anunciarActivamente = () => {
     try {
+      // Recalculado en cada ráfaga porque una interfaz puede reconectarse con
+      // otra IP en medio de la partida; es una lista de un puñado de
+      // direcciones, así que repetirlo cada segundo no cuesta nada.
+      const propias = new Set(interfacesLocales().map((it) => it.address));
       const info = describir();
       const respBinaria = codificar(TIPOS.DISCOVER_RESPONSE, info);
 
@@ -299,13 +304,20 @@ export function publicarServidor({
         '192.168.255.255',
       ];
 
-      // Unicast directo a IPs conocidas de la VPN Radmin para que Windows NUNCA las descarte
-      const ipsRadminConocidas = [
-        '26.135.3.121', '26.204.234.64', '26.149.39.235', '26.145.82.121',
-        '26.202.164.209', '26.230.5.152', '26.230.5.15', '26.221.47.165',
-        '26.199.242.82', '26.192.234.52', '26.169.238.102', '26.157.21.141',
-        '26.138.165.249', '26.110.160.28', '26.106.185.242', '26.94.87.242',
-      ];
+      // Unicast directo a IPs conocidas de la VPN Radmin para que Windows NUNCA las descarte.
+      //
+      // Esta lista vivía copiada a mano AQUÍ, por su cuenta, separada de
+      // NOMBRES_RADMIN en vecinos.js. Las dos se fueron separando con el
+      // tiempo: a esta le faltaban ocho compañeros del roster real (Edgar,
+      // LITOS, SAMANTHAR, Vicco-Lap y otros cuatro simplemente no estaban, así
+      // que nunca recibían el anuncio salvo que el broadcast por Radmin
+      // funcionara, que es precisamente lo que este mecanismo existe para
+      // evitar) y encima conservaba direcciones fabricadas de un bug de hace
+      // tiempo (26.230.5.152 y 26.169.238.102 mal cortadas: ver la nota del
+      // <textarea> del visor). Ahora hay una sola lista — la de vecinos.js — y
+      // esta se deriva de ella para que no se puedan volver a separar.
+      const ipsRadminConocidas = Object.keys(NOMBRES_RADMIN)
+        .filter((ip) => !propias.has(ip));
 
       const todosLosDestinos = [...new Set([...destinosBroadcast, ...ipsRadminConocidas])];
 
@@ -332,31 +344,7 @@ export function publicarServidor({
       }
     },
     anunciar: anunciarActivamente,
-  };
-
-  try {
-    principal.bind(puerto, () => {
-      atado = true;
-      try { principal.setBroadcast(true); } catch {}
-      log(`descubrimiento UDP escuchando en el puerto ${puerto}`);
-      anunciarActivamente();
-    });
-    sockets.push(principal);
-  } catch {
-    intentarAtarEspecificas();
-  }
-
-  const rAnuncio = setInterval(anunciarActivamente, 3000);
-
-  return {
-    cerrar: () => {
-      clearInterval(rAnuncio);
-      for (const s of sockets) {
-        try { s.close(); } catch {}
-      }
-    },
-    anunciar: anunciarActivamente,
-    get atado() { return atado; }
+    get atado() { return atado; },
   };
 }
 
