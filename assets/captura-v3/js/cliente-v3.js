@@ -274,7 +274,16 @@ export class ClienteV3 extends EventTarget {
   static async buscarServidores(urlBridge = 'http://localhost:8146', {
     esperaMs = 800, ips = [],
   } = {}) {
-    const q = new URLSearchParams({ espera: String(esperaMs) });
+    // El sondeo automático debe ser liviano y ajustarse al protocolo:
+    // broadcast UDP 5001. No se recorre todo el roster ni se abren conexiones
+    // TCP a decenas de equipos en cada actualización de la lista.
+    const q = new URLSearchParams({
+      espera: String(esperaMs),
+      roster: '0',
+      vecinos: '0',
+      tcp: '0',
+      puerto: '5001',
+    });
     if (ips.length) q.set('ips', ips.join(','));
     const r = await fetch(`${urlBridge}/servidores?${q}`);
     if (!r.ok) throw new Error('el bridge respondió ' + r.status);

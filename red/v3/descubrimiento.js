@@ -174,10 +174,6 @@ export function publicarServidor({
       };
 
       enviarEnTodosFormatos(origen.address, origen.port);
-      if (origen.port !== 5001) enviarEnTodosFormatos(origen.address, 5001);
-      if (origen.port !== 5000) enviarEnTodosFormatos(origen.address, 5000);
-      if (origen.port !== 5100) enviarEnTodosFormatos(origen.address, 5100);
-      if (origen.port !== 5101) enviarEnTodosFormatos(origen.address, 5101);
 
       log(`[UDP-DISCOVER] 📥 Consulta recibida desde ${origen.address}:${origen.port} (${esJson ? 'JSON v' + reqVersion : 'Binario'}) -> Respuesta enviada.`);
     });
@@ -188,7 +184,7 @@ export function publicarServidor({
     let creados = 0;
     for (const it of interfacesLocales()) {
       if (it.interna) continue;
-      for (const p of [5001, 5000, 5100, 5101]) {
+      for (const p of [puerto]) {
         try {
           const s = crearRespondedor(it.address, p);
           s.on('error', () => {});
@@ -223,23 +219,13 @@ export function publicarServidor({
     log(`[UDP-BIND] Descubrimiento principal activo en 0.0.0.0:${puerto}`);
   });
 
-  // 2. Atar sockets adicionales en 0.0.0.0 para 5000, 5100, 5101
-  for (const pSec of [5000, 5100, 5101]) {
-    try {
-      const sec = crearRespondedor(undefined, pSec);
-      sec.on('error', () => {});
-      sec.bind(pSec, () => {
-        try { sec.setBroadcast(true); } catch {}
-        sockets.push(sec);
-        log(`[UDP-BIND] Descubrimiento secundario activo en 0.0.0.0:${pSec}`);
-      });
-    } catch {}
-  }
+  // No se atan puertos secundarios ni se crean copias por interfaz:
+  // 0.0.0.0:5001 recibe por todas ellas. Duplicar sockets y puertos provocaba
+  // que cada anuncio se multiplicara cientos de veces.
 
-  // 3. Atar por IPs específicas de Radmin y LAN
-  intentarAtarEspecificas();
-
-  // Ráfagas activas de broadcast y unicast directo a todos los vecinos Radmin
+  // Se conserva como acción manual para compatibilidad interna, pero ya no se
+  // ejecuta periódicamente. El protocolo es de consulta/respuesta: el cliente
+  // emite DISCOVER_REQUEST por UDP 5001 y el servidor contesta.
   const anunciarActivamente = () => {
     try {
       // Recalculado en cada ráfaga porque una interfaz puede reconectarse con
@@ -342,11 +328,8 @@ export function publicarServidor({
     } catch {}
   };
 
-  const timerAnuncio = setInterval(anunciarActivamente, 1000);
-
   return {
     cerrar() {
-      clearInterval(timerAnuncio);
       for (const s of sockets) {
         try { s.close(); } catch {}
       }
