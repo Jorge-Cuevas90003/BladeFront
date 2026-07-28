@@ -231,7 +231,7 @@ export function crearBridge({
         // sondearDirecciones ya filtra las no-IPv4 y recorta al tope, así que
         // aquí no hace falta validar nada más.
         exploracion.sondeadas = Math.min(new Set(candidatas).size, LIMITE_SONDEO);
-        const porSondeo = candidatas.length
+        const porSondeo = candidatas.length && url.searchParams.get('sondeo') !== '0'
           ? aparte('sondeo dirigido', Promise.all(
               puertos.map((pt) => sondearDirecciones({
                 direcciones: candidatas, puerto: pt, esperaMs: espera, limite: LIMITE_SONDEO, log,
@@ -246,6 +246,23 @@ export function crearBridge({
         // partida alojada aquí mismo responde por cada interfaz y por cada vía:
         // el jugador vería su propio servidor repetido cuatro veces.
         const servidores = colapsarPropias(combinarHallazgos(b, d));
+
+        // Mostrar la lista conocida de Radmin no debe convertir cada refresco
+        // en una ronda de tráfico UDP/TCP. Los anuncios que respondieron al
+        // broadcast conservan sus datos reales; el resto aparece como vecino
+        // conocido hasta que publique una partida.
+        if (url.searchParams.get('listar') === '1') {
+          const yaVistos = new Set(servidores.map((s) => s.host));
+          for (const host of [...new Set(candidatas)]) {
+            if (!net.isIPv4(host) || yaVistos.has(host)) continue;
+            yaVistos.add(host);
+            servidores.push({
+              host, tcpPort, gameId: 0, serverName: nombreDeRadmin(host),
+              state: 'SIN_SERVICIO', playerCount: 0, maximumPlayers: 0,
+              via: 'radmin', anuncia: false, sinServicio: true,
+            });
+          }
+        }
 
         // SERVIDORES QUE NO SE ANUNCIAN.
         //
