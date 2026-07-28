@@ -267,6 +267,9 @@ function asegurarKnight(id, nombreManual = null) {
     k = {
       group, marca, etiqueta, anim: new KnightAnimator(group),
       target: new THREE.Vector3(), yaw: 0,
+      serverPosition: new THREE.Vector3(),
+      serverDirection: DIRECCIONES.NONE,
+      serverStateAt: 0,
       colocado: false, accion: 0, nombre,
     };
     knights.set(id, k);
@@ -469,16 +472,26 @@ on(TIPOS.GAME_STATE, (m) => {
     vistos.add(p.playerId);
     const k = asegurarKnight(p.playerId);
     aMundo(p.x, p.y, _vTarget);
+    k.serverPosition.copy(_vTarget);
+    k.serverDirection = p.direction;
+    k.serverStateAt = performance.now();
     if (!k.colocado) {
       k.group.position.copy(_vTarget);
       k.target.copy(_vTarget);
       k.colocado = true;
     } else if (p.playerId === miId) {
-      // Reconciliación limpia para el jugador local:
-      // Solo corregimos si la desviación con el servidor es mayor a un umbral (por ejemplo al chocar contra un borde),
-      // evitando cualquier tiron o snap hacia atrás durante el movimiento continuo.
-      if (k.group.position.distanceTo(_vTarget) > 1.8 * ESCALA * cfg.playerSpeed) {
+      // Mantener la predicción local cerca de la posición oficial es esencial:
+      // el servidor decide si se puede tomar la bandera usando SUS coordenadas.
+      const tolerancia = Math.max(
+        cfg.playerRadius,
+        cfg.playerSpeed * (cfg.tickIntervalMs / 1000) * 3,
+      ) * ESCALA;
+      if (k.group.position.distanceTo(_vTarget) > tolerancia) {
         k.group.position.copy(_vTarget);
+        k.target.copy(_vTarget);
+      } else if (ultimaDireccion === DIRECCIONES.NONE) {
+        // Al soltar la tecla se converge suavemente al punto exacto del
+        // servidor, sin conservar para siempre un pequeño error acumulado.
         k.target.copy(_vTarget);
       }
     } else {
@@ -587,6 +600,7 @@ let ultimaDireccion = DIRECCIONES.NONE;
 let ultimoInputEnviadoEn = 0;
 const INTERVALO_HEARTBEAT_INPUT = 100;
 let interactuando = false;
+let ultimoInteractEnviadoEn = 0;
 
 const _adelante = new THREE.Vector3();
 
@@ -652,6 +666,7 @@ window.addEventListener('keydown', (e) => {
     interactuando = true;
     if (!e.repeat) {
       cliente.interactuar();
+      ultimoInteractEnviadoEn = performance.now();
       const k = knights.get(miId);
       if (k) k.accion = 0.4;
     }
@@ -714,6 +729,21 @@ function frame(dtForzado) {
 
   for (const k of knights.values()) {
     const p = k.group.position;
+    // El GAME_STATE incluye la dirección oficial. Proyectar brevemente desde
+    // la última posición evita que un compañero se congele y luego salte
+    // cuando la VPN entrega varios estados juntos.
+    if (k !== yoLocal && k.serverStateAt) {
+      const edadMs = Math.min(
+        200,
+        performance.now() - k.serverStateAt + cfg.tickIntervalMs,
+      );
+      k.target.copy(k.serverPosition);
+      const adelanto = velocidadMaxima() * edadMs / 1000;
+      if (k.serverDirection === DIRECCIONES.UP) k.target.z -= adelanto;
+      else if (k.serverDirection === DIRECCIONES.DOWN) k.target.z += adelanto;
+      else if (k.serverDirection === DIRECCIONES.LEFT) k.target.x -= adelanto;
+      else if (k.serverDirection === DIRECCIONES.RIGHT) k.target.x += adelanto;
+    }
     _v.subVectors(k.target, p); _v.y = 0;
     const d = _v.length();
 
@@ -753,7 +783,11 @@ function frame(dtForzado) {
   // La cámara puede girar con una tecla de movimiento pulsada; hay que
   // reevaluar para que "adelante" siga siendo adelante mientras se orbita.
   if (teclas.size) recalcularDireccion();
-  if (interactuando) cliente.interactuar();
+  if (interactuando
+      && performance.now() - ultimoInteractEnviadoEn >= cfg.tickIntervalMs) {
+    cliente.interactuar();
+    ultimoInteractEnviadoEn = performance.now();
+  }
 
   cosmos.update(dt, t);
   titans.update(dt, t);
