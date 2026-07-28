@@ -54,7 +54,7 @@ export const NOMBRES_RADMIN = {
   '26.63.72.136': 'SAMANTHAR',
   '26.98.33.110': 'Vicco-Lap',
   '26.157.21.141': 'Victor_PC',
-  '26.11.206.94': 'J (Tú)',
+  '26.40.171.28': 'J (Tú)',
 };
 
 export function nombreDeRadmin(ip) {

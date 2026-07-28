@@ -71,7 +71,11 @@ export function publicarServidor({
       // 1. Decodificar JSON / Texto (para clientes Java/C#/Python de los compañeros)
       try {
         const texto = new TextDecoder('utf-8').decode(datos).trim();
-        if (texto.includes('DISCOVER_REQUEST') || texto.includes('DISCOVER') || texto.startsWith('{')) {
+        // Un anuncio DISCOVER_RESPONSE también contiene la palabra DISCOVER.
+        // Ignorarlo explícitamente evita que el servidor se responda a sí mismo
+        // sin volver más estrictos los formatos tolerados de otros equipos.
+        if (!texto.includes('DISCOVER_RESPONSE') &&
+            (texto.includes('DISCOVER_REQUEST') || texto.includes('DISCOVER') || texto.startsWith('{'))) {
           if (texto.startsWith('{')) {
             const obj = JSON.parse(texto);
             if (obj.protocolVersion) reqVersion = String(obj.protocolVersion);
@@ -96,7 +100,7 @@ export function publicarServidor({
 
       const info = describir();
 
-      // Enviar respuestas a origen.port, a 5001, 5000, 5100, 5101 en todos los formatos posibles
+      // Enviar respuestas a origen.port y a los puertos de compatibilidad.
       const enviarEnTodosFormatos = (targetHost, targetPort) => {
         try {
           const respBinaria = codificar(TIPOS.DISCOVER_RESPONSE, info);
