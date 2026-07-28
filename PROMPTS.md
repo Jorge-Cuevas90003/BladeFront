@@ -1,8 +1,7 @@
 # 📜 Registro de prompts — documentación del proceso con IA
+## Proyecto: Captura la Bandera — BladeFront (PRFC-CC8-2026 v3)
 
-Transcripción **literal** (typos incluidos) de cada prompt usado para construir
-este proyecto con Claude Code, en orden cronológico, con el resultado que
-produjo cada uno. Sesiones del 2026-07-18 al 2026-07-19.
+Este documento registra los **20 hitos principales de interacción con IA**, los cuales están respaldados por una cronología detallada de **más de 90 commits en el repositorio Git** (desde el diseño inicial de assets hasta la versión oficial v3.0). Cada hito agrupa las consultas y evoluciones técnicas desarrolladas e integradas paso a paso.
 
 ---
 
