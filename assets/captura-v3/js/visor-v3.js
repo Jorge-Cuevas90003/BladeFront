@@ -479,29 +479,13 @@ on(TIPOS.GAME_STATE, (m) => {
       k.group.position.copy(_vTarget);
       k.target.copy(_vTarget);
       k.colocado = true;
-    } else if (p.playerId === miId) {
-      // Mantener la predicción local cerca de la posición oficial es esencial:
-      // el servidor decide si se puede tomar la bandera usando SUS coordenadas.
-      const tolerancia = Math.max(
-        cfg.playerRadius,
-        cfg.playerSpeed * (cfg.tickIntervalMs / 1000) * 3,
-      ) * ESCALA;
-      if (k.group.position.distanceTo(_vTarget) > tolerancia) {
-        k.group.position.copy(_vTarget);
-        k.target.copy(_vTarget);
-      } else if (ultimaDireccion === DIRECCIONES.NONE) {
-        // Al soltar la tecla se converge suavemente al punto exacto del
-        // servidor, sin conservar para siempre un pequeño error acumulado.
-        k.target.copy(_vTarget);
-      }
     } else {
-      // Para los compañeros se sigue la posición autoritativa del servidor
+      // Un salto enorme es una reaparición o corrección excepcional. El
+      // movimiento normal se interpola en frame() desde serverPosition.
       if (k.group.position.distanceTo(_vTarget) > cfg.circleRadius * ESCALA) {
         k.group.position.copy(_vTarget);
-        k.target.copy(_vTarget);
-      } else {
-        k.target.copy(_vTarget);
       }
+      k.target.copy(_vTarget);
     }
     k.llevaBandera = p.hasFlag;
     if (p.playerId === miId) k.marca.material.opacity = 0.55;
@@ -715,46 +699,31 @@ function frame(dtForzado) {
   const dt = dtForzado != null ? dtForzado : Math.min(reloj.getDelta(), 0.05);
   const t = reloj.elapsedTime;
 
-  // Predicción local instantánea (0ms delay) para el jugador propio mientras mantenga teclas pulsadas
   const yoLocal = knights.get(miId);
-  if (yoLocal && ultimaDireccion !== DIRECCIONES.NONE && !terminada) {
-    const velPaso = velocidadMaxima() * dt;
-    // DIRECCIONES: UP=1, DOWN=2, LEFT=3, RIGHT=4 (§10)
-    // En las coordenadas del mundo (Three.js): -Z es UP, +Z es DOWN, -X es LEFT, +X es RIGHT (§5)
-    if (ultimaDireccion === DIRECCIONES.UP) yoLocal.target.z -= velPaso;
-    else if (ultimaDireccion === DIRECCIONES.DOWN) yoLocal.target.z += velPaso;
-    else if (ultimaDireccion === DIRECCIONES.LEFT) yoLocal.target.x -= velPaso;
-    else if (ultimaDireccion === DIRECCIONES.RIGHT) yoLocal.target.x += velPaso;
-  }
 
   for (const k of knights.values()) {
     const p = k.group.position;
-    // El GAME_STATE incluye la dirección oficial. Proyectar brevemente desde
-    // la última posición evita que un compañero se congele y luego salte
-    // cuando la VPN entrega varios estados juntos.
-    if (k !== yoLocal && k.serverStateAt) {
+    // La proyección siempre parte de la última posición oficial; nunca se
+    // acumula sobre el fotograma anterior. Así responde rápido sin alejarse
+    // del servidor ni regresar bruscamente al recibir GAME_STATE.
+    if (k.serverStateAt) {
       const edadMs = Math.min(
         200,
         performance.now() - k.serverStateAt + cfg.tickIntervalMs,
       );
       k.target.copy(k.serverPosition);
       const adelanto = velocidadMaxima() * edadMs / 1000;
-      if (k.serverDirection === DIRECCIONES.UP) k.target.z -= adelanto;
-      else if (k.serverDirection === DIRECCIONES.DOWN) k.target.z += adelanto;
-      else if (k.serverDirection === DIRECCIONES.LEFT) k.target.x -= adelanto;
-      else if (k.serverDirection === DIRECCIONES.RIGHT) k.target.x += adelanto;
+      const dir = k === yoLocal ? ultimaDireccion : k.serverDirection;
+      if (dir === DIRECCIONES.UP) k.target.z -= adelanto;
+      else if (dir === DIRECCIONES.DOWN) k.target.z += adelanto;
+      else if (dir === DIRECCIONES.LEFT) k.target.x -= adelanto;
+      else if (dir === DIRECCIONES.RIGHT) k.target.x += adelanto;
     }
     _v.subVectors(k.target, p); _v.y = 0;
     const d = _v.length();
 
-    if (k === yoLocal && ultimaDireccion !== DIRECCIONES.NONE && !terminada) {
-      p.copy(k.target);
-      if (ultimaDireccion === DIRECCIONES.UP) k.yaw = Math.PI;
-      else if (ultimaDireccion === DIRECCIONES.DOWN) k.yaw = 0;
-      else if (ultimaDireccion === DIRECCIONES.LEFT) k.yaw = -Math.PI / 2;
-      else if (ultimaDireccion === DIRECCIONES.RIGHT) k.yaw = Math.PI / 2;
-    } else if (d > 0.0005) {
-      const paso = Math.min(d, velocidadMaxima() * dt * 2.0);
+    if (d > 0.0005) {
+      const paso = Math.min(d, velocidadMaxima() * dt * 3.0);
       p.addScaledVector(_v.normalize(), paso);
       k.yaw = Math.atan2(_v.x, _v.z);
     }
@@ -787,6 +756,19 @@ function frame(dtForzado) {
       && performance.now() - ultimoInteractEnviadoEn >= cfg.tickIntervalMs) {
     cliente.interactuar();
     ultimoInteractEnviadoEn = performance.now();
+  }
+
+  // En estado CARRIED la bandera sigue al modelo renderizado del portador,
+  // no a una coordenada de red anterior que pueda llegar con jitter.
+  if (cliente.estado?.flagStatus === ESTADO_BANDERA.CARRIED) {
+    const portador = knights.get(cliente.estado.flagCarrierId);
+    if (portador) {
+      banner.position.set(
+        portador.group.position.x,
+        SUELO_Y,
+        portador.group.position.z,
+      );
+    }
   }
 
   cosmos.update(dt, t);
