@@ -447,6 +447,34 @@ try {
       `el servidor propio sale UNA vez pese a ${r.difusiones.length} interfaces (${r.servidores.length})`);
   }
 
+  // ── El servidor no se responde a sí mismo ─────────────────────────────────
+  //
+  // El propio broadcast de anunciarActivamente() le llega de vuelta a su
+  // mismo socket (medido, sobre todo por interfaces con difusión real). Un
+  // DISCOVER_RESPONSE contiene la palabra "DISCOVER", así que sin excluirlo a
+  // propósito el filtro de compatibilidad (pensado para tolerar clientes de
+  // otros equipos) lo confundía con una pregunta nueva: el servidor se
+  // contestaba a sí mismo, esa respuesta volvía a entrar, y así. Medido antes
+  // de la corrección: ~670 mensajes por segundo sin que nadie preguntara nada.
+  console.log('\n== El servidor no entra en bucle respondiéndose a sí mismo ==');
+  {
+    let mensajes = 0;
+    const solitario = publicarServidor({
+      puerto: 15602,
+      describir: () => ({
+        gameId: 9, serverName: 'Prueba de bucle', tcpPort: 5009,
+        state: ESTADO_PARTIDA.WAITING, playerCount: 0, maximumPlayers: 100,
+      }),
+      log: () => { mensajes++; },
+    });
+    await dormir(2500);   // deja correr varias ráfagas de anunciarActivamente() (1/s)
+    solitario.cerrar();
+    // Ritmo normal esperado: unas pocas líneas de log por ráfaga (una por
+    // destino/formato), no cientos. El bucle sin arreglar daba miles en este
+    // mismo lapso.
+    check(mensajes < 50, `sin bucle de auto-respuesta (${mensajes} mensajes en 2.5 s, antes eran miles)`);
+  }
+
   terminar(fail ? 1 : 0);
 } catch (e) {
   console.error('\nExcepción en la prueba:', e);

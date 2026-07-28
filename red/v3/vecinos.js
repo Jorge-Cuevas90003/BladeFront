@@ -34,10 +34,28 @@ const IPV4 = /(\d{1,3}(?:\.\d{1,3}){3})/;
 const INFRAESTRUCTURA = new Set(['26.0.0.1']);
 
 // Mapeo de nombres oficiales del canal de Radmin VPN (CC8_ProyectoCTF).
+//
+// Esta lista se construyó a mano y por eso se queda corta cada vez que alguien
+// se une a la red o le cambia la IP a Radmin (pasa al reinstalar, o al
+// reconectar tras mucho tiempo desconectado). El 2026-07-27 se contrastó
+// contra una captura real del panel de Radmin de Lester y aparecieron cinco
+// compañeros que estaban en la red pero no aquí: COMPUROS, CRISPC,
+// CRISTOPHERPC y dos DESKTOP-* (el nombre venía cortado en la captura).
+//
+// Antes se había dicho que las IPs de esos cinco eran "direcciones
+// fabricadas" de un bug viejo del <textarea> — eso era un error: cuatro de
+// las cinco (todas menos 26.230.5.152, que sigue sin cuadrar con nadie) son
+// gente real que simplemente nunca se agregó aquí con nombre. Queda
+// corregido.
 export const NOMBRES_RADMIN = {
   '26.202.164.209': 'C4RL',
+  '26.149.39.235': 'COMPUROS',
+  '26.145.82.121': 'CRISPC',
+  '26.186.204.96': 'CRISTOPHERPC',
   '26.10.214.186': 'DAVIDSG6',
   '26.149.22.221': 'DESKTOP-8C1TEUH',
+  '26.199.242.82': 'DESKTOP-PEB',   // nombre cortado en la captura de origen
+  '26.110.160.28': 'DESKTOP-PS',    // nombre cortado en la captura de origen
   '26.78.151.72': 'Edgar',
   '26.135.3.121': 'Emmanuel',
   '26.230.5.15': 'Espana-PC',
@@ -55,6 +73,7 @@ export const NOMBRES_RADMIN = {
   '26.98.33.110': 'Vicco-Lap',
   '26.157.21.141': 'Victor_PC',
   '26.11.206.94': 'J (Tú)',
+  '26.40.171.28': 'Santiago',
 };
 
 export function nombreDeRadmin(ip) {

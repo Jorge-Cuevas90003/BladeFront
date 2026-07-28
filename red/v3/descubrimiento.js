@@ -71,7 +71,15 @@ export function publicarServidor({
       // 1. Decodificar JSON / Texto (para clientes Java/C#/Python de los compañeros)
       try {
         const texto = new TextDecoder('utf-8').decode(datos).trim();
-        if (texto.includes('DISCOVER_REQUEST') || texto.includes('DISCOVER') || texto.startsWith('{')) {
+        // Un DISCOVER_RESPONSE también contiene la palabra DISCOVER, y el propio
+        // broadcast de este servidor le llega de vuelta a su mismo socket
+        // (medido: sí pasa, sobre todo por la interfaz de Radmin). Sin excluirlo
+        // aquí, el servidor confundía su propia respuesta con una pregunta nueva
+        // y se contestaba a sí mismo — y esa segunda respuesta volvía a
+        // entrar por el mismo camino. Medido en el código sin este filtro:
+        // ~670 mensajes por segundo en bucle, sin que nadie preguntara nada.
+        if (!texto.includes('DISCOVER_RESPONSE') &&
+            (texto.includes('DISCOVER_REQUEST') || texto.includes('DISCOVER') || texto.startsWith('{'))) {
           if (texto.startsWith('{')) {
             const obj = JSON.parse(texto);
             if (obj.protocolVersion) reqVersion = String(obj.protocolVersion);
