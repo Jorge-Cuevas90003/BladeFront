@@ -41,6 +41,7 @@ export class ClienteV3 extends EventTarget {
     this._bots = [];
     this._ultimoTick = -1;
     this._cerrandoAdrede = false;
+    this._esperaJoin = null;
 
     // Lo dice el servidor, no se adivina. En local siempre mandas tú.
     this.hostId = 0;
@@ -181,6 +182,14 @@ export class ClienteV3 extends EventTarget {
       this.conectado = true;
       console.log('%c[RED-WS]%c ✅ Conexión establecida. Enviando JOIN:', 'background: #16a34a; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;', 'color: inherit', { name: nombre });
       ws.send(enmarcar(TIPOS.JOIN, { name: nombre }));
+      // Abrir el WebSocket solo confirma que hablamos con el bridge local. La
+      // conexión no está lista hasta que el servidor remoto entiende JOIN y
+      // devuelve JOIN_ACCEPTED/JOIN_REJECTED.
+      this._esperaJoin = setTimeout(() => {
+        this._esperaJoin = null;
+        if (this.playerId || this._cerrandoAdrede) return;
+        try { ws.close(4003, 'sin respuesta compatible al JOIN'); } catch {}
+      }, 5000);
     };
     ws.onmessage = (ev) => this._acc.alimentar(new Uint8Array(ev.data));
     ws.onerror = (e) => {
@@ -190,14 +199,20 @@ export class ClienteV3 extends EventTarget {
       }
     };
     ws.onclose = (ev) => {
+      if (this._esperaJoin) { clearTimeout(this._esperaJoin); this._esperaJoin = null; }
       this.conectado = false;
       console.log('%c[RED-WS]%c 🔌 Conexión cerrada (code ' + ev.code + ')', 'background: #64748b; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;', 'color: inherit');
       if (this._cerrandoAdrede) return;
       // 4001 lo pone el bridge cuando el servidor de juego no responde: así se
       // distingue "no hay servidor" de "se cayó el bridge".
+      const razon = (ev.reason || '').trim();
       const desc = ev.code === 4001
-        ? 'el servidor de juego no responde'
-        : 'se perdió la conexión con el bridge';
+        ? `no se pudo abrir TCP con el servidor${razon ? `: ${razon}` : ''}`
+        : ev.code === 4002
+          ? `el servidor cerró la conexión después de abrir TCP${razon ? `: ${razon}` : ''}`
+          : ev.code === 4003
+            ? 'el servidor no respondió al JOIN o usa un protocolo incompatible'
+            : 'se perdió la conexión con el bridge';
       this._emitir(TIPOS.ERROR, { code: 0, description: desc });
     };
   }
@@ -217,10 +232,14 @@ export class ClienteV3 extends EventTarget {
 
     switch (msg.type) {
       case TIPOS.JOIN_ACCEPTED:
+        if (this._esperaJoin) { clearTimeout(this._esperaJoin); this._esperaJoin = null; }
         this.playerId = msg.playerId;
         this.gameId = msg.gameId;
         console.log('%c[RED]%c 🎉 JOIN_ACCEPTED -> Asignado ID #' + msg.playerId + ', Partida #' + msg.gameId, 'background: #16a34a; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;', 'color: inherit');
         this.consultarAnfitrion();
+        break;
+      case TIPOS.JOIN_REJECTED:
+        if (this._esperaJoin) { clearTimeout(this._esperaJoin); this._esperaJoin = null; }
         break;
       case TIPOS.LOBBY_STATE:
         this._lobby = msg;
@@ -317,6 +336,7 @@ export class ClienteV3 extends EventTarget {
 
   detener() {
     this._cerrandoAdrede = true;
+    if (this._esperaJoin) { clearTimeout(this._esperaJoin); this._esperaJoin = null; }
     if (this._bucle) { this._bucle.detener(); this._bucle = null; }
     if (this._cuentaLocal) { clearInterval(this._cuentaLocal); this._cuentaLocal = null; }
     if (this._ws) {

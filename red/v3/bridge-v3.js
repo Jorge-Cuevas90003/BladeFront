@@ -400,9 +400,12 @@ export function crearBridge({
     tcp.on('close', cerrar);
     tcp.on('error', (e) => {
       log(`error TCP (${host}:${port}): ${e.message}`);
-      // Cerrar con un código propio permite al cliente distinguir "no pude
-      // conectar con el servidor" de "se cayó el bridge".
-      try { ws.close(4001, 'no se pudo conectar con el servidor de juego'); } catch {}
+      // Antes y después de `connect` son fallos distintos. Un rechazo/timeout
+      // significa que no se abrió TCP; ECONNRESET después de conectar suele
+      // indicar que el servidor remoto no entendió el protocolo recibido.
+      const codigo = tcpListo ? 4002 : 4001;
+      const detalle = `${e.code || 'TCP'}: ${e.message}`.slice(0, 120);
+      try { ws.close(codigo, detalle); } catch {}
       try { tcp.destroy(); } catch {}
     });
   });
