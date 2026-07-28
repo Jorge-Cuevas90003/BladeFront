@@ -267,6 +267,9 @@ function asegurarKnight(id, nombreManual = null) {
     k = {
       group, marca, etiqueta, anim: new KnightAnimator(group),
       target: new THREE.Vector3(), yaw: 0,
+      serverPosition: new THREE.Vector3(),
+      serverDirection: DIRECCIONES.NONE,
+      serverStateAt: 0,
       colocado: false, accion: 0, nombre,
     };
     knights.set(id, k);
@@ -449,6 +452,10 @@ on(TIPOS.GAME_STARTED, (m) => {
     k.colocado = true;
     if (p.playerId === miId) k.marca.material.opacity = 0.55;
   }
+  // Una tecla puede quedar presionada durante la cuenta regresiva. En ese
+  // caso el servidor descarta el INPUT previo porque la partida aún no había
+  // empezado; reenviarlo aquí evita que solo se mueva la predicción local.
+  recalcularDireccion(true);
   bandera('¡A la arena!');
   aviso(`Partida iniciada · ${m.players.length} caballeros`);
 });
@@ -465,26 +472,20 @@ on(TIPOS.GAME_STATE, (m) => {
     vistos.add(p.playerId);
     const k = asegurarKnight(p.playerId);
     aMundo(p.x, p.y, _vTarget);
+    k.serverPosition.copy(_vTarget);
+    k.serverDirection = p.direction;
+    k.serverStateAt = performance.now();
     if (!k.colocado) {
       k.group.position.copy(_vTarget);
       k.target.copy(_vTarget);
       k.colocado = true;
-    } else if (p.playerId === miId) {
-      // Reconciliación limpia para el jugador local:
-      // Solo corregimos si la desviación con el servidor es mayor a un umbral (por ejemplo al chocar contra un borde),
-      // evitando cualquier tiron o snap hacia atrás durante el movimiento continuo.
-      if (k.group.position.distanceTo(_vTarget) > 1.8 * ESCALA * cfg.playerSpeed) {
-        k.group.position.copy(_vTarget);
-        k.target.copy(_vTarget);
-      }
     } else {
-      // Para los compañeros se sigue la posición autoritativa del servidor
+      // Un salto enorme es una reaparición o corrección excepcional. El
+      // movimiento normal se interpola en frame() desde serverPosition.
       if (k.group.position.distanceTo(_vTarget) > cfg.circleRadius * ESCALA) {
         k.group.position.copy(_vTarget);
-        k.target.copy(_vTarget);
-      } else {
-        k.target.copy(_vTarget);
       }
+      k.target.copy(_vTarget);
     }
     k.llevaBandera = p.hasFlag;
     if (p.playerId === miId) k.marca.material.opacity = 0.55;
@@ -580,7 +581,10 @@ const INTENCION = {
   KeyD: [1, 0],  ArrowRight: [1, 0],
 };
 let ultimaDireccion = DIRECCIONES.NONE;
+let ultimoInputEnviadoEn = 0;
+const INTERVALO_HEARTBEAT_INPUT = 100;
 let interactuando = false;
+let ultimoInteractEnviadoEn = 0;
 
 const _adelante = new THREE.Vector3();
 
@@ -607,7 +611,7 @@ function direccionDesdeCamara(lateral, frontal) {
   return dz >= 0 ? DIRECCIONES.DOWN : DIRECCIONES.UP;
 }
 
-function recalcularDireccion() {
+function recalcularDireccion(forzar = false) {
   // Gana la última tecla pulsada que siga presionada: si se mantiene W y luego
   // se pulsa D, va a la derecha, y al soltar D vuelve a subir.
   let intencion = null;
@@ -617,9 +621,16 @@ function recalcularDireccion() {
     ? direccionDesdeCamara(intencion[0], intencion[1])
     : DIRECCIONES.NONE;
 
-  if (dir !== ultimaDireccion) {
+  const ahora = performance.now();
+  const cambio = dir !== ultimaDireccion;
+  if (cambio) {
     ultimaDireccion = dir;
+  }
+  const heartbeat = dir !== DIRECCIONES.NONE
+    && ahora - ultimoInputEnviadoEn >= INTERVALO_HEARTBEAT_INPUT;
+  if (cambio || forzar || heartbeat) {
     cliente.mandarDireccion(dir);
+    ultimoInputEnviadoEn = ahora;
   }
 }
 
@@ -639,6 +650,7 @@ window.addEventListener('keydown', (e) => {
     interactuando = true;
     if (!e.repeat) {
       cliente.interactuar();
+      ultimoInteractEnviadoEn = performance.now();
       const k = knights.get(miId);
       if (k) k.accion = 0.4;
     }
@@ -687,31 +699,34 @@ function frame(dtForzado) {
   const dt = dtForzado != null ? dtForzado : Math.min(reloj.getDelta(), 0.05);
   const t = reloj.elapsedTime;
 
-  // Predicción local instantánea (0ms delay) para el jugador propio mientras mantenga teclas pulsadas
   const yoLocal = knights.get(miId);
-  if (yoLocal && ultimaDireccion !== DIRECCIONES.NONE && !terminada) {
-    const velPaso = velocidadMaxima() * dt;
-    // DIRECCIONES: UP=1, DOWN=2, LEFT=3, RIGHT=4 (§10)
-    // En las coordenadas del mundo (Three.js): -Z es UP, +Z es DOWN, -X es LEFT, +X es RIGHT (§5)
-    if (ultimaDireccion === DIRECCIONES.UP) yoLocal.target.z -= velPaso;
-    else if (ultimaDireccion === DIRECCIONES.DOWN) yoLocal.target.z += velPaso;
-    else if (ultimaDireccion === DIRECCIONES.LEFT) yoLocal.target.x -= velPaso;
-    else if (ultimaDireccion === DIRECCIONES.RIGHT) yoLocal.target.x += velPaso;
-  }
 
   for (const k of knights.values()) {
     const p = k.group.position;
+    // Todos parten de la posición oficial. Solo los compañeros remotos se
+    // extrapolan brevemente para ocultar el jitter de la VPN. El jugador
+    // propio no se predice: nunca puede separarse del servidor ni quedar
+    // atrapado dentro de una corrección visual.
+    if (k.serverStateAt) {
+      k.target.copy(k.serverPosition);
+    }
+    if (k !== yoLocal && k.serverStateAt) {
+      const edadMs = Math.min(
+        200,
+        performance.now() - k.serverStateAt + cfg.tickIntervalMs,
+      );
+      const adelanto = velocidadMaxima() * edadMs / 1000;
+      const dir = k.serverDirection;
+      if (dir === DIRECCIONES.UP) k.target.z -= adelanto;
+      else if (dir === DIRECCIONES.DOWN) k.target.z += adelanto;
+      else if (dir === DIRECCIONES.LEFT) k.target.x -= adelanto;
+      else if (dir === DIRECCIONES.RIGHT) k.target.x += adelanto;
+    }
     _v.subVectors(k.target, p); _v.y = 0;
     const d = _v.length();
 
-    if (k === yoLocal && ultimaDireccion !== DIRECCIONES.NONE && !terminada) {
-      p.copy(k.target);
-      if (ultimaDireccion === DIRECCIONES.UP) k.yaw = Math.PI;
-      else if (ultimaDireccion === DIRECCIONES.DOWN) k.yaw = 0;
-      else if (ultimaDireccion === DIRECCIONES.LEFT) k.yaw = -Math.PI / 2;
-      else if (ultimaDireccion === DIRECCIONES.RIGHT) k.yaw = Math.PI / 2;
-    } else if (d > 0.0005) {
-      const paso = Math.min(d, velocidadMaxima() * dt * 2.0);
+    if (d > 0.0005) {
+      const paso = Math.min(d, velocidadMaxima() * dt * 3.0);
       p.addScaledVector(_v.normalize(), paso);
       k.yaw = Math.atan2(_v.x, _v.z);
     }
@@ -740,7 +755,24 @@ function frame(dtForzado) {
   // La cámara puede girar con una tecla de movimiento pulsada; hay que
   // reevaluar para que "adelante" siga siendo adelante mientras se orbita.
   if (teclas.size) recalcularDireccion();
-  if (interactuando) cliente.interactuar();
+  if (interactuando
+      && performance.now() - ultimoInteractEnviadoEn >= cfg.tickIntervalMs) {
+    cliente.interactuar();
+    ultimoInteractEnviadoEn = performance.now();
+  }
+
+  // En estado CARRIED la bandera sigue al modelo renderizado del portador,
+  // no a una coordenada de red anterior que pueda llegar con jitter.
+  if (cliente.estado?.flagStatus === ESTADO_BANDERA.CARRIED) {
+    const portador = knights.get(cliente.estado.flagCarrierId);
+    if (portador) {
+      banner.position.set(
+        portador.group.position.x,
+        SUELO_Y,
+        portador.group.position.z,
+      );
+    }
+  }
 
   cosmos.update(dt, t);
   titans.update(dt, t);
@@ -844,7 +876,9 @@ $('finOtra')?.addEventListener('click', () => { volverAlMenu(); entrar(); });
 //  pintar en cada sondeo, la selección del usuario se perdería cada dos
 //  segundos y la animación de entrada parpadearía sin parar.
 // ---------------------------------------------------------------------------
-const INTERVALO_BUSQUEDA = 2500;
+// Sondea cada segundo mientras el menú de red está abierto. Durante una
+// partida se pausa para que el broadcast no compita con el tráfico del juego.
+const INTERVALO_BUSQUEDA = 1000;
 let servidoresVistos = new Map();   // "host:puerto" -> datos
 let seleccionado = null;
 let buscando = false;

@@ -137,14 +137,11 @@ export function crearServidor({
           return enviar(socket, TIPOS.ERROR, { code: ERRORES.INVALID_MESSAGE, description: 'ya hiciste JOIN en esta conexión' });
         }
 
-        // Desconectar cualquier entrada anterior activa con el mismo nombre exacto
-        const limpio = String(msg.name ?? '').trim();
-        for (const j of juego.jugadores.values()) {
-          if (j.connected && j.name === limpio) {
-            j.connected = false;
-          }
-        }
-
+        // El nombre es descriptivo, no la identidad de red: esa identidad es el
+        // playerId asignado por el servidor. Antes se marcaba como desconectado
+        // a cualquier jugador activo con el mismo nombre. Como todos arrancan
+        // con "Templario", el primer invitado expulsaba silenciosamente al
+        // anfitrión y la sala quedaba diciendo que no estaba conectado.
         const { jugador, error } = juego.agregarJugador(msg.name);
         if (error) return enviar(socket, TIPOS.JOIN_REJECTED, { reason: error });
 

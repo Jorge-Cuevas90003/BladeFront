@@ -96,6 +96,19 @@ try {
   const lobby = anfitrion.ultimo(TIPOS.LOBBY_STATE);
   check(lobby?.players.length === 3, `la sala los lista a los 3 (${lobby?.players.length})`);
 
+  // Todos los clientes arrancan con el nombre "Templario". El nombre no puede
+  // utilizarse para identificar una conexión: un invitado con el mismo nombre
+  // no debe marcar como desconectado al anfitrión.
+  console.log('\n== 2a. Nombres repetidos no expulsan al anfitrión ==');
+  const repetido = await cliente();
+  repetido.manda(TIPOS.JOIN, { name: 'Anfitrion' });
+  check(!!(await repetido.espera(TIPOS.JOIN_ACCEPTED)), 'otro jugador puede usar el mismo nombre');
+  const lobbyRepetido = anfitrion.ultimo(TIPOS.LOBBY_STATE);
+  check(lobbyRepetido?.players.length === 4,
+    `los dos nombres repetidos siguen conectados (${lobbyRepetido?.players.length})`);
+  repetido.cierra();
+  await dormir(50);
+
   // ── 2b. Quién manda lo dice el SERVIDOR ───────────────────────────────────
   // Que el cliente lo dedujera del id más bajo era el error: el anfitrión es
   // quien aloja la partida en su máquina, y puede haber entrado después que un

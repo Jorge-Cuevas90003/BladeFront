@@ -104,7 +104,7 @@ export function publicarServidor({
 
       const info = describir();
 
-      // Enviar respuestas a origen.port, a 5001, 5000, 5100, 5101 en todos los formatos posibles
+      // Enviar respuestas a origen.port y a los puertos de compatibilidad.
       const enviarEnTodosFormatos = (targetHost, targetPort) => {
         try {
           const respBinaria = codificar(TIPOS.DISCOVER_RESPONSE, info);

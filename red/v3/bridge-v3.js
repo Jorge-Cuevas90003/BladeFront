@@ -21,7 +21,6 @@
 
 import http from 'node:http';
 import net from 'node:net';
-import os from 'node:os';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 import { WebSocketServer } from 'ws';
@@ -355,19 +354,6 @@ export function crearBridge({
       if (u.searchParams.has('port')) port = Number(u.searchParams.get('port')) || tcpPort;
     } catch {}
 
-    // En Windows con Radmin VPN, 127.0.0.1/localhost sufre ETIMEDOUT por la tabla de métricas.
-    // Mapear al adaptador de Radmin local u otra IPv4 externa activa permite conectar en 0.01s.
-    if (host === '127.0.0.1' || host === 'localhost') {
-      for (const list of Object.values(os.networkInterfaces())) {
-        for (const iface of list ?? []) {
-          if ((iface.family === 'IPv4' || iface.family === 4) && !iface.internal && iface.address.startsWith('26.')) {
-            host = iface.address;
-            break;
-          }
-        }
-      }
-    }
-
     const tcp = net.connect(port, host);
     tcp.setNoDelay(true);
     // Mismo motivo que en el servidor: si el equipo que aloja la partida se
@@ -410,9 +396,12 @@ export function crearBridge({
     tcp.on('close', cerrar);
     tcp.on('error', (e) => {
       log(`error TCP (${host}:${port}): ${e.message}`);
-      // Cerrar con un código propio permite al cliente distinguir "no pude
-      // conectar con el servidor" de "se cayó el bridge".
-      try { ws.close(4001, 'no se pudo conectar con el servidor de juego'); } catch {}
+      // Antes y después de `connect` son fallos distintos. Un rechazo/timeout
+      // significa que no se abrió TCP; ECONNRESET después de conectar suele
+      // indicar que el servidor remoto no entendió el protocolo recibido.
+      const codigo = tcpListo ? 4002 : 4001;
+      const detalle = `${e.code || 'TCP'}: ${e.message}`.slice(0, 120);
+      try { ws.close(codigo, detalle); } catch {}
       try { tcp.destroy(); } catch {}
     });
   });
