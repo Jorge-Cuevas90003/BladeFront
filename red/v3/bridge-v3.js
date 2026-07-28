@@ -90,10 +90,20 @@ export function crearBridge({
       // Por eso se pregunta SIEMPRE en el estándar, más el propio por si algún
       // compañero tuvo que moverse igual. Cuesta lo mismo: los datagramas salen
       // del mismo socket y la espera es una sola.
+      // El servidor (descubrimiento.js, publicarServidor) SIEMPRE intenta atar
+      // 5000, 5100 y 5101 como respaldo además del puerto pedido, pase lo que
+      // pase con ese — es la garantía del lado que anuncia. Del lado que
+      // pregunta hacía falta la misma garantía: antes solo se probaban DOS
+      // puertos (el estándar y el propio), y si un compañero tenía su propio
+      // conflicto de puerto y terminaba en un valor que no coincidiera con
+      // ninguno de esos dos, nunca se le ocurría mirar en el 5000/5100/5101
+      // donde el otro lado sí estaba respondiendo. Ahora se preguntan los
+      // mismos cuatro que el anunciante garantiza, siempre.
+      const PUERTOS_RESPALDO = [5000, 5100, 5101];
       const puertoPedido = Number(url.searchParams.get('puerto'));
       const puertos = puertoPedido
         ? [puertoPedido]
-        : [...new Set([PARAMS_DEFECTO.discoveryPort, puertoUdp, ...puertosExtra])];
+        : [...new Set([PARAMS_DEFECTO.discoveryPort, puertoUdp, ...PUERTOS_RESPALDO, ...puertosExtra])];
 
       // Qué se miró DE VERDAD. Va en la respuesta porque el usuario tiene que
       // poder distinguir "no hay nadie" de "no miré ahí".
