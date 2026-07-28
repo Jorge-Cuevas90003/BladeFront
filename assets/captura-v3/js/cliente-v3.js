@@ -275,12 +275,15 @@ export class ClienteV3 extends EventTarget {
     esperaMs = 800, ips = [],
   } = {}) {
     // El sondeo automático debe ser liviano y ajustarse al protocolo:
-    // broadcast UDP 5001. No se recorre todo el roster ni se abren conexiones
-    // TCP a decenas de equipos en cada actualización de la lista.
+    // broadcast UDP 5001. El roster y los vecinos de Radmin se muestran en la
+    // interfaz, pero no se les envían consultas UDP individuales ni se abren
+    // conexiones TCP a decenas de equipos en cada actualización.
     const q = new URLSearchParams({
       espera: String(esperaMs),
-      roster: '0',
-      vecinos: '0',
+      roster: '1',
+      vecinos: '1',
+      sondeo: '0',
+      listar: '1',
       tcp: '0',
       puerto: '5001',
     });
