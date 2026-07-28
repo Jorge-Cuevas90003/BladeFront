@@ -449,6 +449,10 @@ on(TIPOS.GAME_STARTED, (m) => {
     k.colocado = true;
     if (p.playerId === miId) k.marca.material.opacity = 0.55;
   }
+  // Una tecla puede quedar presionada durante la cuenta regresiva. En ese
+  // caso el servidor descarta el INPUT previo porque la partida aún no había
+  // empezado; reenviarlo aquí evita que solo se mueva la predicción local.
+  recalcularDireccion(true);
   bandera('¡A la arena!');
   aviso(`Partida iniciada · ${m.players.length} caballeros`);
 });
@@ -580,6 +584,8 @@ const INTENCION = {
   KeyD: [1, 0],  ArrowRight: [1, 0],
 };
 let ultimaDireccion = DIRECCIONES.NONE;
+let ultimoInputEnviadoEn = 0;
+const INTERVALO_HEARTBEAT_INPUT = 100;
 let interactuando = false;
 
 const _adelante = new THREE.Vector3();
@@ -607,7 +613,7 @@ function direccionDesdeCamara(lateral, frontal) {
   return dz >= 0 ? DIRECCIONES.DOWN : DIRECCIONES.UP;
 }
 
-function recalcularDireccion() {
+function recalcularDireccion(forzar = false) {
   // Gana la última tecla pulsada que siga presionada: si se mantiene W y luego
   // se pulsa D, va a la derecha, y al soltar D vuelve a subir.
   let intencion = null;
@@ -617,9 +623,16 @@ function recalcularDireccion() {
     ? direccionDesdeCamara(intencion[0], intencion[1])
     : DIRECCIONES.NONE;
 
-  if (dir !== ultimaDireccion) {
+  const ahora = performance.now();
+  const cambio = dir !== ultimaDireccion;
+  if (cambio) {
     ultimaDireccion = dir;
+  }
+  const heartbeat = dir !== DIRECCIONES.NONE
+    && ahora - ultimoInputEnviadoEn >= INTERVALO_HEARTBEAT_INPUT;
+  if (cambio || forzar || heartbeat) {
     cliente.mandarDireccion(dir);
+    ultimoInputEnviadoEn = ahora;
   }
 }
 
@@ -844,7 +857,9 @@ $('finOtra')?.addEventListener('click', () => { volverAlMenu(); entrar(); });
 //  pintar en cada sondeo, la selección del usuario se perdería cada dos
 //  segundos y la animación de entrada parpadearía sin parar.
 // ---------------------------------------------------------------------------
-const INTERVALO_BUSQUEDA = 2500;
+// Sondea cada segundo mientras el menú de red está abierto. Durante una
+// partida se pausa para que el broadcast no compita con el tráfico del juego.
+const INTERVALO_BUSQUEDA = 1000;
 let servidoresVistos = new Map();   // "host:puerto" -> datos
 let seleccionado = null;
 let buscando = false;

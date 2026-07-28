@@ -156,6 +156,9 @@ try {
   }
   const enCentro = a.todos(TIPOS.GAME_STATE).at(-1)?.players.find((x) => x.playerId === 1);
   check(Math.hypot(enCentro.x, enCentro.y) <= 50, `J1 llega al centro (${Math.hypot(enCentro.x, enCentro.y).toFixed(1)})`);
+  const vistoPorB = b.todos(TIPOS.GAME_STATE).at(-1)?.players.find((x) => x.playerId === 1);
+  check(vistoPorB && Math.hypot(vistoPorB.x, vistoPorB.y) <= 55,
+    `el segundo cliente ve el movimiento de J1 (${Math.hypot(vistoPorB?.x ?? 999, vistoPorB?.y ?? 999).toFixed(1)})`);
 
   a.manda(TIPOS.INPUT, { playerId: 1, direction: DIRECCIONES.NONE });
   a.manda(TIPOS.INTERACT, { playerId: 1 });
