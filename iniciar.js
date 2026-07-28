@@ -25,17 +25,14 @@ import path from 'node:path';
 import dgram from 'node:dgram';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
-import { spawn, exec, execSync } from 'node:child_process';
+import { spawn, exec } from 'node:child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const ROOT = path.dirname(__filename);
 
-// Intentar liberar automáticamente procesos de fondo en puertos 5000/5001 (Windows)
-if (process.platform === 'win32') {
-  try {
-    execSync('powershell -NoProfile -Command "Get-Process -Name lktsrv, nidmsrv -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue"', { stdio: 'ignore', timeout: 2000 });
-  } catch {}
-}
+// El lanzador no debe detener servicios del sistema para apropiarse de un
+// puerto. Si 5001 está ocupado se informa mediante la comprobación de puertos
+// que aparece más abajo, sin afectar la conectividad de Windows.
 
 // ----------------------------------------------------------------------------
 //  Argumentos
