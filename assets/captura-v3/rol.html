@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BladeFront · Elegir configuración</title>
+  <style>
+    *{box-sizing:border-box} body{margin:0;min-height:100vh;display:grid;place-items:center;
+      background:radial-gradient(circle at 50% 20%,#202b39,#05080d 65%);color:#edf2f6;
+      font:14px system-ui,sans-serif}.panel{width:min(760px,92vw);padding:42px;border:1px solid #364656;
+      background:rgba(6,10,16,.94)}h1{margin:0;color:#ffb638;font:700 30px Georgia,serif;
+      letter-spacing:.12em;text-transform:uppercase}.sub{color:#8295a6;margin:8px 0 30px;letter-spacing:.1em;
+      text-transform:uppercase;font-size:11px}.roles{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    button{min-height:190px;padding:25px;text-align:left;color:#eef4f8;background:#09111b;
+      border:1px solid #304153;cursor:pointer;transition:.2s}button:hover{transform:translateY(-3px);
+      border-color:#ffb638;background:#111a24}.icono{display:block;font-size:30px;margin-bottom:18px}
+    b{display:block;color:#ffb638;font:700 18px Georgia,serif;text-transform:uppercase;margin-bottom:9px}
+    span{color:#91a3b2;line-height:1.6}button:disabled{opacity:.45;cursor:wait;transform:none}
+    #estado{min-height:20px;margin:20px 0 0;color:#ff8585;text-align:center}
+    @media(max-width:620px){.roles{grid-template-columns:1fr}.panel{padding:26px}}
+  </style>
+</head>
+<body>
+  <main class="panel">
+    <h1>Captura la Bandera</h1>
+    <div class="sub">Selecciona cómo se configurará esta computadora</div>
+    <div class="roles">
+      <button data-rol="servidor">
+        <i class="icono">◉</i><b>Servidor</b>
+        <span>Aloja la partida y muestra a todos los jugadores. Esta computadora no participa ni controla un personaje.</span>
+      </button>
+      <button data-rol="cliente">
+        <i class="icono">⚔</i><b>Cliente</b>
+        <span>Busca una partida en la red y entra como jugador. Esta computadora no aloja un servidor propio.</span>
+      </button>
+    </div>
+    <p id="estado"></p>
+  </main>
+  <script>
+    const botones=[...document.querySelectorAll('[data-rol]')];
+    const estado=document.getElementById('estado');
+    for(const boton of botones) boton.addEventListener('click',async()=>{
+      botones.forEach(b=>b.disabled=true);
+      estado.textContent='Configurando…';
+      try{
+        const r=await fetch('/__rol',{
+          method:'POST',
+          headers:{'content-type':'application/json'},
+          body:JSON.stringify({rol:boton.dataset.rol}),
+        });
+        const d=await r.json();
+        if(!r.ok) throw new Error(d.error||`HTTP ${r.status}`);
+        location.replace(d.destino);
+      }catch(e){
+        estado.textContent=e.message;
+        botones.forEach(b=>b.disabled=false);
+      }
+    });
+  </script>
+</body>
+</html>

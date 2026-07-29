@@ -33,9 +33,21 @@ placajes y un jefe. **Captura la Bandera** es el que habla el protocolo
 propio del curso, diseñado entre todos los equipos, y con el que se juega entre
 computadoras distintas.
 
-Lo más rápido es doble clic en **`iniciar.bat`**: levanta el servidor, el
-bridge y la web, abre el navegador y te dice cuál de tus IPs pasarles a los
-demás. O a mano:
+Los roles están separados para que la computadora que aloja la partida no
+participe como jugador. El comando normal abre primero una pantalla para elegir:
+
+```bash
+npm start        # elegir Servidor o Cliente en el navegador
+npm run server   # acceso directo al modo Servidor
+npm run client   # acceso directo al modo Cliente
+```
+
+El servidor muestra a todos los jugadores y la bandera, pero no acepta
+controles de movimiento, no ocupa un cupo y solo consulta su estado por
+`127.0.0.1`. Desde esa pantalla se inicia la cuenta atrás cuando los clientes
+ya entraron. El cliente no levanta un servidor propio. Tanto el servidor como
+el cliente incluyen **Cambiar configuración**, que cierra el rol activo, libera
+sus puertos y vuelve a la selección inicial. O a mano:
 
 ```bash
 npx http-server . -p 8145 -c-1
@@ -43,6 +55,7 @@ npx http-server . -p 8145 -c-1
 
 - Modo Juggernaut → `http://localhost:8145/assets/modo-juggernaut/`
 - Captura la Bandera → `http://localhost:8145/assets/captura-v3/`
+- Vista del servidor → `http://localhost:8145/assets/captura-v3/servidor.html`
 
 **Modo Juggernaut**
 

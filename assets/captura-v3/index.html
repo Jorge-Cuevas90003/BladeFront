@@ -69,6 +69,10 @@
     .modo-card.on { border-color:var(--oro); background:linear-gradient(160deg,rgba(255,182,56,.12),rgba(6,9,13,.7) 60%); }
     .modo-card .dot { position:absolute; top:13px; right:13px; width:8px; height:8px; border-radius:50%; border:1px solid var(--dim); }
     .modo-card.on .dot { background:var(--oro); border-color:var(--oro); box-shadow:0 0 10px var(--oro); }
+    .cambiar-rol { width:100%; margin-top:10px; padding:10px; border:1px solid #314151;
+      color:#91a4b3; background:rgba(7,12,19,.78); text-transform:uppercase;
+      font-size:9px; font-weight:700; letter-spacing:.13em; cursor:pointer; }
+    .cambiar-rol:hover { color:var(--oro); border-color:var(--oro); }
 
     .fila { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     .stepper { display:flex; }
@@ -358,6 +362,7 @@
       </div>
 
       <button class="entrar" id="jugar">Entrar a la Arena</button>
+      <button type="button" class="cambiar-rol" id="cambiarRol">Cambiar configuración Servidor / Cliente</button>
 
       <div class="footline">
         <span>una bandera · sal del círculo</span>
@@ -445,6 +450,18 @@
       const clamp = (v) => Math.max(0, Math.min(20, v));
       $('botsMenos').addEventListener('click', () => bots.value = clamp((+bots.value || 0) - 1));
       $('botsMas').addEventListener('click', () => bots.value = clamp((+bots.value || 0) + 1));
+      $('cambiarRol').addEventListener('click', async () => {
+        $('cambiarRol').disabled = true;
+        try {
+          const r = await fetch('/__reiniciar-rol', { method:'POST' });
+          const d = await r.json();
+          if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+          location.replace(d.destino);
+        } catch (e) {
+          alert(`No se pudo cambiar la configuración: ${e.message}`);
+          $('cambiarRol').disabled = false;
+        }
+      });
     })();
   </script>
 

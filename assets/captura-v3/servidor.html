@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BladeFront · Vista del servidor</title>
+  <style>
+    :root { color-scheme:dark; --oro:#ffb638; --cian:#8cecff; --fondo:#05080d; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:radial-gradient(circle at 50% 30%,#152231,var(--fondo) 62%);
+      color:#e8edf2; font:14px/1.4 system-ui,sans-serif; display:grid; grid-template-rows:auto 1fr; }
+    header { padding:16px 22px; border-bottom:1px solid #263443; background:rgba(5,8,13,.92);
+      display:flex; gap:20px; align-items:center; justify-content:space-between; }
+    .acciones { display:flex; gap:16px; align-items:center; }
+    .empezar { color:#171109; border:1px solid var(--oro); padding:9px 13px; background:var(--oro);
+      text-transform:uppercase; font-size:10px; font-weight:800; letter-spacing:.1em; cursor:pointer; }
+    .empezar:disabled { opacity:.35; cursor:not-allowed; }
+    .cambiar { color:#a9bdcc; border:1px solid #314151; padding:9px 11px; background:#09111b;
+      text-transform:uppercase; font-size:9px; font-weight:700; letter-spacing:.1em; cursor:pointer; }
+    .cambiar:hover { color:var(--oro); border-color:var(--oro); }
+    h1 { margin:0; color:var(--oro); font:700 18px Georgia,serif; letter-spacing:.12em; text-transform:uppercase; }
+    .solo { color:#94a5b5; font-size:12px; letter-spacing:.08em; text-transform:uppercase; }
+    main { min-height:0; display:grid; grid-template-columns:minmax(420px,1fr) 280px; gap:16px; padding:16px; }
+    .arena,.datos { border:1px solid #263443; background:rgba(7,11,18,.88); }
+    .arena { min-height:480px; display:grid; place-items:center; overflow:hidden; }
+    canvas { width:min(78vh,100%); height:min(78vh,100%); aspect-ratio:1; display:block; }
+    .datos { padding:18px; overflow:auto; }
+    dl { display:grid; grid-template-columns:1fr auto; gap:9px 12px; margin:0 0 22px; }
+    dt { color:#718596; text-transform:uppercase; font-size:11px; letter-spacing:.1em; }
+    dd { margin:0; font-weight:700; }
+    h2 { color:var(--oro); font-size:12px; letter-spacing:.14em; text-transform:uppercase; }
+    ul { list-style:none; padding:0; margin:0; display:grid; gap:8px; }
+    li { padding:9px; border:1px solid #243343; display:flex; justify-content:space-between; }
+    .ok { color:#7ee8a8; } .error { color:#ff7878; }
+    footer { color:#708292; font-size:11px; margin-top:20px; }
+    @media (max-width:760px) { main { grid-template-columns:1fr; } .arena { min-height:58vh; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div><h1>BladeFront · Servidor</h1><div class="solo">Vista global de solo lectura · sin controles de juego</div></div>
+    <div class="acciones">
+      <strong id="conexion">Conectando…</strong>
+      <button class="empezar" id="empezar" disabled>Iniciar partida</button>
+      <button class="cambiar" id="cambiarRol">Cambiar configuración</button>
+    </div>
+  </header>
+  <main>
+    <section class="arena"><canvas id="mapa" width="900" height="900"></canvas></section>
+    <aside class="datos">
+      <dl>
+        <dt>Servidor</dt><dd id="nombre">—</dd>
+        <dt>Estado</dt><dd id="estado">—</dd>
+        <dt>Tick</dt><dd id="tick">—</dd>
+        <dt>Jugadores</dt><dd id="cantidad">0</dd>
+        <dt>Bandera</dt><dd id="bandera">—</dd>
+      </dl>
+      <h2>Todos los jugadores</h2>
+      <ul id="jugadores"><li>Nadie conectado</li></ul>
+      <footer>Esta pantalla no se registra como jugador, no envía entradas y solo consulta el servidor mediante 127.0.0.1.</footer>
+    </aside>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const canvas = $('mapa');
+    const ctx = canvas.getContext('2d');
+    const endpoint = new URLSearchParams(location.search).get('estado') || 'http://127.0.0.1:8147/estado';
+    const estados = {1:'ESPERANDO',2:'INICIANDO',3:'EN PARTIDA',4:'FINALIZADA',5:'CANCELADA'};
+    const banderas = {1:'LIBRE',2:'LLEVADA',3:'CAÍDA',4:'FUERA'};
+    let consultando = false;
+    let ultimoEstado = null;
+
+    function dibujar(s) {
+      const w = canvas.width, h = canvas.height;
+      const escala = Math.min(w,h) / (s.params.mapSize * 2.2);
+      const px = (x) => w/2 + x*escala;
+      const py = (y) => h/2 + y*escala;
+      ctx.clearRect(0,0,w,h);
+      ctx.fillStyle='#07101a'; ctx.fillRect(0,0,w,h);
+      ctx.strokeStyle='#263b4d'; ctx.lineWidth=2;
+      ctx.strokeRect(px(-s.params.mapSize),py(-s.params.mapSize),
+        s.params.mapSize*2*escala,s.params.mapSize*2*escala);
+      ctx.beginPath(); ctx.arc(w/2,h/2,s.params.circleRadius*escala,0,Math.PI*2);
+      ctx.strokeStyle='#ffb638'; ctx.lineWidth=5; ctx.stroke();
+
+      const f=s.flag;
+      ctx.beginPath(); ctx.arc(px(f.x),py(f.y),11,0,Math.PI*2);
+      ctx.fillStyle='#ffd36f'; ctx.shadowColor='#ffb638'; ctx.shadowBlur=18; ctx.fill(); ctx.shadowBlur=0;
+
+      for (const p of s.players) {
+        const x=px(p.x), y=py(p.y);
+        ctx.beginPath(); ctx.arc(x,y,15,0,Math.PI*2);
+        ctx.fillStyle=p.hasFlag ? '#ffb638' : '#8cecff'; ctx.fill();
+        ctx.strokeStyle='#eafaff'; ctx.lineWidth=2; ctx.stroke();
+        ctx.fillStyle='#fff'; ctx.font='700 17px system-ui'; ctx.textAlign='center';
+        ctx.fillText(`${p.name} #${p.playerId}`,x,y-23);
+      }
+    }
+
+    function presentar(s) {
+      $('nombre').textContent=s.serverName;
+      $('estado').textContent=estados[s.state] ?? s.state;
+      $('tick').textContent=s.tick;
+      $('cantidad').textContent=s.players.length;
+      $('bandera').textContent=banderas[s.flag.status] ?? s.flag.status;
+      ultimoEstado=s;
+      $('empezar').disabled=s.state!==1 || s.players.length===0;
+      $('jugadores').replaceChildren(...(s.players.length
+        ? s.players.map((p) => {
+            const li=document.createElement('li');
+            const nombre=document.createElement('span');
+            const id=document.createElement('b');
+            nombre.textContent=p.name;
+            id.textContent=`#${p.playerId}${p.hasFlag?' · bandera':''}`;
+            li.append(nombre,id);
+            return li;
+          })
+        : [Object.assign(document.createElement('li'),{textContent:'Nadie conectado'})]));
+      dibujar(s);
+    }
+
+    async function actualizar() {
+      if (consultando) return;
+      consultando=true;
+      try {
+        const r=await fetch(endpoint,{cache:'no-store'});
+        if(!r.ok) throw new Error(`HTTP ${r.status}`);
+        presentar(await r.json());
+        $('conexion').textContent='Servidor activo';
+        $('conexion').className='ok';
+      } catch(e) {
+        $('conexion').textContent='Servidor no disponible';
+        $('conexion').className='error';
+      } finally { consultando=false; }
+    }
+    actualizar();
+    setInterval(actualizar,100);
+    $('empezar').addEventListener('click',async()=>{
+      if(!ultimoEstado || ultimoEstado.state!==1 || ultimoEstado.players.length===0) return;
+      $('empezar').disabled=true;
+      try {
+        const r=await fetch('http://127.0.0.1:8147/empezar',{method:'POST'});
+        if(!r.ok) {
+          const d=await r.json().catch(()=>({}));
+          throw new Error(d.error || `HTTP ${r.status}`);
+        }
+      } catch(e) {
+        alert(`No se pudo iniciar: ${e.message}`);
+      }
+      actualizar();
+    });
+    $('cambiarRol').addEventListener('click',async()=>{
+      $('cambiarRol').disabled=true;
+      try{
+        const r=await fetch('/__reiniciar-rol',{method:'POST'});
+        const d=await r.json();
+        if(!r.ok) throw new Error(d.error||`HTTP ${r.status}`);
+        location.replace(d.destino);
+      }catch(e){
+        alert(`No se pudo cambiar la configuración: ${e.message}`);
+        $('cambiarRol').disabled=false;
+      }
+    });
+  </script>
+</body>
+</html>
