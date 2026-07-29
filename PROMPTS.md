@@ -228,8 +228,18 @@ como anfitrión, porque el servidor es quien aloja y controla la partida.
 que atribuía ese papel a un jugador. La sala conserva la marca `TÚ` y espera el
 inicio administrativo del servidor, sin modificar conexiones ni reglas.
 
+## 27 · Estricto cumplimiento del protocolo oficial PRFC v3.0.0 (eliminación de 0x7E)
+
+**Solicitud:** resolver discrepancias de compatibilidad en red con servidores de
+otros equipos causadas por el envío del mensaje no estándar `0x7E` (`HOST_QUERY`).
+
+**Resultado:** se desactivó el envío automático de `HOST_QUERY` (`0x7E`) en `cliente-v3.js`,
+garantizando que el cliente envíe únicamente tipos de mensaje contemplados en el rango oficial `0x01`-`0x2A`
+del estándar PRFC v3.0.0 (`erickm13/CC8-Protocolo`).
+
 ---
 
 *Nota: la cronología se mantiene sincronizada con los commits del repositorio Git.*
+
 
 

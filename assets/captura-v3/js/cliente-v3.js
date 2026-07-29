@@ -317,11 +317,10 @@ export class ClienteV3 extends EventTarget {
   // aloja la partida en su máquina, no quien llegó primero. Si un compañero se
   // conecta antes de que el dueño abra su navegador, el id más bajo es el del
   // compañero y la deducción daría el mando a quien no le toca.
+  // Preguntar quién manda. Desactivado en el modo red contra servidores estrictos
+  // oficiales, para no enviar 0x7E (HOST_QUERY) fuera del rango spec 0x01-0x2A.
   consultarAnfitrion() {
-    if (this.modo !== 'red' || !this.playerId) return;
-    if (this._ws?.readyState === WebSocket.OPEN) {
-      this._ws.send(enmarcar(TIPOS.HOST_QUERY, { playerId: this.playerId }));
-    }
+    return;
   }
 
   interactuar() {
