@@ -190,6 +190,13 @@ dentro del mensaje**: se toma del origen real del datagrama UDP, para que no
 se puedan anunciar direcciones falsas o equivocadas por tener varias
 interfaces de red.
 
+La respuesta binaria sigue literalmente PRFC §27.2: `playerCount` y
+`maximumPlayers` ocupan **u16 big-endian** cada uno. Una versión anterior los
+codificaba como `u8`, dejando el datagrama dos bytes más corto; los clientes
+que implementaban estrictamente el PRFC descartaban ese anuncio aunque el
+servidor sí fuera alcanzable por TCP. El servidor solo responde mientras está
+en estado `WAITING`.
+
 ### 4.1 Broadcast estándar (`255.255.255.255`)
 
 Es la vía de libro de texto: un cliente manda el `DISCOVER_REQUEST` a la

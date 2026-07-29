@@ -31,7 +31,9 @@
 import dgram from 'node:dgram';
 import net from 'node:net';
 import os from 'node:os';
-import { TIPOS, VERSION, codificar, decodificar, PARAMS_DEFECTO } from './protocolo-v3.js';
+import {
+  TIPOS, VERSION, ESTADO_PARTIDA, codificar, decodificar, PARAMS_DEFECTO,
+} from './protocolo-v3.js';
 import { NOMBRES_RADMIN } from './vecinos.js';
 
 // Tope de IPs por sondeo. Protege dos cosas: el tiempo de la petición y la red
@@ -103,6 +105,9 @@ export function publicarServidor({
       if (msg && msg.type !== TIPOS.DISCOVER_REQUEST) return;
 
       const info = describir();
+      // PRFC §19: una partida que ya está corriendo no se anuncia ni responde
+      // al descubrimiento. El cliente solo debe listar servidores en espera.
+      if (info.state !== ESTADO_PARTIDA.WAITING && info.state !== 'WAITING') return;
 
       // Enviar respuestas a origen.port y a los puertos de compatibilidad.
       const enviarEnTodosFormatos = (targetHost, targetPort) => {

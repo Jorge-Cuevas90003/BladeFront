@@ -71,8 +71,10 @@ try {
   jugadores = 12;
   estado = ESTADO_PARTIDA.RUNNING;
   const otra = await buscarServidores({ puerto: PUERTO, direccion: '127.0.0.1', esperaMs: 700 });
-  check(otra[0]?.playerCount === 12, `refleja el nuevo conteo (${otra[0]?.playerCount})`);
-  check(otra[0]?.state === ESTADO_PARTIDA.RUNNING, 'y el nuevo estado');
+  check(otra.length === 0, 'un servidor RUNNING no responde al descubrimiento (§19)');
+  estado = ESTADO_PARTIDA.WAITING;
+  const actualizada = await buscarServidores({ puerto: PUERTO, direccion: '127.0.0.1', esperaMs: 700 });
+  check(actualizada[0]?.playerCount === 12, `al volver a WAITING refleja el conteo (${actualizada[0]?.playerCount})`);
 
   // ── 3. Los datagramas van SIN prefijo de longitud (§23) ───────────────────
   console.log('\n== 3. UDP sin prefijo de longitud (§23) ==');

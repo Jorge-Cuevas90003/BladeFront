@@ -146,6 +146,19 @@ observe, pero no participe como jugador, se separaron los roles:
 - [`e5d91e7`](https://github.com/Jorge-Cuevas90003/BladeFront/commit/e5d91e7):
   restauración de roles y uso exclusivo de los puertos oficiales.
 
+### Versión conceptual 7 — interoperabilidad binaria de descubrimiento
+
+Durante la prueba con otro grupo, el servidor BladeFront era alcanzable por
+TCP 5000, pero su partida no aparecía mediante UDP. La comparación con
+PRFC-CC8-2026 §27.2 reveló que la respuesta `DISCOVER_RESPONSE` codificaba
+`playerCount` y `maximumPlayers` como `u8`, cuando el formato común exige
+`u16` big-endian para ambos. Esto producía un datagrama dos bytes más corto
+que un cliente estricto descartaba.
+
+Se corrigió el códec sin modificar la partida TCP ni el motor del juego. Se
+añadió una prueba que compara el datagrama byte por byte con el PRFC y se
+limitó la respuesta de descubrimiento al estado `WAITING`, como exige §19.
+
 ## 4. Cronología resumida por día
 
 | Fecha | Resultado principal | Evidencia Git |
