@@ -458,29 +458,24 @@ try {
     check(!alguno, 'y con roster=0 no sale ni un datagrama hacia esas IPs');
   }
 
-  // ── 4e. Los puertos de respaldo del servidor también se preguntan ─────────
-  // descubrimiento.js (publicarServidor) SIEMPRE ata 5000/5100/5101 como
-  // respaldo, sin importar qué pase con el puerto pedido — es la garantía del
-  // lado que anuncia. Del lado que pregunta hacía falta la misma garantía:
-  // antes solo se probaban el puerto estándar y el propio (como mucho dos),
-  // y un compañero con su propio conflicto de puerto podía terminar en un
-  // valor que no coincidiera con ninguno de esos dos.
-  console.log('\n== 4e. Se preguntan los mismos puertos de respaldo que el servidor garantiza ==');
+  // ── 4e. El descubrimiento se limita al puerto oficial ──────────────────────
+  console.log('\n== 4e. El descubrimiento usa exclusivamente UDP 5001 ==');
   {
     const r = await (await fetch(
       `http://127.0.0.1:${PUERTO_WS}/servidores?direccion=127.0.0.1&espera=300&vecinos=0&roster=0`
     )).json();
-    for (const p of [5000, 5100, 5101]) {
-      check(r.exploracion?.puertos?.includes(p), `se pregunta en el puerto de respaldo ${p}`);
-    }
+    check(r.exploracion?.puertos?.includes(5001)
+          && r.exploracion?.puertos?.includes(PUERTO_UDP)
+          && ![5000, 5100, 5101].some((p) => r.exploracion?.puertos?.includes(p)),
+      `se usa 5001 y el puerto aislado de prueba, sin respaldos prohibidos (${JSON.stringify(r.exploracion?.puertos)})`);
 
-    // Con `?puerto=` explícito (modo manual/pruebas) NO deben colarse: pedir
-    // uno solo tiene que dar uno solo, o el modo "solo aquí" dejaría de serlo.
+    // En pruebas se conserva el puerto explícito para no apropiarse del 5001
+    // real de la máquina, pero no se agregan respaldos.
     const rExplicito = await (await fetch(
       `http://127.0.0.1:${PUERTO_WS}/servidores?direccion=127.0.0.1&puerto=${PUERTO_UDP}&espera=300&vecinos=0&roster=0`
     )).json();
     check(rExplicito.exploracion?.puertos?.length === 1 && rExplicito.exploracion.puertos[0] === PUERTO_UDP,
-      `con ?puerto= explícito no se agregan los de respaldo (${JSON.stringify(rExplicito.exploracion?.puertos)})`);
+      `con ?puerto= explícito tampoco se agregan respaldos (${JSON.stringify(rExplicito.exploracion?.puertos)})`);
   }
 
   // ── 5. Destino elegible por query ─────────────────────────────────────────

@@ -21,7 +21,6 @@
 
 import http from 'node:http';
 import net from 'node:net';
-import os from 'node:os';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 import { WebSocketServer } from 'ws';
@@ -87,23 +86,13 @@ export function crearBridge({
       // pero los compañeros siguen escuchando en el 5001 que fija la spec.
       // Preguntando solo en el 5101 se grita donde no hay nadie.
       //
-      // Por eso se pregunta SIEMPRE en el estándar, más el propio por si algún
-      // compañero tuvo que moverse igual. Cuesta lo mismo: los datagramas salen
-      // del mismo socket y la espera es una sola.
-      // El servidor (descubrimiento.js, publicarServidor) SIEMPRE intenta atar
-      // 5000, 5100 y 5101 como respaldo además del puerto pedido, pase lo que
-      // pase con ese — es la garantía del lado que anuncia. Del lado que
-      // pregunta hacía falta la misma garantía: antes solo se probaban DOS
-      // puertos (el estándar y el propio), y si un compañero tenía su propio
-      // conflicto de puerto y terminaba en un valor que no coincidiera con
-      // ninguno de esos dos, nunca se le ocurría mirar en el 5000/5100/5101
-      // donde el otro lado sí estaba respondiendo. Ahora se preguntan los
-      // mismos cuatro que el anunciante garantiza, siempre.
-      const PUERTOS_RESPALDO = [5000, 5001];
+      // El laboratorio reserva exclusivamente UDP 5001 para descubrimiento.
+      // No se consultan 5000/5100/5101: 5000 queda reservado para TCP y un
+      // servidor que no pueda usar 5001 debe informar el conflicto al arrancar.
       const puertoPedido = Number(url.searchParams.get('puerto'));
       const puertos = puertoPedido
         ? [puertoPedido]
-        : [...new Set([PARAMS_DEFECTO.discoveryPort, puertoUdp, ...PUERTOS_RESPALDO, ...puertosExtra])];
+        : [...new Set([PARAMS_DEFECTO.discoveryPort, puertoUdp])];
 
       // Qué se miró DE VERDAD. Va en la respuesta porque el usuario tiene que
       // poder distinguir "no hay nadie" de "no miré ahí".
@@ -371,13 +360,6 @@ export function crearBridge({
       if (u.searchParams.has('host')) host = u.searchParams.get('host');
       if (u.searchParams.has('port')) port = Number(u.searchParams.get('port')) || tcpPort;
     } catch {}
-
-    // Si el destino es loopback local (127.0.0.1 / localhost), resolverlo a la IP de Radmin/LAN
-    // de esta máquina para evitar el retardo/timeout del adaptador virtual de Radmin en Windows.
-    if (host === '127.0.0.1' || host === 'localhost' || host === '::1') {
-      const radminIface = Object.values(os.networkInterfaces()).flat().find(i => i && !i.internal && i.family === 'IPv4' && i.address.startsWith('26.'));
-      if (radminIface) host = radminIface.address;
-    }
 
     const tcp = net.connect(port, host);
     tcp.setNoDelay(true);

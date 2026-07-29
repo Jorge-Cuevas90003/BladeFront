@@ -317,12 +317,10 @@ export function publicarServidor({
 
       for (const s of sockets) {
         for (const dest of todosLosDestinos) {
-          for (const pDest of [5001, 5000, 5100, 5101]) {
-            try {
-              s.send(respBinaria, pDest, dest, () => {});
-              s.send(jsonBuf, pDest, dest, () => {});
-            } catch {}
-          }
+          try {
+            s.send(respBinaria, puerto, dest, () => {});
+            s.send(jsonBuf, puerto, dest, () => {});
+          } catch {}
         }
       }
     } catch {}
