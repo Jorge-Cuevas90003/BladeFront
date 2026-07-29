@@ -56,6 +56,8 @@ if (flag('ayuda') || flag('help') || args.includes('-h')) {
 
     --v1                       arranca la implementación antigua (rejilla)
                                en vez de la v3, que es la de por defecto
+    --servidor                 aloja la partida y abre solo la vista global
+    --cliente                  abre el cliente jugable, sin alojar servidor
     --puerto-tcp N             puerto del servidor de juego      (5000)
     --puerto-descubrimiento N  puerto UDP de descubrimiento      (5001)
                                si está ocupado se busca otro solo
@@ -70,6 +72,8 @@ if (flag('ayuda') || flag('help') || args.includes('-h')) {
 }
 
 const V1 = flag('v1');
+let ROL_CLIENTE = flag('cliente');
+let ROL_SERVIDOR = flag('servidor');
 
 const PUERTO_WEB = 8145;
 const PUERTO_TCP = num('puerto-tcp', 5000);
@@ -97,6 +101,9 @@ const MODO = V1
     };
 
 const URL_JUEGO = `http://localhost:${PUERTO_WEB}${MODO.pagina}`;
+const PUERTO_MONITOR = 8147;
+const URL_MONITOR = `http://localhost:${PUERTO_WEB}/assets/captura-v3/servidor.html`;
+const URL_ROLES = `http://localhost:${PUERTO_WEB}/assets/captura-v3/rol.html`;
 
 // ----------------------------------------------------------------------------
 //  Consola
@@ -218,6 +225,36 @@ const MIME = {
 };
 
 const servidorWeb = http.createServer((req, res) => {
+  if (req.method === 'POST' && req.url === '/__reiniciar-rol') {
+    return detenerRol().then(() => {
+      res.writeHead(200, { 'content-type':'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok:true, destino:URL_ROLES }));
+    }).catch((e) => {
+      res.writeHead(500, { 'content-type':'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok:false, error:e.message }));
+    });
+  }
+  if (req.method === 'POST' && req.url === '/__rol') {
+    let cuerpo = '';
+    req.setEncoding('utf8');
+    req.on('data', (d) => { if (cuerpo.length < 1000) cuerpo += d; });
+    return req.on('end', () => {
+      let rol;
+      try { rol = JSON.parse(cuerpo).rol; } catch {}
+      if (rol !== 'servidor' && rol !== 'cliente') {
+        res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ ok:false, error:'rol inválido' }));
+      }
+      try {
+        const destino = activarRol(rol);
+        res.writeHead(200, { 'content-type':'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok:true, destino }));
+      } catch (e) {
+        res.writeHead(409, { 'content-type':'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok:false, error:e.message }));
+      }
+    });
+  }
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { 'content-type': 'text/plain; charset=utf-8' });
     return res.end('405 Método no permitido');
@@ -230,7 +267,9 @@ const servidorWeb = http.createServer((req, res) => {
     res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
     return res.end('400 URL mal formada');
   }
-  if (ruta === '/') ruta = MODO.pagina;
+  if (ruta === '/') ruta = !ROL_CLIENTE && !ROL_SERVIDOR
+    ? '/assets/captura-v3/rol.html'
+    : ROL_SERVIDOR ? '/assets/captura-v3/servidor.html' : MODO.pagina;
 
   // path.resolve normaliza los '..': si el resultado se sale de la raíz, fuera.
   let archivo = path.resolve(ROOT, '.' + ruta);
@@ -277,6 +316,7 @@ function escucharWeb() {
 // ----------------------------------------------------------------------------
 const hijos = [];
 let cerrando = false;
+let cambiandoRol = false;
 
 function tuberia(flujo, etiqueta, color, aError = false) {
   let resto = '';
@@ -304,7 +344,7 @@ function lanzar(etiqueta, color, script, argumentos) {
 
   proc.on('error', (e) => error(`no se pudo arrancar ${script}: ${e.message}`));
   proc.on('exit', (code, sig) => {
-    if (cerrando) return;
+    if (cerrando || cambiandoRol) return;
     aviso(`${etiqueta} terminó (${sig ? 'señal ' + sig : 'código ' + code}).`);
   });
 
@@ -387,9 +427,9 @@ function resumen(udp) {
   console.log(linea('═'));
   console.log(`  ${C.negrita}⚔  BLADEFRONT — CAPTURA LA BANDERA${C.fin}   ${C.gris}${MODO.etiqueta}${C.fin}`);
   console.log(linea('═'));
-  fila('Juego (navegador)', `${C.verde}${URL_JUEGO}${C.fin}`);
-  fila('Servidor TCP', `puerto ${PUERTO_TCP}`);
-  if (MODO.descubrimiento) {
+  if (ROL_CLIENTE || V1) fila('Cliente (navegador)', `${C.verde}${URL_JUEGO}${C.fin}`);
+  if (ROL_SERVIDOR || V1) fila('Servidor TCP', `puerto ${PUERTO_TCP}`);
+  if (MODO.descubrimiento && ROL_SERVIDOR) {
     fila(
       'Descubrimiento UDP',
       udp.cambiado
@@ -399,8 +439,9 @@ function resumen(udp) {
   } else {
     fila('Descubrimiento UDP', `${C.gris}no aplica en la v1 (se escribe la IP a mano)${C.fin}`);
   }
-  fila('Bridge WebSocket', `ws://localhost:${PUERTO_BRIDGE}`);
-  if (MODO.descubrimiento) fila('Nombre anunciado', `"${NOMBRE}"`);
+  if (ROL_CLIENTE || V1) fila('Bridge WebSocket', `ws://localhost:${PUERTO_BRIDGE}`);
+  if (!V1 && ROL_SERVIDOR) fila('Vista del servidor', `${C.verde}${URL_MONITOR}${C.fin}`);
+  if (MODO.descubrimiento && ROL_SERVIDOR) fila('Nombre anunciado', `"${NOMBRE}"`);
 
   console.log(linea());
   console.log(`  ${C.negrita}IPs de esta máquina${C.fin} ${C.gris}— pásale una de estas a tus compañeros:${C.fin}`);
@@ -468,50 +509,83 @@ try {
 log(`web sirviendo la raíz del proyecto en http://localhost:${PUERTO_WEB}`);
 // En paralelo, no bloquea el arranque: solo lee, tarda menos de un segundo y
 // el aviso puede llegar un poco después del cuadro de resumen.
-avisarFirewallWindows();
-
-if (V1) {
-  // SIN --auto a propósito: con él la cuenta atrás arranca en cuanto entra el
-  // primer jugador, y a partir de ahí el servidor rechaza a todos los demás con
-  // GAME_ALREADY_STARTED. El anfitrión acababa jugando solo. Ahora la partida
-  // espera y es él quien la empieza desde el navegador.
-  lanzar('servidor', C.verde, MODO.servidor, ['--port', String(puertoTcpFinal)]);
-  lanzar('bridge', C.magenta, MODO.bridge, [
-    '--ws', String(PUERTO_BRIDGE),
-    '--tcp-host', '127.0.0.1',
-    '--tcp-port', String(puertoTcpFinal),
-  ]);
-} else {
-  // SIN --auto a propósito: con él la cuenta atrás arranca en cuanto entra el
-  // primer jugador, y desde ese momento el servidor rechaza a todos los demás
-  // con GAME_ALREADY_STARTED. El anfitrión acababa jugando solo y nadie podía
-  // unirse. Ahora la partida espera en el lobby y la empieza él desde el
-  // navegador, cuando ya están todos dentro.
-  lanzar('servidor', C.verde, MODO.servidor, [
-    '--port', String(puertoTcpFinal),
-    '--discovery-port', String(udp.puerto),
-    '--name', NOMBRE,
-  ]);
-  // El bridge tiene que usar EL MISMO puerto de descubrimiento que el servidor:
-  // es el que consulta la página para listar partidas.
-  lanzar('bridge', C.magenta, MODO.bridge, [
-    '--ws', String(PUERTO_BRIDGE),
-    '--tcp-host', '127.0.0.1',
-    '--tcp-port', String(puertoTcpFinal),
-    '--discovery-port', String(udp.puerto),
-  ]);
+let rolArrancado = null;
+async function detenerRol() {
+  if (!rolArrancado) return;
+  cambiandoRol = true;
+  const activos = hijos.splice(0);
+  await Promise.all(activos.map(({ proc }) => new Promise((resolve) => {
+    if (proc.exitCode !== null || proc.killed) return resolve();
+    let terminado = false;
+    const acabar = () => { if (!terminado) { terminado = true; resolve(); } };
+    proc.once('exit', acabar);
+    try { proc.kill('SIGTERM'); } catch { acabar(); }
+    const t = setTimeout(() => {
+      try { if (proc.exitCode === null) proc.kill('SIGKILL'); } catch {}
+      acabar();
+    }, 1500);
+    t.unref();
+  })));
+  rolArrancado = null;
+  ROL_SERVIDOR = false;
+  ROL_CLIENTE = false;
+  cambiandoRol = false;
 }
+
+function activarRol(rol) {
+  if (rolArrancado) {
+    if (rolArrancado === rol) return rol === 'servidor' ? URL_MONITOR : URL_JUEGO;
+    throw new Error(`ya está activo el modo ${rolArrancado}; usa Ctrl+C antes de cambiar`);
+  }
+  rolArrancado = rol;
+  ROL_SERVIDOR = rol === 'servidor';
+  ROL_CLIENTE = rol === 'cliente';
+
+  if (V1) {
+    lanzar('servidor', C.verde, MODO.servidor, ['--port', String(puertoTcpFinal)]);
+    lanzar('bridge', C.magenta, MODO.bridge, [
+      '--ws', String(PUERTO_BRIDGE),
+      '--tcp-host', '127.0.0.1',
+      '--tcp-port', String(puertoTcpFinal),
+    ]);
+  } else if (ROL_SERVIDOR) {
+    avisarFirewallWindows();
+    lanzar('servidor', C.verde, MODO.servidor, [
+      '--port', String(puertoTcpFinal),
+      '--discovery-port', String(udp.puerto),
+      '--monitor', String(PUERTO_MONITOR),
+      '--strict-host',
+      '--name', NOMBRE,
+    ]);
+  } else {
+    lanzar('bridge', C.magenta, MODO.bridge, [
+      '--ws', String(PUERTO_BRIDGE),
+      '--tcp-host', '127.0.0.1',
+      '--tcp-port', String(puertoTcpFinal),
+      '--discovery-port', String(udp.puerto),
+    ]);
+  }
+  resumen(udp);
+  return ROL_SERVIDOR && !V1 ? URL_MONITOR : URL_JUEGO;
+}
+
+if (ROL_SERVIDOR) activarRol('servidor');
+else if (ROL_CLIENTE) activarRol('cliente');
 
 // Un respiro para que los hijos impriman sus líneas de arranque antes del cuadro.
 setTimeout(() => {
-  resumen(udp);
   if (SIN_NAVEGADOR) {
-    log(`--sin-navegador: abre tú ${URL_JUEGO}`);
+    if (!rolArrancado) log(`selecciona el rol en ${URL_ROLES}`);
+    else if (ROL_SERVIDOR && !V1) log(`vista del servidor: ${URL_MONITOR}`);
+    else log(`cliente: ${URL_JUEGO}`);
     return;
   }
-  const cmd =
-    process.platform === 'win32' ? `start "" "${URL_JUEGO}"` :
-    process.platform === 'darwin' ? `open "${URL_JUEGO}"` :
-    `xdg-open "${URL_JUEGO}"`;
-  exec(cmd, (e) => { if (e) aviso(`no pude abrir el navegador solo; entra a mano en ${URL_JUEGO}`); });
+  const abrir = (url) => {
+    const cmd =
+      process.platform === 'win32' ? `start "" "${url}"` :
+      process.platform === 'darwin' ? `open "${url}"` :
+      `xdg-open "${url}"`;
+    exec(cmd, (e) => { if (e) aviso(`no pude abrir el navegador solo; entra a mano en ${url}`); });
+  };
+  abrir(!rolArrancado ? URL_ROLES : ROL_SERVIDOR && !V1 ? URL_MONITOR : URL_JUEGO);
 }, 900);

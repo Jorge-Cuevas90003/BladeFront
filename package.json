@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node iniciar.js"
+    "start": "node iniciar.js",
+    "server": "node iniciar.js --servidor",
+    "client": "node iniciar.js --cliente"
   },
   "dependencies": {
     "three": "^0.170.0",

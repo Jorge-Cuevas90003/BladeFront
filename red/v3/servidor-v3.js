@@ -25,6 +25,7 @@
 // ============================================================================
 
 import net from 'node:net';
+import http from 'node:http';
 import os from 'node:os';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
@@ -58,6 +59,9 @@ export function crearServidor({
   minJugadores = 0,   // 0 = no arrancar solo; espera a que el anfitrión lo pida
   udp = true,
   puertoUdp = PARAMS_DEFECTO.discoveryPort,
+  monitorPort = null,
+  monitorHost = '127.0.0.1',
+  servidorEstricto = false,
   keepAliveMs = 10000,
   // Margen de cortesía entre el GAME_OVER y el desalojo: el tiempo que se les
   // deja a todos para ver quién ganó antes de cortarles la conexión.
@@ -73,6 +77,78 @@ export function crearServidor({
   let cuenta = null;   // temporizador de la cuenta atrás
   let bucle = null;    // temporizador del ciclo de juego
   let discovery = null;
+  let monitor = null;
+
+  // Vista administrativa local. No usa el protocolo de juego, no crea un
+  // jugador y no escucha en Radmin: únicamente expone una instantánea de solo
+  // lectura por loopback para la pantalla del servidor.
+  const instantaneaMonitor = () => ({
+    serverName: nombre,
+    state: juego.estado,
+    tick: juego.tick,
+    params: {
+      mapSize: juego.p.mapSize,
+      circleRadius: juego.p.circleRadius,
+      playerRadius: juego.p.playerRadius,
+      tickIntervalMs: juego.p.tickIntervalMs,
+    },
+    flag: {
+      x: juego.bandera.x,
+      y: juego.bandera.y,
+      status: juego.bandera.status,
+      carrierId: juego.bandera.carrierId,
+    },
+    players: juego.jugadoresActivos().map((j) => ({
+      playerId: j.playerId,
+      name: j.name,
+      x: j.x,
+      y: j.y,
+      direction: j.direction,
+      hasFlag: j.hasFlag,
+    })),
+  });
+
+  const crearMonitor = () => {
+    if (monitorPort === null || monitorPort === undefined) return Promise.resolve();
+    monitor = http.createServer((req, res) => {
+      res.setHeader('access-control-allow-origin', '*');
+      res.setHeader('cache-control', 'no-store');
+      if (req.method === 'GET' && req.url === '/estado') {
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify(instantaneaMonitor()));
+      }
+      if (req.method === 'GET' && req.url === '/salud') {
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ ok: true }));
+      }
+      if (req.method === 'POST' && req.url === '/empezar') {
+        if (!servidorEstricto) {
+          res.writeHead(403, { 'content-type': 'application/json; charset=utf-8' });
+          return res.end(JSON.stringify({ ok: false, error: 'control local desactivado' }));
+        }
+        if (juego.estado !== ESTADO_PARTIDA.WAITING) {
+          res.writeHead(409, { 'content-type': 'application/json; charset=utf-8' });
+          return res.end(JSON.stringify({ ok: false, error: 'la partida ya empezó' }));
+        }
+        if (juego.jugadoresActivos().length === 0) {
+          res.writeHead(409, { 'content-type': 'application/json; charset=utf-8' });
+          return res.end(JSON.stringify({ ok: false, error: 'no hay jugadores conectados' }));
+        }
+        arrancarCuenta();
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ ok: true }));
+      }
+      res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+      res.end('No encontrado');
+    });
+    return new Promise((resolve, reject) => {
+      monitor.once('error', reject);
+      monitor.listen(monitorPort, monitorHost, () => {
+        monitor.off('error', reject);
+        resolve();
+      });
+    });
+  };
 
   // --- envío ----------------------------------------------------------------
   const enviar = (socket, type, campos) => {
@@ -153,7 +229,8 @@ export function crearServidor({
         // Anfitrión es quien juega desde la máquina que aloja la partida. Si
         // ya hay uno no se reemplaza: abrir una segunda pestaña en local no
         // debe robarle el mando al que ya estaba.
-        if (info.esLocal && (!anfitrionId || !juego.jugadores.get(anfitrionId)?.connected)) {
+        if (!servidorEstricto && info.esLocal
+            && (!anfitrionId || !juego.jugadores.get(anfitrionId)?.connected)) {
           anfitrionId = jugador.playerId;
           log(`  ${jugador.playerId} es el anfitrión (juega desde esta máquina)`);
         }
@@ -174,6 +251,12 @@ export function crearServidor({
       // nuestra, no una desviación del protocolo.
       case TIPOS.HOST_START: {
         if (!duenoValido(socket, info, msg)) return;
+        if (servidorEstricto) {
+          return enviar(socket, TIPOS.ERROR, {
+            code: ERRORES.UNKNOWN_PLAYER,
+            description: 'la partida se inicia desde la consola del servidor',
+          });
+        }
         // Doble comprobación: el id tiene que ser el del anfitrión Y la
         // conexión tiene que venir de esta máquina. Con solo lo primero, si el
         // anfitrión se fuera y otro heredara su número podría dar la salida en
@@ -420,8 +503,8 @@ export function crearServidor({
     servidor,
     get puerto() { return servidor.address()?.port ?? puerto; },
 
-    escuchar() {
-      return new Promise((resolve) => {
+    async escuchar() {
+      const p = await new Promise((resolve) => {
         servidor.listen(puerto, host, () => {
           if (udp) {
             discovery = publicarServidor({
@@ -443,12 +526,20 @@ export function crearServidor({
           resolve(servidor.address()?.port ?? puerto);
         });
       });
+      try {
+        await crearMonitor();
+      } catch (e) {
+        await new Promise((resolve) => servidor.close(resolve));
+        throw e;
+      }
+      return p;
     },
 
     cerrar() {
       if (cuenta) { cuenta.detener(); cuenta = null; }
       if (bucle) { bucle.detener(); bucle = null; }
       try { discovery?.cerrar(); } catch {}
+      try { monitor?.close(); } catch {}
       for (const s of conexiones.keys()) s.destroy();
       conexiones.clear();
       return new Promise((resolve) => servidor.close(resolve));
@@ -489,6 +580,8 @@ if (esPrincipal) {
   const s = crearServidor({
     puerto: Number(val('port', PARAMS_DEFECTO.serverPort)),
     puertoUdp: Number(val('discovery-port', PARAMS_DEFECTO.discoveryPort)),
+    monitorPort: Number(val('monitor', 8147)),
+    servidorEstricto: flag('strict-host'),
     params, nombre, auto, minJugadores,
     keepAliveMs: Number(val('keepalive', 10000)),
     udp: !flag('no-udp'),
@@ -498,6 +591,7 @@ if (esPrincipal) {
 
   const p = await s.escuchar();
   marca(`"${nombre}" escuchando TCP en el puerto ${p}`);
+  marca(`vista local del servidor en http://127.0.0.1:${Number(val('monitor', 8147))}`);
   marca(auto
     ? '(--auto: arranca con el primer jugador — solo para pruebas, nadie más podrá entrar)'
     : minJugadores > 0
