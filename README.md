@@ -44,10 +44,11 @@ npm run client   # acceso directo al modo Cliente
 
 El servidor muestra a todos los jugadores y la bandera, pero no acepta
 controles de movimiento, no ocupa un cupo y solo consulta su estado por
-`127.0.0.1`. Desde esa pantalla se inicia la cuenta atrás cuando los clientes
-ya entraron. El cliente no levanta un servidor propio. Tanto el servidor como
-el cliente incluyen **Cambiar configuración**, que cierra el rol activo, libera
-sus puertos y vuelve a la selección inicial. O a mano:
+`127.0.0.1`. El primer cliente que entra es el anfitrión jugable y puede iniciar
+la partida desde su sala de espera; la vista del servidor conserva también un
+botón de inicio administrativo. El cliente no levanta un servidor propio. Tanto
+el servidor como el cliente incluyen **Cambiar configuración**, que cierra el
+rol activo, libera sus puertos y vuelve a la selección inicial. O a mano:
 
 ```bash
 npx http-server . -p 8145 -c-1
