@@ -371,6 +371,13 @@ export function crearBridge({
       if (u.searchParams.has('port')) port = Number(u.searchParams.get('port')) || tcpPort;
     } catch {}
 
+    // Si el destino es loopback local (127.0.0.1 / localhost), resolverlo a la IP de Radmin/LAN
+    // de esta máquina para evitar el retardo/timeout del adaptador virtual de Radmin en Windows.
+    if (esDeEstaMaquina(host)) {
+      const radminIface = Object.values(os.networkInterfaces()).flat().find(i => i && !i.internal && i.family === 'IPv4' && i.address.startsWith('26.'));
+      if (radminIface) host = radminIface.address;
+    }
+
     const tcp = net.connect(port, host);
     tcp.setNoDelay(true);
     // Mismo motivo que en el servidor: si el equipo que aloja la partida se
