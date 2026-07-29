@@ -1,7 +1,8 @@
 import net from 'node:net';
+import { readFile } from 'node:fs/promises';
 import { crearServidor } from '../red/v3/servidor-v3.js';
 import {
-  TIPOS, AcumuladorTCP, enmarcar,
+  TIPOS, ESTADO_BANDERA, AcumuladorTCP, enmarcar,
 } from '../red/v3/protocolo-v3.js';
 
 let fallas = 0;
@@ -56,7 +57,40 @@ ok(!!await esperar(TIPOS.GAME_STARTED, intento),
 const respuesta = await fetch('http://127.0.0.1:18147/empezar', { method: 'POST' });
 ok(respuesta.status === 409, 'la vista del servidor detecta que la partida ya inició');
 
+const jugador = servidor.juego.jugadores.get(aceptado.playerId);
+jugador.hasFlag = true;
+jugador.x = servidor.juego.p.circleRadius + servidor.juego.p.playerRadius + 2;
+jugador.y = 0;
+servidor.juego.bandera = {
+  x: jugador.x, y: jugador.y,
+  status: ESTADO_BANDERA.CARRIED,
+  carrierId: jugador.playerId,
+};
+ok(!!await esperar(TIPOS.GAME_OVER, mensajes.length, 1500),
+  'la partida termina y publica GAME_OVER');
+const estadoMonitor = await (await fetch('http://127.0.0.1:18147/estado')).json();
+ok(estadoMonitor.winner?.playerId === aceptado.playerId
+  && estadoMonitor.winner?.name === 'Cliente',
+  'la vista del servidor recibe el nombre y el id del ganador');
+
+const htmlServidor = await readFile(
+  new URL('../assets/captura-v3/servidor.html', import.meta.url), 'utf8',
+);
+const visorServidor = await readFile(
+  new URL('../assets/captura-v3/js/visor-servidor-3d.js', import.meta.url), 'utf8',
+);
+const visorCliente = await readFile(
+  new URL('../assets/captura-v3/js/visor-v3.js', import.meta.url), 'utf8',
+);
+ok(htmlServidor.includes('visor-servidor-3d.js')
+  && !visorServidor.includes('new ClienteV3')
+  && !visorServidor.includes('.mandarDireccion(')
+  && !visorServidor.includes('.interactuar('),
+  'el monitor 3D es de solo lectura y no contiene controles de juego');
+ok(!visorCliente.includes('Mi Propio Servidor (Host Local)'),
+  'el cliente ya no muestra la opción de servidor local');
+
 socket.destroy();
 await servidor.cerrar();
-console.log(`Resultado: ${fallas ? `${fallas} FALLAS` : '6 OK, 0 FALLAS'}`);
+console.log(`Resultado: ${fallas ? `${fallas} FALLAS` : '10 OK, 0 FALLAS'}`);
 if (fallas) process.exitCode = 1;

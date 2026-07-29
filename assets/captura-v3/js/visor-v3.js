@@ -887,24 +887,12 @@ function pintarServidores() {
   const lista = $('listaServidores');
   const estado = $('estadoBusqueda');
 
-  // Asegurar entrada de "Mi Propio Servidor (Host Local)" al inicio de la lista
   const claveLocal = '127.0.0.1:5000';
-  if (!lista.querySelector(`[data-clave="${claveLocal}"]`)) {
-    const liLocal = document.createElement('li');
-    liLocal.dataset.clave = claveLocal;
-    liLocal.innerHTML = `<b>🏠 Mi Propio Servidor (Host Local)</b><span class="via">◎</span><span>127.0.0.1:5000</span><span class="estado abierta">HOST</span>`;
-    liLocal.addEventListener('click', () => {
-      seleccionado = claveLocal;
-      $('host').value = '127.0.0.1';
-      $('puerto').value = '5000';
-      for (const otro of lista.children) otro.classList.toggle('on', otro === liLocal);
-    });
-    lista.prepend(liLocal);
-  }
+  lista.querySelector(`[data-clave="${claveLocal}"]`)?.remove();
 
   lista.querySelector('.vacio')?.remove();
 
-  const claves = new Set([claveLocal]);
+  const claves = new Set();
   for (const [clave, s] of servidoresVistos) {
     if (clave === claveLocal || s.host === '127.0.0.1' || s.host === 'localhost') continue;
     claves.add(clave);

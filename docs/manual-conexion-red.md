@@ -6,6 +6,14 @@ lo que se describe aquí está sacado directamente del código en
 `red/v3/` y `assets/captura-v3/js/cliente-v3.js`; no hay nada inventado ni
 simplificado más allá de lo necesario para explicarlo en voz alta.
 
+> [!IMPORTANT]
+> **Fuente normativa vigente:** la especificación estándar se mantiene en
+> [erickm13/CC8-Protocolo](https://github.com/erickm13/CC8-Protocolo), rama
+> `main`. El repositorio oficial declara vigente la versión **3.0.0**. Las
+> especificaciones y borradores locales anteriores de BladeFront están
+> obsoletos y solo sirven como historial; no deben usarse para implementar,
+> probar ni decidir compatibilidad.
+
 El contexto del proyecto: cada equipo de la clase implementa su propio
 cliente y servidor siguiendo un protocolo compartido, el **PRFC v3**
 (Protocolo de Red para Captura la Bandera, versión 3). Luego todos los
@@ -82,7 +90,7 @@ flowchart LR
     B -- "TCP" --> S
     B -- "UDP broadcast / unicast" --> Otros
     C -- "HTTP (carga de la página)" --> W
-    V -- "HTTP local de solo lectura" --> S
+    V -- "HTTP local /estado de solo lectura" --> S
 ```
 
 Nótese que el bridge cumple **dos** papeles a la vez: traduce la conexión de
@@ -98,10 +106,25 @@ a cada rol (ver sección 6).
 
 ## 2. El protocolo: PRFC v3
 
-El códec vive en `red/v3/protocolo-v3.js` y lo comparten literalmente los
+La definición normativa vive fuera de este proyecto, en
+[CC8-Protocolo](https://github.com/erickm13/CC8-Protocolo). El códec de
+BladeFront vive en `red/v3/protocolo-v3.js` y lo comparten literalmente los
 tres procesos —servidor, bridge (indirectamente) y cliente— porque es el
 mismo archivo JavaScript, sin build step, importado con rutas relativas tanto
 en Node como en el navegador.
+
+Esta distinción es obligatoria:
+
+- **Repositorio oficial:** define el estándar que todos los grupos deben
+  seguir.
+- **`red/v3/protocolo-v3.js`:** implementa ese estándar en JavaScript.
+- **`red/PROTOCOLO.md` y documentos locales antiguos:** material histórico,
+  no normativo y en desuso.
+
+No existe una sincronización automática de código entre ambos repositorios.
+Antes de modificar mensajes, tipos, campos, puertos o reglas, se debe consultar
+la rama `main` oficial, registrar la revisión en la bitácora y actualizar juntos
+el códec, las pruebas y la documentación de BladeFront.
 
 Puntos clave:
 
@@ -189,6 +212,11 @@ El mensaje base es simple: el cliente manda `DISCOVER_REQUEST` (tipo
 dentro del mensaje**: se toma del origen real del datagrama UDP, para que no
 se puedan anunciar direcciones falsas o equivocadas por tener varias
 interfaces de red.
+
+La vista administrativa renderiza la arena en 3D, pero esa diferencia es
+exclusivamente gráfica. Lee jugadores, bandera, estado y ganador desde
+`127.0.0.1:8147/estado`; no se registra como jugador ni transmite mensajes del
+protocolo de partida.
 
 La respuesta binaria sigue literalmente PRFC §27.2: `playerCount` y
 `maximumPlayers` ocupan **u16 big-endian** cada uno. Una versión anterior los
