@@ -568,14 +568,12 @@ function activarRol(rol) {
 }
 
 if (ROL_SERVIDOR) activarRol('servidor');
-else if (ROL_CLIENTE) activarRol('cliente');
+else activarRol('cliente');
 
 // Un respiro para que los hijos impriman sus líneas de arranque antes del cuadro.
 setTimeout(() => {
   if (SIN_NAVEGADOR) {
-    if (!rolArrancado) log(`selecciona el rol en ${URL_ROLES}`);
-    else if (ROL_SERVIDOR && !V1) log(`vista del servidor: ${URL_MONITOR}`);
-    else log(`cliente: ${URL_JUEGO}`);
+    log(`juego: ${URL_JUEGO}`);
     return;
   }
   const abrir = (url) => {
@@ -585,5 +583,5 @@ setTimeout(() => {
       `xdg-open "${url}"`;
     exec(cmd, (e) => { if (e) aviso(`no pude abrir el navegador solo; entra a mano en ${url}`); });
   };
-  abrir(!rolArrancado ? URL_ROLES : ROL_SERVIDOR && !V1 ? URL_MONITOR : URL_JUEGO);
+  abrir(URL_JUEGO);
 }, 900);
