@@ -546,16 +546,14 @@ function activarRol(rol) {
       '--tcp-host', '127.0.0.1',
       '--tcp-port', String(puertoTcpFinal),
     ]);
-  } else if (ROL_SERVIDOR) {
+  } else {
     avisarFirewallWindows();
     lanzar('servidor', C.verde, MODO.servidor, [
       '--port', String(puertoTcpFinal),
       '--discovery-port', String(udp.puerto),
       '--monitor', String(PUERTO_MONITOR),
-      '--strict-host',
       '--name', NOMBRE,
     ]);
-  } else {
     lanzar('bridge', C.magenta, MODO.bridge, [
       '--ws', String(PUERTO_BRIDGE),
       '--tcp-host', '127.0.0.1',
