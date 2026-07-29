@@ -8,7 +8,7 @@
 ## 1. Propósito y alcance
 
 BladeFront es una implementación de **Captura la Bandera multijugador** para
-el protocolo compartido PRFC-CC8-2026 v3. El proyecto combina:
+el protocolo compartido PRFC-CC8-2026 v3 (cuyo estándar oficial vivo y actualizado se encuentra en el repositorio externo [https://github.com/erickm13/CC8-Protocolo](https://github.com/erickm13/CC8-Protocolo)). El protocolo local previo queda reemplazado por dicha especificación oficial. El proyecto combina:
 
 - una arena tridimensional en Three.js;
 - un servidor autoritativo con sockets TCP;

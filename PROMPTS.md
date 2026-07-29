@@ -180,8 +180,15 @@ jugadores como `u8`, en contradicción con §27.2, que define ambos como `u16`
 big-endian. Se corrigió el códec, se respetó la regla de responder únicamente
 en `WAITING` y se añadió una prueba binaria exacta.
 
+## 23 · Actualización del protocolo oficial y referencia al repositorio estándar
+
+**Solicitud:** Actualizar la bitácora de prompts y la documentación del proyecto notificando que la especificación del protocolo de red se ha actualizado oficialmente. El protocolo local previo queda obsoleto y en desuso; a partir de este momento la referencia canónica viva y actualizada del protocolo estándar se mantiene y sincroniza desde el repositorio externo oficial: https://github.com/erickm13/CC8-Protocolo. Asegúrate de actualizar el registro de prompts, la guía de red y mantener la documentación completamente al día.
+
+**Resultado:** Se actualizó `PROMPTS.md` y la documentación técnica declarando la migración/sincronización con el repositorio oficial del protocolo (`https://github.com/erickm13/CC8-Protocolo`), asegurando interoperabilidad continua con el resto de proyectos del curso.
+
 ---
 
 *Nota: la cronología se mantiene sincronizada con los commits del repositorio Git.*
+
 
 
