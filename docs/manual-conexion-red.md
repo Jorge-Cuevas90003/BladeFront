@@ -14,17 +14,18 @@ que simula estar todos en la misma LAN aunque cada quien esté en su casa.
 
 ---
 
-## 1. Arquitectura general: por qué son tres procesos
+## 1. Arquitectura general: procesos según el rol
 
-Al arrancar el juego (`node iniciar.js`) no se levanta un solo programa, se
-levantan **tres**:
+`iniciar.js` siempre levanta el servidor web estático, pero los procesos de
+red dependen de la configuración elegida:
 
-1. **El servidor TCP autoritativo** (`red/v3/servidor-v3.js`) — dueño único de
-   la verdad del juego. Aplica el protocolo, valida cada mensaje y nunca
-   confía en la posición que un cliente diga tener.
-2. **El bridge WebSocket↔TCP** (`red/v3/bridge-v3.js`) — un traductor.
-3. **Un servidor web estático** — sirve los archivos del juego
-   (HTML/JS/three.js) al navegador, integrado en el propio `iniciar.js`.
+1. **Rol servidor:** levanta el servidor TCP autoritativo
+   (`red/v3/servidor-v3.js`), el respondedor UDP y la vista global. No levanta
+   un cliente jugable.
+2. **Rol cliente:** levanta el bridge WebSocket↔TCP
+   (`red/v3/bridge-v3.js`) y el navegador jugable. No aloja una partida.
+3. **Servidor web estático:** sirve los archivos HTML/JS/Three.js en ambos
+   roles y vive dentro de `iniciar.js`.
 
 ### Por qué hace falta el bridge
 
@@ -64,10 +65,13 @@ flowchart LR
     subgraph Navegador
         C[cliente-v3.js<br/>three.js + WebSocket]
     end
-    subgraph "Esta máquina"
+    subgraph "Máquina cliente"
         B["bridge-v3.js<br/>WebSocket ↔ TCP<br/>+ proxy de descubrimiento UDP"]
-        S["servidor-v3.js<br/>TCP autoritativo<br/>(motor del juego)"]
-        W["servidor web estático<br/>(dentro de iniciar.js)"]
+        W["servidor web estático<br/>(iniciar.js)"]
+    end
+    subgraph "Máquina servidor"
+        S["servidor-v3.js<br/>TCP autoritativo + UDP 5001"]
+        V["vista global<br/>sin controles"]
     end
     subgraph "Radmin VPN (26.0.0.0/8)"
         Otros[Servidores de otros equipos]
@@ -78,6 +82,7 @@ flowchart LR
     B -- "TCP" --> S
     B -- "UDP broadcast / unicast" --> Otros
     C -- "HTTP (carga de la página)" --> W
+    V -- "HTTP local de solo lectura" --> S
 ```
 
 Nótese que el bridge cumple **dos** papeles a la vez: traduce la conexión de
@@ -85,9 +90,9 @@ juego (WebSocket↔TCP) y hace de proxy del descubrimiento UDP (el navegador le
 pide por HTTP `/servidores` y el bridge sale a la red por él). Los dos
 existen por el mismo motivo: el navegador no tiene acceso a sockets crudos.
 
-Los tres procesos corren en la misma máquina cuando alguien aloja una
-partida; `iniciar.js` es justamente el lanzador que arranca los tres juntos
-(ver sección 6).
+La separación impide que la computadora configurada como servidor participe
+accidentalmente como jugador. `iniciar.js` coordina el conjunto que corresponde
+a cada rol (ver sección 6).
 
 ---
 
@@ -156,48 +161,18 @@ cliente), que son quienes de verdad necesitan interpretarlo.
 ## 3. Cómo se decide quién es el anfitrión
 
 El PRFC v3 no dice explícitamente qué mecanismo usar para elegir quién
-controla el inicio de la partida (cuenta atrás, etc.), así que este proyecto
-resuelve la ambigüedad con una regla concreta, basada en **el origen de la
-conexión TCP**, no en quién entró primero:
-
-```js
-// servidor-v3.js
-function esDeEstaMaquina(dir) {
-  if (!dir) return false;
-  const limpia = String(dir).replace(/^::ffff:/i, '');
-  if (limpia === '::1' || limpia === '127.0.0.1' || limpia.startsWith('127.')) return true;
-  for (const list of Object.values(os.networkInterfaces())) {
-    for (const iface of list ?? []) {
-      if (iface.address === limpia) return true;
-    }
-  }
-  return false;
-}
-```
-
-Quien juega desde el navegador de la misma máquina que aloja el servidor
-llega por **loopback** (`127.0.0.1`/`::1`) o por una IP local propia de esa
-máquina, mientras que los compañeros llegan desde sus direcciones de la VPN
-de Radmin. Esa distinción de origen es justo lo que identifica al anfitrión:
-el dueño de la máquina que levantó la partida.
+controla el inicio. En el modo actual, la máquina servidor no crea jugador:
+el **primer cliente aceptado** se convierte en anfitrión jugable.
 
 Puntos importantes de esta regla:
 
-- **No se hereda si el anfitrión se desconecta.** El puesto queda vacante;
-  la partida en curso se cancela y vuelve a WAITING, esperando a que el
-  anfitrión vuelva a entrar. Antes de esta regla el código miraba "quién fue
-  el jugador número 1", pero eso es simplemente el primero que se conectó —
-  y si un compañero entraba antes de que el dueño abriera su navegador, el
-  compañero se quedaba con el número 1 sin ser el anfitrión de verdad.
-- **Se comprueba dos veces para acciones sensibles.** Cuando el anfitrión
-  pide arrancar la partida (`HOST_START`), el servidor exige tanto que el
-  `playerId` coincida con el anfitrión registrado **como** que la conexión
-  sea local en ese instante. Con solo lo primero, si el anfitrión se fuera y
-  otro jugador heredara ese número de jugador, podría terminar dando la
-  salida en una partida que no es suya.
-- El servidor solo asigna anfitrión si no hay uno activo ya, para que abrir
-  una segunda pestaña desde la misma máquina no le "robe" el mando al que ya
-  estaba jugando.
+- El servidor no ocupa un `playerId` y nunca envía `INPUT` o `INTERACT`.
+- Solo el `playerId` anunciado por `HOST_INFO` puede enviar `HOST_START`.
+- Los demás clientes pueden jugar, pero no iniciar.
+- La vista global conserva un botón administrativo para iniciar si fuera
+  necesario, sin registrar al observador como jugador.
+- Si no existe un anfitrión activo, el siguiente JOIN aceptado en estado
+  `WAITING` puede ocupar el puesto.
 
 ---
 
@@ -354,19 +329,17 @@ New-NetFirewallRule -DisplayName "BladeFront (Node.js UDP)" -Direction Inbound -
 El PRFC v3 fija el puerto UDP `5001` para descubrimiento. En la práctica, en
 varias máquinas del curso ese puerto (y a veces el `5000`) ya estaba ocupado
 por servicios del propio sistema operativo — el código los identifica por
-nombre: `nidmsrv` y `lktsrv`. El servidor de juego arranca igual, pero se
-queda **invisible** para la búsqueda automática (aunque el juego sigue
-funcionando si alguien escribe la IP a mano), y sin ningún mensaje de error
-obvio que lo explique.
+nombre: `nidmsrv` y `lktsrv`. Una implementación que cambiara silenciosamente
+de puerto quedaría **invisible** para los demás proyectos, porque todos deben
+consultar el 5001.
 
-`iniciar.js` resuelve esto en dos frentes:
+La política vigente de `iniciar.js` es estricta:
 
-- Al arrancar, intenta terminar esos dos procesos si están corriendo
-  (`Get-Process -Name lktsrv, nidmsrv | Stop-Process`), solo en Windows.
-- Si el puerto pedido sigue ocupado, prueba automáticamente el **puerto de
-  respaldo**: salta de 100 en 100 (`5101`, `5201`, …) hasta encontrar uno
-  libre, y avisa por consola cuál usó. El bridge se lanza apuntando a ese
-  mismo puerto, para que servidor y bridge sigan de acuerdo.
+- comprueba TCP 5000 y UDP 5001 antes de lanzar los procesos;
+- no termina automáticamente servicios del sistema;
+- no usa puertos de respaldo;
+- si alguno está ocupado, detiene el arranque y muestra un diagnóstico para
+  que el usuario libere exactamente el puerto oficial.
 
 ### 5.3 Antivirus con cortafuegos propio (ESET)
 
@@ -381,36 +354,36 @@ antivirus de terceros con su propio firewall, hay que revisar también ahí.
 
 ## 6. Cómo se arranca todo en la práctica: `iniciar.js`
 
-Levantar los tres procesos a mano (servidor, bridge, servidor web, en el
-orden correcto, con los puertos coordinados entre sí) sería tedioso y
-propenso a errores de coordinación. `iniciar.js` es el lanzador único que lo
-hace todo de un tirón: `node iniciar.js`, `npm start`, o doble clic en
-`iniciar.bat`.
+Levantar los procesos a mano sería tedioso y propenso a errores.
+`iniciar.js` coordina el rol solicitado:
+
+```powershell
+npm start
+npm run server
+npm run client
+```
 
 Lo que hace, en orden:
 
-1. En Windows, intenta liberar los puertos UDP estándar matando `nidmsrv` y
-   `lktsrv` si están corriendo (sección 5.2).
+1. Comprueba que los puertos oficiales estén disponibles. No mata servicios
+   del sistema ni cambia automáticamente a otro puerto.
 2. Levanta el **servidor web estático** que sirve la raíz completa del
    proyecto (no solo `assets/`, porque las páginas importan módulos con
    rutas relativas que salen de esa carpeta, como
    `../../../red/v3/protocolo-v3.js`).
-3. Elige puertos TCP y UDP libres (con lógica de respaldo si los pedidos
-   están ocupados).
-4. Lanza el **servidor** (`servidor-v3.js`) como proceso hijo, pasándole el
-   puerto TCP y el puerto UDP de descubrimiento elegidos.
-5. Lanza el **bridge** (`bridge-v3.js`) como proceso hijo, apuntado al mismo
-   puerto TCP y al mismo puerto UDP que el servidor — es importante que
-   coincidan, porque el bridge consulta ese puerto UDP cuando la página pide
-   la lista de partidas.
+3. En rol servidor, exige TCP **5000** y UDP **5001**; si están ocupados,
+   detiene el arranque con un diagnóstico.
+4. En rol servidor, lanza `servidor-v3.js --strict-host` y la vista global.
+5. En rol cliente, lanza únicamente `bridge-v3.js`; el destino TCP se elige
+   desde la interfaz y el descubrimiento consulta UDP 5001.
 6. Imprime un resumen con la URL del juego, los puertos usados, y las IPs
    locales de la máquina — remarcando cuál es la de Radmin, que es la que
    hay que compartir con los compañeros para jugar juntos.
 7. Abre el navegador automáticamente (salvo `--sin-navegador`).
-8. Al recibir `Ctrl+C`, cierra los tres procesos de forma ordenada.
+8. Al recibir `Ctrl+C`, cierra los procesos activos de forma ordenada.
 
-En síntesis: un solo comando coordina tres procesos independientes que, sin
-este lanzador, habría que arrancar y sincronizar manualmente cada vez.
+En síntesis: un solo lanzador coordina procesos distintos sin mezclar la
+computadora observadora con los clientes jugables.
 
 ---
 

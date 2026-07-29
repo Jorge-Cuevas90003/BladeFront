@@ -60,7 +60,7 @@ if (flag('ayuda') || flag('help') || args.includes('-h')) {
     --cliente                  abre el cliente jugable, sin alojar servidor
     --puerto-tcp N             puerto del servidor de juego      (5000)
     --puerto-descubrimiento N  puerto UDP de descubrimiento      (5001)
-                               si está ocupado se busca otro solo
+                               si está ocupado el arranque se detiene
     --puerto-bridge N          puerto del bridge WebSocket  (8146; 8140 en v1)
     --nombre "TEXTO"           nombre con el que el servidor se anuncia
     --sin-navegador            no abrir el navegador automáticamente

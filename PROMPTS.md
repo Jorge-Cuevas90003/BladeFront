@@ -109,6 +109,10 @@ este registro, README y primer commit del repositorio.
 
 **Resultado**: módulo `red/v3/descubrimiento.js` con soporte multi-puerto (5001, 5000, 5100, 5101), respuestas duales JSON/MessagePack y ráfagas unicast dirigidas a IPs de Radmin.
 
+**Evolución posterior**: el experimento multi-puerto se descartó porque la
+materia exige UDP 5001. Desde `e5d91e7`, la compatibilidad de formatos se
+conserva, pero el descubrimiento se limita al puerto oficial.
+
 ## 14 · Mapeo de loopback para eliminar ETIMEDOUT en Windows
 
 > Al conectarme por TCP a 127.0.0.1 en Windows teniendo activa la interfaz de Radmin VPN (26.x.x.x), la pila de red de Windows genera un retraso por timeout ETIMEDOUT. ¿Por qué ocurre esta resolución en la tabla de rutas de Windows y cómo puedo resolver la dirección en el WebSocket bridge para que conecte de forma instantánea en 0.01s?
@@ -150,6 +154,20 @@ este registro, README y primer commit del repositorio.
 > Agrega la bitácora completa de prompts e interacción con IA para documentar el proceso de desarrollo en el repositorio Git.
 
 **Resultado**: actualización de `PROMPTS.md` y `README.md` alineados con la cronología de commits en GitHub.
+
+## 21 · Auditoría documental contra los requisitos de entrega
+
+> El proyecto necesita documentación de implementación desde el primer día,
+> versiones de cambios de ideas referenciadas a Git, explicación de conexiones
+> entre proyectos, cronología como LOG y registro de IA/prompts. Audita lo que
+> ya existe, completa lo faltante y establece que los cambios futuros mantengan
+> actualizada la documentación.
+
+**Resultado**: creación de `docs/documentacion-implementacion.md` como
+documento canónico, incorporación de una matriz de cumplimiento y cronología
+con commits reales, actualización del manual de red a la separación actual de
+roles, y creación de `CONTRIBUTING.md` con la definición documental de
+terminado.
 
 ---
 

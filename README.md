@@ -117,6 +117,16 @@ iniciar.js / iniciar.bat  Lanzador de un clic: servidor + bridge + web
 test/                     Pruebas de regresión (node test/verify-*.mjs)
 ```
 
+### Documentación del proyecto
+
+- [Documentación de implementación](docs/documentacion-implementacion.md):
+  historia desde el primer día, versiones de la idea y referencias a Git.
+- [Manual de conexión de red](docs/manual-conexion-red.md): TCP, UDP, bridge,
+  Radmin VPN e interoperabilidad.
+- [Registro de prompts e IA](PROMPTS.md): solicitudes, decisiones y resultados.
+- [Guía de contribución](CONTRIBUTING.md): regla obligatoria para mantener
+  código, pruebas y documentación sincronizados.
+
 Cada carpeta de `assets/` funciona también sola, como visor con botón de
 captura PNG (`/caballero-templario/`, `/arena-vacio/`, `/ejecutor-del-vacio/`).
 
