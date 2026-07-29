@@ -310,19 +310,6 @@ export class ClienteV3 extends EventTarget {
     }
   }
 
-  // El anfitrión pide empezar. Solo tiene efecto en red: en local la partida
-  // arranca sola porque no hay nadie a quien esperar.
-  //
-  // Si el servidor es de otro equipo y no conoce este mensaje, responderá con
-  // ERROR e INVALID_MESSAGE. No pasa nada: significa que esa partida la empieza
-  // su anfitrión desde su propio cliente.
-  pedirInicio() {
-    if (this.modo !== 'red' || !this.playerId) return;
-    if (this._ws?.readyState === WebSocket.OPEN) {
-      this._ws.send(enmarcar(TIPOS.HOST_START, { playerId: this.playerId }));
-    }
-  }
-
   // Preguntar quién manda. La respuesta llega en HOST_INFO y actualiza
   // `soyAnfitrion` y `hostId`.
   //
@@ -330,18 +317,6 @@ export class ClienteV3 extends EventTarget {
   // aloja la partida en su máquina, no quien llegó primero. Si un compañero se
   // conecta antes de que el dueño abra su navegador, el id más bajo es el del
   // compañero y la deducción daría el mando a quien no le toca.
-  async empezarServidorLocal() {
-    try {
-      const res = await fetch('http://127.0.0.1:8147/empezar', { method: 'POST' });
-      if (res.ok) return true;
-    } catch {}
-    if (this.playerId) {
-      this.empezarComoAnfitrion();
-      return true;
-    }
-    return false;
-  }
-
   consultarAnfitrion() {
     if (this.modo !== 'red' || !this.playerId) return;
     if (this._ws?.readyState === WebSocket.OPEN) {

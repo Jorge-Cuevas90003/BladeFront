@@ -56,7 +56,7 @@ export function crearServidor({
   params = {},
   nombre = 'BladeFront',
   auto = false,
-  minJugadores = 0,   // 0 = no arrancar solo; espera a que el anfitrión lo pida
+  minJugadores = 0,   // 0 = no arrancar solo; espera el inicio administrativo
   udp = true,
   puertoUdp = PARAMS_DEFECTO.discoveryPort,
   monitorPort = null,
@@ -232,9 +232,9 @@ export function crearServidor({
         log(`  JOIN ${jugador.playerId} "${jugador.name}"`);
         difundir(TIPOS.LOBBY_STATE, juego.serializarLobby());
 
-        // El servidor estricto no crea un jugador propio: el primer cliente
-        // conectado es el anfitrión jugable y puede iniciar la partida. En el
-        // modo anterior, el anfitrión sigue siendo el cliente local.
+        // El servidor estricto no crea un jugador propio. Conserva el dato del
+        // anfitrión jugable para el lobby, pero solo el monitor inicia. En el
+        // modo clásico, el anfitrión sigue siendo el cliente local.
         if ((servidorEstricto || info.esLocal)
             && (!anfitrionId || !juego.jugadores.get(anfitrionId)?.connected)) {
           anfitrionId = jugador.playerId;
@@ -257,6 +257,14 @@ export function crearServidor({
       // nuestra, no una desviación del protocolo.
       case TIPOS.HOST_START: {
         if (!duenoValido(socket, info, msg)) return;
+        // Con roles separados, la salida pertenece exclusivamente al monitor
+        // administrativo local. Los clientes nunca pueden iniciar.
+        if (servidorEstricto) {
+          return enviar(socket, TIPOS.ERROR, {
+            code: ERRORES.UNKNOWN_PLAYER,
+            description: 'solo la vista del servidor puede empezar la partida',
+          });
+        }
         // En servidor estricto el anfitrión es el primer cliente conectado; en
         // modo clásico también debe ser una conexión local.
         const anfitrionAutorizado = info.playerId === anfitrionId
@@ -282,7 +290,8 @@ export function crearServidor({
         if (!duenoValido(socket, info, msg)) return;
         return enviar(socket, TIPOS.HOST_INFO, {
           hostId: anfitrionId,
-          puedesEmpezar: !!((servidorEstricto || info.esLocal)
+          puedesEmpezar: !!(!servidorEstricto
+                            && info.esLocal
                             && info.playerId === anfitrionId
                             && juego.estado === ESTADO_PARTIDA.WAITING),
         });
@@ -597,7 +606,9 @@ if (esPrincipal) {
     ? '(--auto: arranca con el primer jugador — solo para pruebas, nadie más podrá entrar)'
     : minJugadores > 0
       ? `(arranca solo al llegar a ${minJugadores} jugadores)`
-      : '(el anfitrión decide cuándo empezar desde el navegador)');
+      : flag('strict-host')
+        ? '(la partida se inicia desde la vista administrativa del servidor)'
+        : '(el anfitrión decide cuándo empezar desde el navegador)');
 
   // Sin esto, Ctrl+C deja el puerto ocupado unos segundos.
   for (const sig of ['SIGINT', 'SIGTERM']) {

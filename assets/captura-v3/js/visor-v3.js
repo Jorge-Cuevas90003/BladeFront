@@ -387,18 +387,12 @@ function pintarSala(jugadores) {
     return `<li><span>${p.name}</span><span>${etiquetas.join(' ')}</span></li>`;
   }).join('') || '<li><span>nadie todavía…</span><span></span></li>';
 
-  const soyYo = cliente.soyAnfitrion;
-  $('salaEmpezar').style.display = soyYo ? '' : 'none';
   const nombreAnfitrion = anfitrion
     ? (jugadores.find((p) => p.playerId === anfitrion)?.name ?? `#${anfitrion}`)
     : null;
-  $('salaAviso').textContent = soyYo
-    ? `Cuando estén todos, empieza tú. Ahora mismo sois ${jugadores.length}.`
-    : nombreAnfitrion
-      ? `Esperando a que ${nombreAnfitrion} empiece la partida…`
-      // Sin anfitrión conectado nadie puede dar la salida: el dueño de la
-      // partida tiene que entrar desde su propia máquina.
-      : 'El anfitrión no está conectado. La partida no puede empezar hasta que entre.';
+  $('salaAviso').textContent = nombreAnfitrion
+    ? `Esperando a que el servidor inicie la partida. Anfitrión conectado: ${nombreAnfitrion}.`
+    : 'Esperando a que el servidor inicie la partida…';
   // Precargar modelos 3D y compilar WebGL shaders durante la espera
   for (const p of jugadores) {
     const k = asegurarKnight(p.playerId);
@@ -411,14 +405,6 @@ function pintarSala(jugadores) {
 
 function cerrarSala() { $('sala').classList.add('oculto'); }
 
-$('salaEmpezar')?.addEventListener('click', () => {
-  $('salaEmpezar').disabled = true;
-  $('salaAviso').textContent = 'Empezando…';
-  cliente.pedirInicio();
-  // Si el servidor no acepta la petición hay que poder reintentar, no dejar el
-  // botón muerto para siempre.
-  setTimeout(() => { $('salaEmpezar').disabled = false; }, 2500);
-});
 $('salaSalir')?.addEventListener('click', volverAlMenu);
 
 on(0x7d, () => {   // HOST_INFO: el servidor dice quién manda

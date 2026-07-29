@@ -246,8 +246,8 @@ El puerto de descubrimiento es exclusivamente **UDP 5001**. No se cambia a
 - **Servidor:** levanta servidor TCP 5000, respondedor UDP 5001 y vista global.
   No crea un personaje ni acepta controles de movimiento.
 - **Cliente:** levanta el bridge local y participa como jugador.
-- El primer cliente conectado es el anfitrión jugable y puede iniciar.
-- La vista del servidor conserva un inicio administrativo.
+- Los clientes participan como jugadores, pero no pueden iniciar.
+- La vista del servidor tiene el único control de inicio.
 
 Los detalles de tipos, campos, errores y diagramas están en
 [`manual-conexion-red.md`](manual-conexion-red.md).

@@ -181,21 +181,22 @@ cliente), que son quienes de verdad necesitan interpretarlo.
 
 ---
 
-## 3. Cómo se decide quién es el anfitrión
+## 3. Cómo se controla el inicio de la partida
 
-El PRFC v3 no dice explícitamente qué mecanismo usar para elegir quién
-controla el inicio. En el modo actual, la máquina servidor no crea jugador:
-el **primer cliente aceptado** se convierte en anfitrión jugable.
+El PRFC v3 no dice explícitamente qué mecanismo activa la salida. En el modo
+actual, la máquina servidor no crea jugador y el inicio se controla
+exclusivamente desde su vista administrativa de solo lectura.
 
 Puntos importantes de esta regla:
 
 - El servidor no ocupa un `playerId` y nunca envía `INPUT` o `INTERACT`.
-- Solo el `playerId` anunciado por `HOST_INFO` puede enviar `HOST_START`.
-- Los demás clientes pueden jugar, pero no iniciar.
-- La vista global conserva un botón administrativo para iniciar si fuera
-  necesario, sin registrar al observador como jugador.
-- Si no existe un anfitrión activo, el siguiente JOIN aceptado en estado
-  `WAITING` puede ocupar el puesto.
+- Ningún cliente muestra un botón de inicio ni puede activar la salida.
+- En modo de roles separados, cualquier `HOST_START` recibido de un cliente se
+  rechaza.
+- La vista global contiene el único botón para iniciar, sin registrar al
+  observador como jugador.
+- Todos los clientes permanecen en la sala hasta recibir `GAME_COUNTDOWN` y
+  `GAME_STARTED` del servidor.
 
 ---
 
