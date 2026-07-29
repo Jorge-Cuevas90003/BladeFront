@@ -46,16 +46,20 @@ ok(servidor.juego.jugadoresActivos().length === 1, 'el servidor no agrega un jug
 const marca = mensajes.length;
 socket.write(enmarcar(TIPOS.HOST_QUERY, { playerId: aceptado.playerId }));
 const host = await esperar(TIPOS.HOST_INFO, marca);
-ok(host?.hostId === aceptado.playerId && host?.puedesEmpezar === true,
-  'el primer cliente es el anfitrión jugable');
+ok(host?.hostId === aceptado.playerId && host?.puedesEmpezar === false,
+  'el cliente puede ser anfitrión jugable, pero no controla el inicio');
 
 const intento = mensajes.length;
 socket.write(enmarcar(TIPOS.HOST_START, { playerId: aceptado.playerId }));
-ok(!!await esperar(TIPOS.GAME_STARTED, intento),
-  'el anfitrión cliente puede iniciar y recibe GAME_STARTED');
+const rechazoInicio = await esperar(TIPOS.ERROR, intento);
+ok(rechazoInicio?.description === 'solo la vista del servidor puede empezar la partida',
+  'el servidor rechaza el intento de inicio enviado por un cliente');
 
+const antesDelInicio = mensajes.length;
 const respuesta = await fetch('http://127.0.0.1:18147/empezar', { method: 'POST' });
-ok(respuesta.status === 409, 'la vista del servidor detecta que la partida ya inició');
+ok(respuesta.ok, 'la vista del servidor inicia la partida');
+ok(!!await esperar(TIPOS.GAME_STARTED, antesDelInicio),
+  'el cliente recibe GAME_STARTED después del inicio administrativo');
 
 const jugador = servidor.juego.jugadores.get(aceptado.playerId);
 jugador.hasFlag = true;
@@ -82,6 +86,9 @@ const visorServidor = await readFile(
 const visorCliente = await readFile(
   new URL('../assets/captura-v3/js/visor-v3.js', import.meta.url), 'utf8',
 );
+const htmlCliente = await readFile(
+  new URL('../assets/captura-v3/index.html', import.meta.url), 'utf8',
+);
 ok(htmlServidor.includes('visor-servidor-3d.js')
   && !visorServidor.includes('new ClienteV3')
   && !visorServidor.includes('.mandarDireccion(')
@@ -89,8 +96,11 @@ ok(htmlServidor.includes('visor-servidor-3d.js')
   'el monitor 3D es de solo lectura y no contiene controles de juego');
 ok(!visorCliente.includes('Mi Propio Servidor (Host Local)'),
   'el cliente ya no muestra la opción de servidor local');
+ok(!htmlCliente.includes('id="salaEmpezar"')
+  && !visorCliente.includes('cliente.pedirInicio()'),
+  'el cliente no muestra ni ejecuta controles para iniciar la partida');
 
 socket.destroy();
 await servidor.cerrar();
-console.log(`Resultado: ${fallas ? `${fallas} FALLAS` : '10 OK, 0 FALLAS'}`);
+console.log(`Resultado: ${fallas ? `${fallas} FALLAS` : '11 OK, 0 FALLAS'}`);
 if (fallas) process.exitCode = 1;

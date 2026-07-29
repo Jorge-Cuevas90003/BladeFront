@@ -207,6 +207,18 @@ local que la implementa, además del procedimiento obligatorio para sincronizar
 futuros cambios mediante revisión de la fuente oficial, pruebas y actualización
 documental conjunta.
 
+## 25 · Inicio exclusivo desde la vista del servidor
+
+**Solicitud:** retirar del cliente el botón para empezar la partida y mantener
+el inicio únicamente en la vista administrativa del servidor, sin alterar las
+demás funciones del juego.
+
+**Resultado:** se eliminó el control de inicio de la sala del cliente y su
+emisión de `HOST_START`. En el modo de servidor estricto también se rechaza
+cualquier intento de inicio procedente de un cliente. El botón administrativo
+del servidor conserva el flujo existente mediante `/empezar`; movimiento,
+bandera, descubrimiento y transporte permanecen sin cambios.
+
 ---
 
 *Nota: la cronología se mantiene sincronizada con los commits del repositorio Git.*

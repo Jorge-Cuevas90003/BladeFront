@@ -193,7 +193,6 @@
     #salaJugadores li .anfitrion { color:var(--oro); border-color:rgba(255,182,56,.45); }
     #salaJugadores li .tu { color:var(--cyan); border-color:rgba(73,230,255,.45); }
     .sala-acciones { display:grid; grid-template-columns:1fr; gap:10px; margin-top:18px; }
-    .sala-acciones:has(#salaEmpezar:not([style*="none"])) { grid-template-columns:2fr 1fr; }
 
     /* ─── panel 2D de diagnóstico ─── */
     #panel2d {
@@ -407,17 +406,16 @@
   </div>
 
   <!-- ═══════════ SALA DE ESPERA ═══════════
-       Entre entrar a la arena y empezar la partida. Sin esto el anfitrión se
-       conectaba y el juego arrancaba solo, dejando fuera a todos los demás. -->
+       Entre entrar a la arena y el inicio administrativo del servidor. Sin
+       esto el juego arrancaba solo, dejando fuera a los demás jugadores. -->
   <div id="sala" class="oculto">
     <div class="panel-sala">
       <h1>Sala de espera</h1>
       <p class="sub" id="salaServidor">—</p>
       <hr class="laser" style="margin:18px 0" />
       <ul id="salaJugadores"></ul>
-      <p class="nota" id="salaAviso">Esperando a que el anfitrión empiece la partida…</p>
+      <p class="nota" id="salaAviso">Esperando a que el servidor inicie la partida…</p>
       <div class="sala-acciones">
-        <button type="button" class="btn-fin p" id="salaEmpezar" style="display:none">▶ Empezar partida</button>
         <button type="button" class="btn-fin s" id="salaSalir">☰ Salir</button>
       </div>
     </div>
