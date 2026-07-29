@@ -195,6 +195,20 @@ mismo cambio y registrar en `PROMPTS.md` qué referencia oficial se revisó. Los
 documentos locales previos quedan como evidencia histórica, nunca como criterio
 para resolver incompatibilidades entre grupos.
 
+### Versión conceptual 10 — cliente limitado al rango oficial de mensajes
+
+La revisión de interoperabilidad detectó que el cliente consultaba el rol de
+anfitrión mediante `HOST_QUERY` (`0x7E`), una extensión local fuera del rango
+oficial `0x01`–`0x2A`. El commit
+[`a54d7ce`](https://github.com/Jorge-Cuevas90003/BladeFront/commit/a54d7ce2a123fcdd11a8f8993c30c6cee8b7e5bc)
+desactivó esa emisión automática.
+
+El cambio no modifica `JOIN`, movimiento, interacción, descubrimiento ni
+representación gráfica. Como el inicio pertenece exclusivamente a la vista
+administrativa del servidor, el cliente ya no necesita consultar quién puede
+iniciar. Esto reduce la superficie de incompatibilidad con implementaciones
+estrictas de otros grupos.
+
 ## 4. Cronología resumida por día
 
 | Fecha | Resultado principal | Evidencia Git |
@@ -207,6 +221,7 @@ para resolver incompatibilidades entre grupos.
 | 2026-07-26 | Descubrimiento Radmin, lobby, firewall, compatibilidad y fluidez | `abe77a7`–`f062e4b` |
 | 2026-07-27 | Roster unificado y corrección UDP colaborativa | `d3c1180`–`b7f84f8` |
 | 2026-07-28 | Diagnóstico TCP, movimiento, bandera, roles estrictos, documentación y adopción de la fuente canónica externa | `9b5b175`–estado actual |
+| 2026-07-29 | Inicio exclusivo del servidor, limpieza del lobby y eliminación de `HOST_QUERY` en el cliente | `57375a3`–`a54d7ce` |
 
 Los rangos anteriores son un índice temático. El historial completo, incluidos
 merges y correcciones intermedias, se obtiene con:

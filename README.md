@@ -173,6 +173,10 @@ fuente de verdad del estándar. Antes de cambiar el códec o interpretar una
 ambigüedad se debe revisar la rama `main` de ese repositorio y sincronizar en el
 mismo cambio la implementación, las pruebas y esta documentación.
 
+El cliente de red solo emite mensajes del rango oficial `0x01`–`0x2A`. La
+extensión local `HOST_QUERY` (`0x7E`) está desactivada; el inicio de partida se
+realiza exclusivamente desde la vista administrativa del servidor.
+
 Va en binario sobre TCP, con un prefijo de longitud por mensaje y las
 coordenadas como enteros ×100 para que ningún lenguaje redondee distinto. Los
 servidores se anuncian por UDP, así que no hay que ir preguntando direcciones.
