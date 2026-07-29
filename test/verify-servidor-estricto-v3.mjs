@@ -99,8 +99,11 @@ ok(!visorCliente.includes('Mi Propio Servidor (Host Local)'),
 ok(!htmlCliente.includes('id="salaEmpezar"')
   && !visorCliente.includes('cliente.pedirInicio()'),
   'el cliente no muestra ni ejecuta controles para iniciar la partida');
+ok(!visorCliente.includes('ANFITRIÓN')
+  && !visorCliente.includes('Anfitrión conectado:'),
+  'la sala del cliente no presenta a ningún jugador como anfitrión');
 
 socket.destroy();
 await servidor.cerrar();
-console.log(`Resultado: ${fallas ? `${fallas} FALLAS` : '11 OK, 0 FALLAS'}`);
+console.log(`Resultado: ${fallas ? `${fallas} FALLAS` : '12 OK, 0 FALLAS'}`);
 if (fallas) process.exitCode = 1;

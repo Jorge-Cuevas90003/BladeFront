@@ -219,6 +219,15 @@ cualquier intento de inicio procedente de un cliente. El botón administrativo
 del servidor conserva el flujo existente mediante `/empezar`; movimiento,
 bandera, descubrimiento y transporte permanecen sin cambios.
 
+## 26 · Identidad correcta del servidor en la sala
+
+**Solicitud:** impedir que el primer jugador conectado aparezca etiquetado
+como anfitrión, porque el servidor es quien aloja y controla la partida.
+
+**Resultado:** se retiraron del cliente la etiqueta `ANFITRIÓN` y el mensaje
+que atribuía ese papel a un jugador. La sala conserva la marca `TÚ` y espera el
+inicio administrativo del servidor, sin modificar conexiones ni reglas.
+
 ---
 
 *Nota: la cronología se mantiene sincronizada con los commits del repositorio Git.*

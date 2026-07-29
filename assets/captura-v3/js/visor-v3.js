@@ -376,23 +376,13 @@ on(TIPOS.LOBBY_STATE, (m) => {
 function pintarSala(jugadores) {
   if (cliente.modo !== 'red' || terminada) return;
   const ul = $('salaJugadores');
-  // Quién manda lo dice el SERVIDOR (cliente.hostId), no el id más bajo: el
-  // anfitrión es quien aloja la partida en su máquina, y puede haber entrado
-  // después que un compañero.
-  const anfitrion = cliente.hostId;
   ul.innerHTML = jugadores.map((p) => {
     const etiquetas = [];
-    if (p.playerId === anfitrion) etiquetas.push('<span class="tag anfitrion">ANFITRIÓN</span>');
     if (p.playerId === miId) etiquetas.push('<span class="tag tu">TÚ</span>');
     return `<li><span>${p.name}</span><span>${etiquetas.join(' ')}</span></li>`;
   }).join('') || '<li><span>nadie todavía…</span><span></span></li>';
 
-  const nombreAnfitrion = anfitrion
-    ? (jugadores.find((p) => p.playerId === anfitrion)?.name ?? `#${anfitrion}`)
-    : null;
-  $('salaAviso').textContent = nombreAnfitrion
-    ? `Esperando a que el servidor inicie la partida. Anfitrión conectado: ${nombreAnfitrion}.`
-    : 'Esperando a que el servidor inicie la partida…';
+  $('salaAviso').textContent = 'Esperando a que el servidor inicie la partida…';
   // Precargar modelos 3D y compilar WebGL shaders durante la espera
   for (const p of jugadores) {
     const k = asegurarKnight(p.playerId);
