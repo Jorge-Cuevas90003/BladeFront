@@ -224,7 +224,10 @@ export function codificar(tipo, c = {}) {
       break; // solo cabecera: 01 03
 
     case TIPOS.DISCOVER_RESPONSE:
-      w.u16(c.gameId).str(c.serverName).u16(c.tcpPort).u8(c.state).u8(c.playerCount).u8(c.maximumPlayers);
+      // PRFC §27.2: ambos conteos son u16 big-endian. Usar u8 hacía que
+      // clientes de otros lenguajes descartaran el anuncio por estar truncado.
+      w.u16(c.gameId).str(c.serverName).u16(c.tcpPort).u8(c.state)
+       .u16(c.playerCount).u16(c.maximumPlayers);
       break;
 
     // ---- cliente → servidor ----------------------------------------------
@@ -335,8 +338,8 @@ export function decodificar(payload) {
       m.serverName = r.str();
       m.tcpPort = r.u16();
       m.state = r.u8();
-      m.playerCount = r.u8();
-      m.maximumPlayers = r.u8();
+      m.playerCount = r.u16();
+      m.maximumPlayers = r.u16();
       break;
 
     case TIPOS.JOIN:

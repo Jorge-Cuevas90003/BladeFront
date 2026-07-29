@@ -166,6 +166,32 @@ console.log('\n== 6. Round-trip de todos los tipos ==');
   check(codificar(TIPOS.JOIN, { name: 'x' })[1] === 0x03, 'el byte de versión es 0x03');
 }
 
+// ── 6b. DISCOVER_RESPONSE coincide byte por byte con PRFC §27.2 ────────────
+console.log('\n== 6b. Formato binario oficial de DISCOVER_RESPONSE ==');
+{
+  const bytes = codificar(TIPOS.DISCOVER_RESPONSE, {
+    gameId: 1,
+    serverName: 'A',
+    tcpPort: 5000,
+    state: ESTADO_PARTIDA.WAITING,
+    playerCount: 2,
+    maximumPlayers: 100,
+  });
+  const esperado = [
+    0x02, 0x03,             // tipo, versión
+    0x00, 0x01,             // gameId u16
+    0x01, 0x41,             // str "A"
+    0x13, 0x88,             // tcpPort 5000 u16
+    0x01,                   // WAITING u8
+    0x00, 0x02,             // playerCount u16
+    0x00, 0x64,             // maximumPlayers u16
+  ];
+  check(
+    Buffer.from(bytes).equals(Buffer.from(esperado)),
+    'DISCOVER_RESPONSE usa exactamente u16 para ambos conteos',
+  );
+}
+
 // ── 7. TRAMPA 1: fragmentación TCP ──────────────────────────────────────────
 console.log('\n== 7. Fragmentación TCP (trampa 1) ==');
 {

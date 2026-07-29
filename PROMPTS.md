@@ -169,6 +169,17 @@ con commits reales, actualización del manual de red a la separación actual de
 roles, y creación de `CONTRIBUTING.md` con la definición documental de
 terminado.
 
+## 22 · Diagnóstico de interoperabilidad UDP con otro grupo
+
+**Solicitud:** comparar la documentación PRFC-CC8-2026 y la evidencia de una
+prueba entre proyectos para explicar por qué BladeFront era alcanzable por
+TCP pero no aparecía en el descubrimiento UDP.
+
+**Resultado:** se detectó que `DISCOVER_RESPONSE` enviaba los conteos de
+jugadores como `u8`, en contradicción con §27.2, que define ambos como `u16`
+big-endian. Se corrigió el códec, se respetó la regla de responder únicamente
+en `WAITING` y se añadió una prueba binaria exacta.
+
 ---
 
 *Nota: la cronología se mantiene sincronizada con los commits del repositorio Git.*
