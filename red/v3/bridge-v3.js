@@ -404,21 +404,32 @@ export function crearBridge({
       else pendiente.push(buf);
     });
 
-    const cerrar = () => {
-      try { ws.close(); } catch {}
-      try { tcp.end(); } catch {}
-    };
-    ws.on('close', cerrar);
-    ws.on('error', cerrar);
-    tcp.on('close', cerrar);
+    let errorTcp = null;
+
     tcp.on('error', (e) => {
+      errorTcp = e;
       log(`error TCP (${host}:${port}): ${e.message}`);
-      // Antes y después de `connect` son fallos distintos. Un rechazo/timeout
-      // significa que no se abrió TCP; ECONNRESET después de conectar suele
-      // indicar que el servidor remoto no entendió el protocolo recibido.
       const codigo = tcpListo ? 4002 : 4001;
       const detalle = `${e.code || 'TCP'}: ${e.message}`.slice(0, 120);
       try { ws.close(codigo, detalle); } catch {}
+      try { tcp.destroy(); } catch {}
+    });
+
+    tcp.on('close', () => {
+      if (!errorTcp && ws.readyState === ws.OPEN) {
+        const codigo = tcpListo ? 4002 : 4001;
+        const detalle = tcpListo
+          ? 'El servidor remoto cerró la conexión TCP'
+          : `No se pudo conectar a ${host}:${port} (TCP cerrado por el compañero o por firewall)`;
+        try { ws.close(codigo, detalle); } catch {}
+      }
+      try { tcp.destroy(); } catch {}
+    });
+
+    ws.on('close', () => {
+      try { tcp.destroy(); } catch {}
+    });
+    ws.on('error', () => {
       try { tcp.destroy(); } catch {}
     });
   });
