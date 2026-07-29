@@ -1,6 +1,13 @@
-# VOID-NET v0.1 — Protocolo de red del Modo Juggernaut
+# VOID-NET v0.1 — Protocolo histórico del Modo Juggernaut
 
-> ⚠️ **OBSOLETO — no describe el sistema actual.** Este era el borrador interno
+> [!CAUTION]
+> **OBSOLETO Y EN DESUSO — NO ES UNA ESPECIFICACIÓN NORMATIVA.**
+> La única referencia canónica y viva es
+> [erickm13/CC8-Protocolo](https://github.com/erickm13/CC8-Protocolo), rama
+> `main`. Este archivo no debe usarse para implementar, validar ni resolver
+> diferencias de interoperabilidad.
+>
+> Este era el borrador interno
 > del modo Juggernaut (WebSocket, envelope `{v,t,seq,ts,data}`, 60 Hz). El
 > proyecto migró al **protocolo oficial "Captura la Bandera" v1.0** (TCP + JSON
 > por línea, envelope `{type, protocolVersion}`) para interoperar con otros

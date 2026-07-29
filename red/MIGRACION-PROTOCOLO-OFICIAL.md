@@ -1,4 +1,10 @@
-# Plan de migración: VOID-NET v0.1 → "Captura la Bandera" v1.0 (oficial)
+# Plan de migración: VOID-NET v0.1 → "Captura la Bandera" v1.0 (histórico)
+
+> [!NOTE]
+> Este documento conserva la decisión histórica de migración. No es la
+> especificación vigente. La única fuente normativa actual es
+> [erickm13/CC8-Protocolo](https://github.com/erickm13/CC8-Protocolo), rama
+> `main`.
 
 > **Estado:** solo documentación (no cambia código de juego todavía).
 > Rama: `protocolo-oficial-tcp`.

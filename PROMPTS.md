@@ -191,6 +191,22 @@ persistente con nombre e ID del ganador y eliminación aislada de la fila local.
 Las pruebas verifican que el monitor no contiene controles ni crea un cliente
 de juego.
 
+## 24 · Adopción de la fuente canónica externa del protocolo
+
+**Solicitud:** actualizar la bitácora y toda la documentación para notificar
+que la especificación local previa del protocolo queda obsoleta y que la
+referencia canónica viva se mantiene en el repositorio oficial
+`https://github.com/erickm13/CC8-Protocolo`.
+
+**Resultado:** se verificó el repositorio oficial, su rama predeterminada
+`main`, la versión vigente `3.0.0` y el commit oficial consultado `b0f3657`.
+Se actualizaron README, manual de red, documentación de implementación, guía
+de contribución, observaciones y el archivo histórico del protocolo. Quedó
+documentada la separación entre la especificación normativa externa y el códec
+local que la implementa, además del procedimiento obligatorio para sincronizar
+futuros cambios mediante revisión de la fuente oficial, pruebas y actualización
+documental conjunta.
+
 ---
 
 *Nota: la cronología se mantiene sincronizada con los commits del repositorio Git.*

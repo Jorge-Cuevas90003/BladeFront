@@ -1,5 +1,12 @@
 # Observaciones al PRFC-CC8-2026 v3
 
+> [!NOTE]
+> Documento histórico de observaciones sobre la implementación probada. No
+> sustituye la especificación vigente. Para implementar o resolver
+> interoperabilidad se debe consultar
+> [erickm13/CC8-Protocolo](https://github.com/erickm13/CC8-Protocolo), rama
+> `main`.
+
 Borrador para llevar al equipo. Tres puntos, ordenados por gravedad. Los tres
 afectan a **§34 (compatibilidad entre lenguajes)**, que es justo lo que el
 protocolo existe para garantizar: no son cuestiones de gusto, son casos en los

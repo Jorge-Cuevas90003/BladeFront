@@ -5,6 +5,13 @@
 > auditable se conserva en Git; este documento explica las decisiones que dan
 > sentido a esa cronología.
 
+> [!IMPORTANT]
+> Este documento es canónico para la **historia de BladeFront**, pero no para
+> el estándar de red. La especificación canónica viva del protocolo se mantiene
+> en [erickm13/CC8-Protocolo](https://github.com/erickm13/CC8-Protocolo),
+> rama `main` (versión vigente declarada: **3.0.0**). Todo protocolo local
+> anterior queda obsoleto y se conserva únicamente como antecedente.
+
 ## 1. Propósito y alcance
 
 BladeFront es una implementación de **Captura la Bandera multijugador** para
@@ -23,7 +30,8 @@ La documentación del proyecto se reparte de esta manera:
 |---|---|
 | Este documento | Historia de implementación, decisiones, versiones y evidencia Git |
 | [`manual-conexion-red.md`](manual-conexion-red.md) | Arquitectura y comunicación entre proyectos |
-| [`../red/PROTOCOLO.md`](../red/PROTOCOLO.md) | Primer protocolo propio, conservado como antecedente |
+| [CC8-Protocolo](https://github.com/erickm13/CC8-Protocolo) | Especificación oficial, viva y única fuente normativa |
+| [`../red/PROTOCOLO.md`](../red/PROTOCOLO.md) | Primer protocolo propio, obsoleto y conservado solo como antecedente |
 | [`../red/MIGRACION-PROTOCOLO-OFICIAL.md`](../red/MIGRACION-PROTOCOLO-OFICIAL.md) | Cambio de VOID-NET al protocolo oficial |
 | [`observaciones-prfc-v3.md`](observaciones-prfc-v3.md) | Hallazgos y ambigüedades del protocolo |
 | [`../PROMPTS.md`](../PROMPTS.md) | Registro de IA y prompts utilizados |
@@ -171,6 +179,22 @@ el cliente se retiró la entrada artificial **Mi Propio Servidor (Host Local)**;
 el descubrimiento de partidas reales y la conexión manual permanecen
 inalterados.
 
+### Versión conceptual 9 — fuente canónica externa del protocolo
+
+La especificación local dejó de considerarse normativa. A partir del
+2026-07-28, la referencia estándar viva es exclusivamente el repositorio
+externo [CC8-Protocolo](https://github.com/erickm13/CC8-Protocolo), en su rama
+`main`. Al momento de esta actualización, su `README.md` declara vigente la
+versión `3.0.0`; la revisión documental tomó como referencia el commit oficial
+[`b0f3657`](https://github.com/erickm13/CC8-Protocolo/commit/b0f36577fd5ae3d05585d825852c6b7830028507).
+
+Este cambio no modifica sockets ni reglas de juego. Establece el proceso de
+mantenimiento: consultar la fuente oficial antes de cualquier cambio de red,
+comparar la implementación local, actualizar código/pruebas/documentación en un
+mismo cambio y registrar en `PROMPTS.md` qué referencia oficial se revisó. Los
+documentos locales previos quedan como evidencia histórica, nunca como criterio
+para resolver incompatibilidades entre grupos.
+
 ## 4. Cronología resumida por día
 
 | Fecha | Resultado principal | Evidencia Git |
@@ -182,7 +206,7 @@ inalterados.
 | 2026-07-25 | Implementación completa PRFC v3 y pruebas | `f44f2ab`–`d0272ca` |
 | 2026-07-26 | Descubrimiento Radmin, lobby, firewall, compatibilidad y fluidez | `abe77a7`–`f062e4b` |
 | 2026-07-27 | Roster unificado y corrección UDP colaborativa | `d3c1180`–`b7f84f8` |
-| 2026-07-28 | Diagnóstico TCP, movimiento, bandera, roles estrictos y documentación | `9b5b175`–`e5d91e7` |
+| 2026-07-28 | Diagnóstico TCP, movimiento, bandera, roles estrictos, documentación y adopción de la fuente canónica externa | `9b5b175`–estado actual |
 
 Los rangos anteriores son un índice temático. El historial completo, incluidos
 merges y correcciones intermedias, se obtiene con:
@@ -238,6 +262,12 @@ Git es la fuente de verdad de la evolución. Cada cambio funcional debe tener:
    protocolo, interfaz, comandos, puertos o comportamiento;
 4. revisión mediante `git diff` antes de publicar.
 
+Para cambios de protocolo, Git no convierte una copia local en fuente
+normativa. La revisión debe comenzar en
+[CC8-Protocolo](https://github.com/erickm13/CC8-Protocolo), rama `main`, y el
+commit de BladeFront debe indicar la versión, etiqueta o commit oficial tomado
+como referencia.
+
 Comandos de auditoría:
 
 ```powershell
@@ -277,6 +307,8 @@ quedar desactualizada, toda contribución debe seguir
 [`CONTRIBUTING.md`](../CONTRIBUTING.md). En particular:
 
 - cambio de red/protocolo → actualizar este documento y el manual de conexión;
+- cambio de protocolo → verificar primero la rama `main` de
+  `erickm13/CC8-Protocolo` y registrar la referencia oficial revisada;
 - cambio de comandos o arranque → actualizar README y este documento;
 - uso relevante de IA → agregar entrada en `PROMPTS.md`;
 - cambio de decisión arquitectónica → agregar versión y commit a la sección 3;

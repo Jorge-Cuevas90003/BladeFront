@@ -18,6 +18,14 @@ entre todos — misma arena, mismos caballeros, reglas distintas.
 
 Proyecto para **Computer Science 8 — Proyecto 1 (Juego)**.
 
+> [!IMPORTANT]
+> La especificación canónica y viva del protocolo de red ya no se mantiene
+> dentro de BladeFront. La referencia oficial es
+> [CC8-Protocolo](https://github.com/erickm13/CC8-Protocolo), rama `main`
+> (versión vigente declarada: **3.0.0**). Cualquier especificación local previa
+> se conserva únicamente como evidencia histórica y está obsoleta para
+> implementar, validar o resolver diferencias de interoperabilidad.
+
 <p align="center">
   <img src="docs/screenshots/executor-frente.jpg" width="90%" alt="El Ejecutor del Vacío de frente, retroiluminado por el Eclipse" />
 </p>
@@ -120,6 +128,9 @@ test/                     Pruebas de regresión (node test/verify-*.mjs)
 
 ### Documentación del proyecto
 
+- [Protocolo estándar oficial y vigente](https://github.com/erickm13/CC8-Protocolo):
+  única fuente normativa para mensajes, campos, puertos y reglas de
+  interoperabilidad.
 - [Documentación de implementación](docs/documentacion-implementacion.md):
   historia desde el primer día, versiones de la idea y referencias a Git.
 - [Manual de conexión de red](docs/manual-conexion-red.md): TCP, UDP, bridge,
@@ -154,6 +165,13 @@ ningún estándar de terceros de por medio — el formato de los mensajes, el or
 del ciclo y las reglas del juego se discutieron y acordaron en clase. La gracia
 está en que el servidor de cualquier grupo funcione con el cliente de cualquier
 otro, aunque uno esté escrito en C# y el otro en JavaScript.
+
+La especificación normativa se consulta siempre en
+[el repositorio oficial CC8-Protocolo](https://github.com/erickm13/CC8-Protocolo).
+El archivo `red/v3/protocolo-v3.js` es la implementación de BladeFront, no la
+fuente de verdad del estándar. Antes de cambiar el códec o interpretar una
+ambigüedad se debe revisar la rama `main` de ese repositorio y sincronizar en el
+mismo cambio la implementación, las pruebas y esta documentación.
 
 Va en binario sobre TCP, con un prefijo de longitud por mensaje y las
 coordenadas como enteros ×100 para que ningún lenguaje redondee distinto. Los

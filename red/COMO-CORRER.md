@@ -1,4 +1,10 @@
-# Cómo correr — Captura la Bandera (protocolo oficial v1.0)
+# Cómo correr — Captura la Bandera (PRFC v3)
+
+> [!IMPORTANT]
+> La especificación normativa vigente se consulta en
+> [erickm13/CC8-Protocolo](https://github.com/erickm13/CC8-Protocolo), rama
+> `main` (versión declarada: `3.0.0`). Esta guía explica cómo ejecutar la
+> implementación de BladeFront, pero no sustituye el estándar oficial.
 
 Hay **dos formas de jugar**: local (para testear al instante) y en red (real,
 protocolo TCP oficial). El motor del juego es el mismo en ambas.
