@@ -267,9 +267,7 @@ const servidorWeb = http.createServer((req, res) => {
     res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
     return res.end('400 URL mal formada');
   }
-  if (ruta === '/') ruta = !ROL_CLIENTE && !ROL_SERVIDOR
-    ? '/assets/captura-v3/rol.html'
-    : ROL_SERVIDOR ? '/assets/captura-v3/servidor.html' : MODO.pagina;
+  if (ruta === '/') ruta = ROL_SERVIDOR ? '/assets/captura-v3/servidor.html' : MODO.pagina;
 
   // path.resolve normaliza los '..': si el resultado se sale de la raíz, fuera.
   let archivo = path.resolve(ROOT, '.' + ruta);
