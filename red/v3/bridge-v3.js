@@ -99,7 +99,7 @@ export function crearBridge({
       // ninguno de esos dos, nunca se le ocurría mirar en el 5000/5100/5101
       // donde el otro lado sí estaba respondiendo. Ahora se preguntan los
       // mismos cuatro que el anunciante garantiza, siempre.
-      const PUERTOS_RESPALDO = [5000, 5100, 5101];
+      const PUERTOS_RESPALDO = [5000, 5001];
       const puertoPedido = Number(url.searchParams.get('puerto'));
       const puertos = puertoPedido
         ? [puertoPedido]

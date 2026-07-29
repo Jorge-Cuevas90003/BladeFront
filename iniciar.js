@@ -169,26 +169,19 @@ function probarPuertoTcp(puerto) {
   });
 }
 
-// Elige el puerto TCP pedido, o busca automáticamente el siguiente libre si está ocupado.
+// Elige el puerto TCP pedido de forma estricta (sin fallback).
 async function elegirPuertoTcp(pedido) {
   if (await probarPuertoTcp(pedido)) return pedido;
-  for (let p = 5002; p <= 5050; p++) {
-    if (await probarPuertoTcp(p)) return p;
-  }
-  return pedido;
+  error(`El puerto TCP ${pedido} está ocupado. No se permite fallback automático por regla estricta de la materia. Cierra el proceso que ocupa el puerto ${pedido} y vuelve a intentarlo.`);
+  process.exit(1);
 }
 
-// Prueba el puerto pedido y, si no, salta de 100 en 100: 5101, 5201...
+// Elige el puerto UDP pedido de forma estricta (sin fallback).
 async function elegirPuertoUdp(pedido) {
-  let motivoOriginal = null;
-  for (let i = 0; i < 12; i++) {
-    const puerto = pedido + i * 100;
-    if (puerto > 65535) break;
-    const fallo = await motivoOcupado(puerto);
-    if (!fallo) return { puerto, cambiado: i > 0, motivo: motivoOriginal };
-    if (i === 0) motivoOriginal = fallo;
-  }
-  return { puerto: pedido, cambiado: false, motivo: motivoOriginal, sinAlternativa: true };
+  const fallo = await motivoOcupado(pedido);
+  if (!fallo) return { puerto: pedido, cambiado: false, motivo: null };
+  error(`El puerto UDP ${pedido} está ocupado (${fallo}). No se permite fallback automático por regla estricta de la materia. Cierra el proceso que ocupa el puerto ${pedido} y vuelve a intentarlo.`);
+  process.exit(1);
 }
 
 // ----------------------------------------------------------------------------
