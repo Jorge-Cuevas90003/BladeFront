@@ -180,6 +180,17 @@ jugadores como `u8`, en contradicción con §27.2, que define ambos como `u16`
 big-endian. Se corrigió el códec, se respetó la regla de responder únicamente
 en `WAITING` y se añadió una prueba binaria exacta.
 
+## 23 · Vista final del servidor y limpieza del cliente
+
+**Solicitud:** mostrar en el servidor quién ganó, reemplazar su mapa 2D por la
+arena 3D del cliente sin permitir que el servidor juegue y eliminar del cliente
+la opción “Mi Propio Servidor (Host Local)”, conservando todo lo funcional.
+
+**Resultado:** monitor 3D independiente alimentado solo por `/estado`, cartel
+persistente con nombre e ID del ganador y eliminación aislada de la fila local.
+Las pruebas verifican que el monitor no contiene controles ni crea un cliente
+de juego.
+
 ---
 
 *Nota: la cronología se mantiene sincronizada con los commits del repositorio Git.*

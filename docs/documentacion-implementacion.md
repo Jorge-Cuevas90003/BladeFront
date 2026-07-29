@@ -159,6 +159,18 @@ Se corrigió el códec sin modificar la partida TCP ni el motor del juego. Se
 añadió una prueba que compara el datagrama byte por byte con el PRFC y se
 limitó la respuesta de descubrimiento al estado `WAITING`, como exige §19.
 
+### Versión conceptual 8 — monitor 3D y resultado del servidor
+
+La vista administrativa del servidor pasó de un mapa 2D a la misma arena 3D
+del cliente. Continúa siendo estrictamente de solo lectura: obtiene
+instantáneas mediante el endpoint local `/estado`, no crea un `ClienteV3`, no
+abre una conexión de juego y no envía `JOIN`, `INPUT` ni `INTERACT`.
+
+El monitor muestra el nombre y el identificador del ganador al finalizar. En
+el cliente se retiró la entrada artificial **Mi Propio Servidor (Host Local)**;
+el descubrimiento de partidas reales y la conexión manual permanecen
+inalterados.
+
 ## 4. Cronología resumida por día
 
 | Fecha | Resultado principal | Evidencia Git |

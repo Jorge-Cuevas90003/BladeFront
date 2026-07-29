@@ -56,7 +56,8 @@ npx http-server . -p 8145 -c-1
 
 - Modo Juggernaut → `http://localhost:8145/assets/modo-juggernaut/`
 - Captura la Bandera → `http://localhost:8145/assets/captura-v3/`
-- Vista del servidor → `http://localhost:8145/assets/captura-v3/servidor.html`
+- Vista 3D del servidor (solo lectura, con jugadores y ganador) →
+  `http://localhost:8145/assets/captura-v3/servidor.html`
 
 **Modo Juggernaut**
 

@@ -98,6 +98,12 @@ export function crearServidor({
       status: juego.bandera.status,
       carrierId: juego.bandera.carrierId,
     },
+    winner: juego.ganadorId
+      ? {
+          playerId: juego.ganadorId,
+          name: juego.jugadores.get(juego.ganadorId)?.name ?? `#${juego.ganadorId}`,
+        }
+      : null,
     players: juego.jugadoresActivos().map((j) => ({
       playerId: j.playerId,
       name: j.name,

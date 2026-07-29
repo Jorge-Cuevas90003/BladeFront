@@ -22,8 +22,9 @@
     .solo { color:#94a5b5; font-size:12px; letter-spacing:.08em; text-transform:uppercase; }
     main { min-height:0; display:grid; grid-template-columns:minmax(420px,1fr) 280px; gap:16px; padding:16px; }
     .arena,.datos { border:1px solid #263443; background:rgba(7,11,18,.88); }
-    .arena { min-height:480px; display:grid; place-items:center; overflow:hidden; }
-    canvas { width:min(78vh,100%); height:min(78vh,100%); aspect-ratio:1; display:block; }
+    .arena { min-height:480px; position:relative; overflow:hidden; }
+    #app3d { position:absolute; inset:0; }
+    #app3d canvas { width:100%; height:100%; display:block; }
     .datos { padding:18px; overflow:auto; }
     dl { display:grid; grid-template-columns:1fr auto; gap:9px 12px; margin:0 0 22px; }
     dt { color:#718596; text-transform:uppercase; font-size:11px; letter-spacing:.1em; }
@@ -32,6 +33,14 @@
     ul { list-style:none; padding:0; margin:0; display:grid; gap:8px; }
     li { padding:9px; border:1px solid #243343; display:flex; justify-content:space-between; }
     .ok { color:#7ee8a8; } .error { color:#ff7878; }
+    .resultado { position:absolute; inset:0; z-index:4; display:grid; place-items:center;
+      background:radial-gradient(circle,rgba(5,8,13,.18),rgba(5,8,13,.75)); pointer-events:none; }
+    .resultado.oculto { display:none; }
+    .resultado div { min-width:min(460px,82%); padding:24px 30px; text-align:center;
+      border:1px solid var(--oro); background:rgba(5,8,13,.9); box-shadow:0 0 45px rgba(255,182,56,.2); }
+    .resultado small { color:#91a5b6; text-transform:uppercase; letter-spacing:.18em; }
+    .resultado strong { display:block; margin-top:8px; color:var(--oro);
+      font:700 30px Georgia,serif; letter-spacing:.08em; }
     footer { color:#708292; font-size:11px; margin-top:20px; }
     @media (max-width:760px) { main { grid-template-columns:1fr; } .arena { min-height:58vh; } }
   </style>
@@ -46,7 +55,12 @@
     </div>
   </header>
   <main>
-    <section class="arena"><canvas id="mapa" width="900" height="900"></canvas></section>
+    <section class="arena">
+      <div id="app3d"></div>
+      <div class="resultado oculto" id="resultado">
+        <div><small>Ganador de la partida</small><strong id="ganador">—</strong></div>
+      </div>
+    </section>
     <aside class="datos">
       <dl>
         <dt>Servidor</dt><dd id="nombre">—</dd>
@@ -62,40 +76,11 @@
   </main>
   <script>
     const $ = (id) => document.getElementById(id);
-    const canvas = $('mapa');
-    const ctx = canvas.getContext('2d');
     const endpoint = new URLSearchParams(location.search).get('estado') || 'http://127.0.0.1:8147/estado';
     const estados = {1:'ESPERANDO',2:'INICIANDO',3:'EN PARTIDA',4:'FINALIZADA',5:'CANCELADA'};
     const banderas = {1:'LIBRE',2:'LLEVADA',3:'CAÍDA',4:'FUERA'};
     let consultando = false;
     let ultimoEstado = null;
-
-    function dibujar(s) {
-      const w = canvas.width, h = canvas.height;
-      const escala = Math.min(w,h) / (s.params.mapSize * 2.2);
-      const px = (x) => w/2 + x*escala;
-      const py = (y) => h/2 + y*escala;
-      ctx.clearRect(0,0,w,h);
-      ctx.fillStyle='#07101a'; ctx.fillRect(0,0,w,h);
-      ctx.strokeStyle='#263b4d'; ctx.lineWidth=2;
-      ctx.strokeRect(px(-s.params.mapSize),py(-s.params.mapSize),
-        s.params.mapSize*2*escala,s.params.mapSize*2*escala);
-      ctx.beginPath(); ctx.arc(w/2,h/2,s.params.circleRadius*escala,0,Math.PI*2);
-      ctx.strokeStyle='#ffb638'; ctx.lineWidth=5; ctx.stroke();
-
-      const f=s.flag;
-      ctx.beginPath(); ctx.arc(px(f.x),py(f.y),11,0,Math.PI*2);
-      ctx.fillStyle='#ffd36f'; ctx.shadowColor='#ffb638'; ctx.shadowBlur=18; ctx.fill(); ctx.shadowBlur=0;
-
-      for (const p of s.players) {
-        const x=px(p.x), y=py(p.y);
-        ctx.beginPath(); ctx.arc(x,y,15,0,Math.PI*2);
-        ctx.fillStyle=p.hasFlag ? '#ffb638' : '#8cecff'; ctx.fill();
-        ctx.strokeStyle='#eafaff'; ctx.lineWidth=2; ctx.stroke();
-        ctx.fillStyle='#fff'; ctx.font='700 17px system-ui'; ctx.textAlign='center';
-        ctx.fillText(`${p.name} #${p.playerId}`,x,y-23);
-      }
-    }
 
     function presentar(s) {
       $('nombre').textContent=s.serverName;
@@ -103,6 +88,12 @@
       $('tick').textContent=s.tick;
       $('cantidad').textContent=s.players.length;
       $('bandera').textContent=banderas[s.flag.status] ?? s.flag.status;
+      if(s.winner) {
+        $('ganador').textContent=`${s.winner.name} · #${s.winner.playerId}`;
+        $('resultado').classList.remove('oculto');
+      } else if(s.state===2 || s.state===3) {
+        $('resultado').classList.add('oculto');
+      }
       ultimoEstado=s;
       $('empezar').disabled=s.state!==1 || s.players.length===0;
       $('jugadores').replaceChildren(...(s.players.length
@@ -116,7 +107,7 @@
             return li;
           })
         : [Object.assign(document.createElement('li'),{textContent:'Nadie conectado'})]));
-      dibujar(s);
+      window.__presentarServidor3D?.(s);
     }
 
     async function actualizar() {
@@ -162,5 +153,14 @@
       }
     });
   </script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module" src="./js/visor-servidor-3d.js"></script>
 </body>
 </html>

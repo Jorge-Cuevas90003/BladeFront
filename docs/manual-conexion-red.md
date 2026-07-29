@@ -82,7 +82,7 @@ flowchart LR
     B -- "TCP" --> S
     B -- "UDP broadcast / unicast" --> Otros
     C -- "HTTP (carga de la página)" --> W
-    V -- "HTTP local de solo lectura" --> S
+    V -- "HTTP local /estado de solo lectura" --> S
 ```
 
 Nótese que el bridge cumple **dos** papeles a la vez: traduce la conexión de
@@ -189,6 +189,11 @@ El mensaje base es simple: el cliente manda `DISCOVER_REQUEST` (tipo
 dentro del mensaje**: se toma del origen real del datagrama UDP, para que no
 se puedan anunciar direcciones falsas o equivocadas por tener varias
 interfaces de red.
+
+La vista administrativa renderiza la arena en 3D, pero esa diferencia es
+exclusivamente gráfica. Lee jugadores, bandera, estado y ganador desde
+`127.0.0.1:8147/estado`; no se registra como jugador ni transmite mensajes del
+protocolo de partida.
 
 La respuesta binaria sigue literalmente PRFC §27.2: `playerCount` y
 `maximumPlayers` ocupan **u16 big-endian** cada uno. Una versión anterior los
