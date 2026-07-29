@@ -226,13 +226,13 @@ export function crearServidor({
         log(`  JOIN ${jugador.playerId} "${jugador.name}"`);
         difundir(TIPOS.LOBBY_STATE, juego.serializarLobby());
 
-        // Anfitrión es quien juega desde la máquina que aloja la partida. Si
-        // ya hay uno no se reemplaza: abrir una segunda pestaña en local no
-        // debe robarle el mando al que ya estaba.
-        if (!servidorEstricto && info.esLocal
+        // El servidor estricto no crea un jugador propio: el primer cliente
+        // conectado es el anfitrión jugable y puede iniciar la partida. En el
+        // modo anterior, el anfitrión sigue siendo el cliente local.
+        if ((servidorEstricto || info.esLocal)
             && (!anfitrionId || !juego.jugadores.get(anfitrionId)?.connected)) {
           anfitrionId = jugador.playerId;
-          log(`  ${jugador.playerId} es el anfitrión (juega desde esta máquina)`);
+          log(`  ${jugador.playerId} es el anfitrión jugable`);
         }
 
         // Con `auto` la cuenta arranca con el primer jugador. Eso deja al
@@ -251,20 +251,14 @@ export function crearServidor({
       // nuestra, no una desviación del protocolo.
       case TIPOS.HOST_START: {
         if (!duenoValido(socket, info, msg)) return;
-        if (servidorEstricto) {
+        // En servidor estricto el anfitrión es el primer cliente conectado; en
+        // modo clásico también debe ser una conexión local.
+        const anfitrionAutorizado = info.playerId === anfitrionId
+          && (servidorEstricto || info.esLocal);
+        if (!anfitrionAutorizado) {
           return enviar(socket, TIPOS.ERROR, {
             code: ERRORES.UNKNOWN_PLAYER,
-            description: 'la partida se inicia desde la consola del servidor',
-          });
-        }
-        // Doble comprobación: el id tiene que ser el del anfitrión Y la
-        // conexión tiene que venir de esta máquina. Con solo lo primero, si el
-        // anfitrión se fuera y otro heredara su número podría dar la salida en
-        // una partida que no es suya.
-        if (!info.esLocal || info.playerId !== anfitrionId) {
-          return enviar(socket, TIPOS.ERROR, {
-            code: ERRORES.UNKNOWN_PLAYER,
-            description: 'solo el anfitrión, desde la máquina que aloja la partida, puede empezarla',
+            description: 'solo el anfitrión puede empezar la partida',
           });
         }
         if (juego.estado !== ESTADO_PARTIDA.WAITING) {
@@ -282,7 +276,8 @@ export function crearServidor({
         if (!duenoValido(socket, info, msg)) return;
         return enviar(socket, TIPOS.HOST_INFO, {
           hostId: anfitrionId,
-          puedesEmpezar: !!(info.esLocal && info.playerId === anfitrionId
+          puedesEmpezar: !!((servidorEstricto || info.esLocal)
+                            && info.playerId === anfitrionId
                             && juego.estado === ESTADO_PARTIDA.WAITING),
         });
       }

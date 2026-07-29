@@ -45,17 +45,16 @@ ok(servidor.juego.jugadoresActivos().length === 1, 'el servidor no agrega un jug
 const marca = mensajes.length;
 socket.write(enmarcar(TIPOS.HOST_QUERY, { playerId: aceptado.playerId }));
 const host = await esperar(TIPOS.HOST_INFO, marca);
-ok(host?.hostId === 0 && host?.puedesEmpezar === false,
-  'ningún cliente se convierte en anfitrión del servidor');
+ok(host?.hostId === aceptado.playerId && host?.puedesEmpezar === true,
+  'el primer cliente es el anfitrión jugable');
 
 const intento = mensajes.length;
 socket.write(enmarcar(TIPOS.HOST_START, { playerId: aceptado.playerId }));
-ok(!!await esperar(TIPOS.ERROR, intento), 'un cliente no puede iniciar la partida');
+ok(!!await esperar(TIPOS.GAME_STARTED, intento),
+  'el anfitrión cliente puede iniciar y recibe GAME_STARTED');
 
-const inicioLocal = mensajes.length;
 const respuesta = await fetch('http://127.0.0.1:18147/empezar', { method: 'POST' });
-ok(respuesta.ok, 'la consola local del servidor puede iniciar');
-ok(!!await esperar(TIPOS.GAME_STARTED, inicioLocal), 'el cliente recibe GAME_STARTED');
+ok(respuesta.status === 409, 'la vista del servidor detecta que la partida ya inició');
 
 socket.destroy();
 await servidor.cerrar();
