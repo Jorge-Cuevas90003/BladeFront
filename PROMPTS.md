@@ -228,6 +228,29 @@ como anfitrión, porque el servidor es quien aloja y controla la partida.
 que atribuía ese papel a un jugador. La sala conserva la marca `TÚ` y espera el
 inicio administrativo del servidor, sin modificar conexiones ni reglas.
 
+## 27 · Estricto cumplimiento del protocolo oficial PRFC v3.0.0 (eliminación de 0x7E)
+
+**Solicitud:** resolver discrepancias de compatibilidad en red con servidores de
+otros equipos causadas por el envío del mensaje no estándar `0x7E` (`HOST_QUERY`).
+
+**Resultado:** se desactivó el envío automático de `HOST_QUERY` (`0x7E`) en `cliente-v3.js`,
+garantizando que el cliente envíe únicamente tipos de mensaje contemplados en el rango oficial `0x01`-`0x2A`
+del estándar PRFC v3.0.0 (`erickm13/CC8-Protocolo`).
+
+## 28 · Jugar de nuevo desde el servidor
+
+**Solicitud:** evitar que la partida se limpie por completo al finalizar y
+permitir que el servidor inicie otra ronda mediante un botón, sin alterar el
+movimiento, la bandera, el descubrimiento ni las conexiones existentes.
+
+**Resultado:** al recibir `GAME_OVER`, el servidor estricto conserva los
+clientes conectados. La vista administrativa cambia su botón a **Jugar de
+nuevo**; al pulsarlo se reinician posiciones, entradas, bandera, ganador y
+tick, conservando sockets, identificadores y nombres. Se reutiliza la secuencia
+existente `GAME_COUNTDOWN` / `GAME_STARTED`, sin agregar mensajes al protocolo.
+Las pruebas verifican que el mismo cliente participa en la segunda ronda sin
+reconectarse y que los modos heredados conservan su limpieza previa.
+
 ---
 
 *Nota: la cronología se mantiene sincronizada con los commits del repositorio Git.*

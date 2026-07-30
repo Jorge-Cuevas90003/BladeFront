@@ -58,6 +58,11 @@ del servidor. El cliente no levanta un servidor propio. Tanto
 el servidor como el cliente incluyen **Cambiar configuración**, que cierra el
 rol activo, libera sus puertos y vuelve a la selección inicial. O a mano:
 
+Cuando termina una ronda, la vista del servidor muestra **Jugar de nuevo**.
+Ese control reinicia la ronda con los mismos clientes conectados: conserva sus
+identificadores y sockets, pero restablece posiciones, entradas, bandera,
+ganador y contador. Los jugadores no tienen que salir ni volver a unirse.
+
 ```bash
 npx http-server . -p 8145 -c-1
 ```
@@ -172,6 +177,10 @@ El archivo `red/v3/protocolo-v3.js` es la implementación de BladeFront, no la
 fuente de verdad del estándar. Antes de cambiar el códec o interpretar una
 ambigüedad se debe revisar la rama `main` de ese repositorio y sincronizar en el
 mismo cambio la implementación, las pruebas y esta documentación.
+
+El cliente de red solo emite mensajes del rango oficial `0x01`–`0x2A`. La
+extensión local `HOST_QUERY` (`0x7E`) está desactivada; el inicio de partida se
+realiza exclusivamente desde la vista administrativa del servidor.
 
 Va en binario sobre TCP, con un prefijo de longitud por mensaje y las
 coordenadas como enteros ×100 para que ningún lenguaje redondee distinto. Los

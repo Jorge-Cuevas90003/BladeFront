@@ -128,6 +128,12 @@ el códec, las pruebas y la documentación de BladeFront.
 
 Puntos clave:
 
+- **El cliente no emite extensiones privadas.** Desde `a54d7ce`, la consulta
+  local `HOST_QUERY` (`0x7E`) permanece desactivada en el cliente de red porque
+  no forma parte del rango oficial `0x01`–`0x2A`. El inicio ya se controla
+  desde la vista administrativa del servidor, así que esa consulta no es
+  necesaria para jugar y eliminarla evita incompatibilidades con servidores
+  estrictos de otros equipos.
 - **Mensajes binarios**, no JSON. Cada mensaje empieza con un byte de tipo
   (`0x10` = JOIN, `0x25` = GAME_STATE, etc.) y un byte de versión de
   protocolo.
@@ -197,6 +203,13 @@ Puntos importantes de esta regla:
   observador como jugador.
 - Todos los clientes permanecen en la sala hasta recibir `GAME_COUNTDOWN` y
   `GAME_STARTED` del servidor.
+- Al terminar la ronda, la vista global cambia el control a **Jugar de
+  nuevo**. En modo servidor estricto se mantienen abiertos los sockets y se
+  conservan los `playerId`; el servidor limpia únicamente el estado de la
+  ronda y vuelve a emitir `GAME_COUNTDOWN` y `GAME_STARTED`.
+- Si todos los clientes abandonan después de `GAME_OVER`, la sala vuelve a
+  `WAITING` para aceptar jugadores nuevos. Los modos antiguos no estrictos
+  conservan su limpieza automática anterior.
 
 ---
 

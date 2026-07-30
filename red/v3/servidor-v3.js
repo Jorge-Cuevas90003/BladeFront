@@ -62,6 +62,10 @@ export function crearServidor({
   monitorPort = null,
   monitorHost = '127.0.0.1',
   servidorEstricto = false,
+  // En el rol servidor separado, GAME_OVER deja la sala detenida con los
+  // mismos sockets para que el monitor pueda lanzar una revancha. Los modos
+  // clásicos conservan el desalojo automático anterior.
+  conservarJugadoresTrasFinal = servidorEstricto,
   keepAliveMs = 10000,
   // Margen de cortesía entre el GAME_OVER y el desalojo: el tiempo que se les
   // deja a todos para ver quién ganó antes de cortarles la conexión.
@@ -132,7 +136,8 @@ export function crearServidor({
           res.writeHead(403, { 'content-type': 'application/json; charset=utf-8' });
           return res.end(JSON.stringify({ ok: false, error: 'control local desactivado' }));
         }
-        if (juego.estado !== ESTADO_PARTIDA.WAITING) {
+        const esRevancha = juego.estado === ESTADO_PARTIDA.FINISHED;
+        if (juego.estado !== ESTADO_PARTIDA.WAITING && !esRevancha) {
           res.writeHead(409, { 'content-type': 'application/json; charset=utf-8' });
           return res.end(JSON.stringify({ ok: false, error: 'la partida ya empezó' }));
         }
@@ -140,9 +145,14 @@ export function crearServidor({
           res.writeHead(409, { 'content-type': 'application/json; charset=utf-8' });
           return res.end(JSON.stringify({ ok: false, error: 'no hay jugadores conectados' }));
         }
+        if (esRevancha) {
+          juego.prepararRevancha();
+          difundir(TIPOS.LOBBY_STATE, juego.serializarLobby());
+          log(`== revancha preparada con ${juego.jugadoresActivos().length} jugador(es) conectados ==`);
+        }
         arrancarCuenta();
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
-        return res.end(JSON.stringify({ ok: true }));
+        return res.end(JSON.stringify({ ok: true, revancha: esRevancha }));
       }
       res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
       res.end('No encontrado');
@@ -372,9 +382,13 @@ export function crearServidor({
         const g = juego.jugadores.get(juego.ganadorId);
         log(`== fin: gana ${juego.ganadorId} "${g?.name ?? '?'}" en el tick ${juego.tick} ==`);
 
-        // Margen de cortesía para que a todos les dé tiempo a ver el resultado
-        // antes de que se les eche.
-        setTimeout(desalojarYReiniciar, msTrasFinal);
+        if (conservarJugadoresTrasFinal) {
+          log('== esperando que el servidor pulse JUGAR DE NUEVO; conexiones conservadas ==');
+        } else {
+          // Margen de cortesía para que a todos les dé tiempo a ver el resultado
+          // antes de que se les eche.
+          setTimeout(desalojarYReiniciar, msTrasFinal);
+        }
       }
     });
   }
@@ -500,6 +514,13 @@ export function crearServidor({
       // soltaba: se quedaba pegada a alguien que ya no estaba y la partida no
       // podía terminar nunca.
       juego.desconectar(info.playerId);
+      // Si todos abandonan la pantalla de resultado, se reabre la sala para
+      // que jugadores nuevos puedan hacer JOIN sin reiniciar el proceso.
+      if (conservarJugadoresTrasFinal
+          && juego.estado === ESTADO_PARTIDA.FINISHED
+          && juego.jugadoresActivos().length === 0) {
+        juego.prepararRevancha();
+      }
       if (juego.jugadoresActivos().length === 0) anfitrionId = 0;
 
       if (juego.estado === ESTADO_PARTIDA.WAITING || juego.estado === ESTADO_PARTIDA.STARTING) {
