@@ -142,6 +142,28 @@ export class MotorV3 {
     this._desconexiones.clear();
   }
 
+  // Prepara otra ronda SIN expulsar a quienes siguen conectados. A diferencia
+  // de reiniciarSala(), conserva playerId, nombre y socket de cada jugador.
+  // iniciar() los reubicará en el anillo al terminar la nueva cuenta atrás.
+  prepararRevancha() {
+    for (const [id, j] of this.jugadores) {
+      if (!j.connected) {
+        this.jugadores.delete(id);
+        continue;
+      }
+      j.direction = DIRECCIONES.NONE;
+      j.hasFlag = false;
+    }
+    this.estado = ESTADO_PARTIDA.WAITING;
+    this.tick = 0;
+    this.ganadorId = 0;
+    this.bandera = { x: 0, y: 0, status: ESTADO_BANDERA.AVAILABLE, carrierId: 0 };
+    this._protegidaHasta = -1;
+    this._inputs.clear();
+    this._interacts.clear();
+    this._desconexiones.clear();
+  }
+
   // --- intención del cliente (§28) ------------------------------------------
 
   // §30.1: de varios INPUT en el mismo ciclo solo sobrevive el último.

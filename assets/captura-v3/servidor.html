@@ -95,7 +95,9 @@
         $('resultado').classList.add('oculto');
       }
       ultimoEstado=s;
-      $('empezar').disabled=s.state!==1 || s.players.length===0;
+      const puedeIniciar=(s.state===1 || s.state===4) && s.players.length>0;
+      $('empezar').textContent=s.state===4 ? 'Jugar de nuevo' : 'Iniciar partida';
+      $('empezar').disabled=!puedeIniciar;
       $('jugadores').replaceChildren(...(s.players.length
         ? s.players.map((p) => {
             const li=document.createElement('li');
@@ -127,7 +129,7 @@
     actualizar();
     setInterval(actualizar,100);
     $('empezar').addEventListener('click',async()=>{
-      if(!ultimoEstado || ultimoEstado.state!==1 || ultimoEstado.players.length===0) return;
+      if(!ultimoEstado || ![1,4].includes(ultimoEstado.state) || ultimoEstado.players.length===0) return;
       $('empezar').disabled=true;
       try {
         const r=await fetch('http://127.0.0.1:8147/empezar',{method:'POST'});
@@ -136,7 +138,7 @@
           throw new Error(d.error || `HTTP ${r.status}`);
         }
       } catch(e) {
-        alert(`No se pudo iniciar: ${e.message}`);
+        alert(`No se pudo iniciar la partida: ${e.message}`);
       }
       actualizar();
     });

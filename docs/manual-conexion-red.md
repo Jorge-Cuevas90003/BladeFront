@@ -203,6 +203,13 @@ Puntos importantes de esta regla:
   observador como jugador.
 - Todos los clientes permanecen en la sala hasta recibir `GAME_COUNTDOWN` y
   `GAME_STARTED` del servidor.
+- Al terminar la ronda, la vista global cambia el control a **Jugar de
+  nuevo**. En modo servidor estricto se mantienen abiertos los sockets y se
+  conservan los `playerId`; el servidor limpia únicamente el estado de la
+  ronda y vuelve a emitir `GAME_COUNTDOWN` y `GAME_STARTED`.
+- Si todos los clientes abandonan después de `GAME_OVER`, la sala vuelve a
+  `WAITING` para aceptar jugadores nuevos. Los modos antiguos no estrictos
+  conservan su limpieza automática anterior.
 
 ---
 

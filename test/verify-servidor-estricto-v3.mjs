@@ -77,6 +77,18 @@ ok(estadoMonitor.winner?.playerId === aceptado.playerId
   && estadoMonitor.winner?.name === 'Cliente',
   'la vista del servidor recibe el nombre y el id del ganador');
 
+const antesRevancha = mensajes.length;
+const revancha = await fetch('http://127.0.0.1:18147/empezar', { method: 'POST' });
+ok(revancha.ok && (await revancha.json()).revancha === true,
+  'el servidor acepta JUGAR DE NUEVO después de GAME_OVER');
+ok(!socket.destroyed,
+  'el jugador conserva la misma conexión TCP para la revancha');
+ok(!!await esperar(TIPOS.GAME_STARTED, antesRevancha, 2500),
+  'la revancha empieza con el jugador que ya estaba conectado');
+ok(servidor.juego.jugadoresActivos().length === 1
+  && servidor.juego.jugadores.has(aceptado.playerId),
+  'la revancha conserva el playerId y no duplica jugadores');
+
 const htmlServidor = await readFile(
   new URL('../assets/captura-v3/servidor.html', import.meta.url), 'utf8',
 );
@@ -105,5 +117,5 @@ ok(!visorCliente.includes('ANFITRIÓN')
 
 socket.destroy();
 await servidor.cerrar();
-console.log(`Resultado: ${fallas ? `${fallas} FALLAS` : '12 OK, 0 FALLAS'}`);
+console.log(`Resultado: ${fallas ? `${fallas} FALLAS` : '16 OK, 0 FALLAS'}`);
 if (fallas) process.exitCode = 1;

@@ -209,6 +209,19 @@ administrativa del servidor, el cliente ya no necesita consultar quién puede
 iniciar. Esto reduce la superficie de incompatibilidad con implementaciones
 estrictas de otros grupos.
 
+### Versión conceptual 11 — revancha controlada por el servidor
+
+Tras `GAME_OVER`, el servidor estricto ya no expulsa automáticamente a los
+jugadores. La vista administrativa presenta **Jugar de nuevo** y reutiliza el
+mismo endpoint local `/empezar`. Al activarlo, el motor conserva sockets,
+`playerId` y nombres, y reinicia solamente el estado de ronda: posiciones,
+entradas, interacciones, bandera, ganador y tick.
+
+El transporte y el protocolo de juego no cambian. Los clientes reciben otra
+secuencia normal `GAME_COUNTDOWN` / `GAME_STARTED`, que ya sabían procesar.
+Los modos no estrictos mantienen la limpieza automática previa para evitar una
+regresión en los flujos heredados.
+
 ## 4. Cronología resumida por día
 
 | Fecha | Resultado principal | Evidencia Git |
@@ -221,7 +234,7 @@ estrictas de otros grupos.
 | 2026-07-26 | Descubrimiento Radmin, lobby, firewall, compatibilidad y fluidez | `abe77a7`–`f062e4b` |
 | 2026-07-27 | Roster unificado y corrección UDP colaborativa | `d3c1180`–`b7f84f8` |
 | 2026-07-28 | Diagnóstico TCP, movimiento, bandera, roles estrictos, documentación y adopción de la fuente canónica externa | `9b5b175`–estado actual |
-| 2026-07-29 | Inicio exclusivo del servidor, limpieza del lobby y eliminación de `HOST_QUERY` en el cliente | `57375a3`–`a54d7ce` |
+| 2026-07-29 | Inicio exclusivo del servidor, limpieza del lobby, eliminación de `HOST_QUERY` y revancha sin reconectar | `57375a3`–estado actual |
 
 Los rangos anteriores son un índice temático. El historial completo, incluidos
 merges y correcciones intermedias, se obtiene con:

@@ -58,6 +58,11 @@ del servidor. El cliente no levanta un servidor propio. Tanto
 el servidor como el cliente incluyen **Cambiar configuración**, que cierra el
 rol activo, libera sus puertos y vuelve a la selección inicial. O a mano:
 
+Cuando termina una ronda, la vista del servidor muestra **Jugar de nuevo**.
+Ese control reinicia la ronda con los mismos clientes conectados: conserva sus
+identificadores y sockets, pero restablece posiciones, entradas, bandera,
+ganador y contador. Los jugadores no tienen que salir ni volver a unirse.
+
 ```bash
 npx http-server . -p 8145 -c-1
 ```
