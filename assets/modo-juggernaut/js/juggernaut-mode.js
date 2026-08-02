@@ -364,8 +364,14 @@ class Hunter {
       desired.clampLength(0, this.speed);
     }
 
-    this.velocity.x += (desired.x - this.velocity.x) * Math.min(1, dt * 4);
-    this.velocity.z += (desired.z - this.velocity.z) * Math.min(1, dt * 4);
+    // Agarre: cuánto tarda en alcanzar la velocidad que pide. El jugador
+    // necesita respuesta casi inmediata —con 4 el caballero seguía derrapando
+    // medio segundo después de soltar la tecla, y eso se siente como jugar con
+    // guantes—; la IA puede permitirse más inercia, que además la hace ver
+    // menos robótica.
+    const agarre = this.inputDir ? 13 : 5;
+    this.velocity.x += (desired.x - this.velocity.x) * Math.min(1, dt * agarre);
+    this.velocity.z += (desired.z - this.velocity.z) * Math.min(1, dt * agarre);
     // Se lee ANTES de _postMove porque ahí es donde gira: la animación tiene
     // que describir el movimiento respecto a donde mira ahora, no después.
     const speedNow = this._leerMovimientoLocal(dt);
@@ -440,7 +446,16 @@ class Hunter {
 
     if (objetivoYaw !== null && this.state === STATES.HUNT) {
       const prev = this.group.rotation.y;
-      this.group.rotation.y = lerpAngle(prev, objetivoYaw, Math.min(1, dt * 9));
+      // Giro proporcional al ángulo que queda. Con una tasa fija, corregir 10°
+      // y darse la vuelta entera tardaban lo mismo en ARRANCAR, así que un
+      // cambio de sentido describía una curva de autobús mientras el cuerpo
+      // seguía apuntando a donde ya no iba. Ahora una corrección fina sale
+      // suave y un giro de 180° se resuelve como un pivote.
+      const pendiente = Math.abs(
+        ((objetivoYaw - prev + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI
+      );
+      const vivo = 7 + 10 * (pendiente / Math.PI);
+      this.group.rotation.y = lerpAngle(prev, objetivoYaw, Math.min(1, dt * vivo));
       const dAng = this.group.rotation.y - prev;
       this._turn += ((dAng / Math.max(dt, 0.001)) / 6 - this._turn) * Math.min(1, dt * 8);
       this._turn = THREE.MathUtils.clamp(this._turn, -1, 1);

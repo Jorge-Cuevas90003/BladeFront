@@ -54,7 +54,45 @@ const N = {
 
 // El ostinato NO se transporta con los acordes: se queda fijo mientras la
 // armonía se mueve debajo. Esa fricción es la que sostiene el bucle.
-const OSTINATO = [N.D3, N.D3, N.F3, N.D3, N.C3, N.D3, N.A2, N.C3];
+//
+// Pero UNA sola célula repitiéndose para siempre cansa, por muchas capas que
+// tenga encima: el oído la memoriza en veinte segundos y a partir de ahí solo
+// oye la repetición. Hay cuatro y rotan por frase, así que el bucle real pasa
+// de 8 notas a 32 antes de volver al principio.
+const OSTINATOS = [
+  [N.D3, N.D3, N.F3, N.D3, N.C3, N.D3, N.A2, N.C3], // la original: insistente
+  [N.D3, N.F3, N.A3, N.F3, N.D3, N.C3, N.D3, N.A2], // abre hacia arriba
+  [N.A2, N.D3, N.F3, N.D3, N.A2, N.C3, N.E3, N.C3], // más grave, más ancha
+  [N.D3, N.D3, N.C3, N.D3, N.F3, N.E3, N.D3, N.C3], // desciende: cierra la vuelta
+];
+
+// ── La melodía ─────────────────────────────────────────────────────────────
+// Esto era LO QUE FALTABA. La partitura tenía ostinato, pads, percusión y
+// metales, pero ninguna línea que durase más de un compás: todo lo que el oído
+// podía seguir era un bucle corto, y por eso sonaba repetitiva por muchos
+// instrumentos que hubiera encima. Una melodía de ocho compases da algo LARGO
+// a lo que agarrarse, y de paso convierte los cuatro acordes en una frase con
+// principio y final en vez de un ciclo sin forma.
+//
+// Forma de lamento descendente sobre la progresión: reposa en notas del acorde
+// y usa las de paso para tirar hacia la siguiente. El si bemol del quinto
+// compás cae sobre un fa mayor —es una suspensión, roza— y se resuelve al la:
+// ese pequeño roce es lo que hace que la frase parezca ir a alguna parte.
+//   p = paso dentro de la frase (0-63) · d = duración en corcheas
+const MELODIA = [
+  { p: 0,  n: N.A3,  d: 7 },
+  { p: 8,  n: N.G3,  d: 3 },
+  { p: 12, n: N.A3,  d: 3 },
+  { p: 16, n: N.F3,  d: 11 },
+  { p: 28, n: N.G3,  d: 3 },
+  { p: 32, n: N.Bb3, d: 7 },   // la suspensión
+  { p: 40, n: N.A3,  d: 7 },   // ...y su resolución
+  { p: 48, n: N.G3,  d: 3 },
+  { p: 52, n: N.F3,  d: 3 },
+  { p: 56, n: N.E3,  d: 7 },
+];
+
+const PASOS_POR_FRASE = 64;  // ocho compases: la unidad musical de verdad
 
 // i – VI – III – VII en re menor. Dos compases cada uno (16 corcheas).
 const PROGRESION = [
@@ -333,8 +371,26 @@ export class VoidScore {
   _schedule(t, stepDur) {
     const i = this.intensity;
     const paso = this._step;
-    const n = OSTINATO[paso % 8];
     const enCompas = paso % 8;
+
+    // ── Dónde estamos dentro de la FRASE ──
+    // La forma no es "un compás que se repite": son ocho compases con
+    // principio, medio y final, y cada vuelta cambia de célula y de peso.
+    const frase = Math.floor(paso / PASOS_POR_FRASE);
+    const enFrase = paso % PASOS_POR_FRASE;
+    const ostinato = OSTINATOS[frase % OSTINATOS.length];
+    const n = ostinato[paso % 8];
+    const ultimoCompas = enFrase >= 56;
+
+    // Respiración de la frase: crece hacia el compás 6 y afloja al cerrar. Un
+    // nivel plano durante ocho compases es lo que hace que la música suene a
+    // bucle aunque las notas cambien.
+    const respiro = 0.82 + 0.18 * Math.sin((enFrase / PASOS_POR_FRASE) * Math.PI);
+
+    // Rotación de orquestación: no todas las frases suenan igual. La primera
+    // deja respirar (sin melodía), y a partir de ahí entra y se refuerza.
+    const capa = frase % 4;
+    const conMelodia = i > 0.25 && capa !== 0;
 
     // ── Cambio de acorde cada dos compases ──
     const idx = Math.floor(paso / PASOS_POR_ACORDE) % PROGRESION.length;
@@ -346,29 +402,52 @@ export class VoidScore {
       if (i > 0.35) this._sub(PROGRESION[idx].sub, t, 1.6, 0.42);
     }
 
+    // ── La melodía de la frase ──
+    // Se dispara en su paso exacto y dura lo que diga la tabla: es la única
+    // voz que cruza los compases de largo.
+    if (conMelodia) {
+      for (const nota of MELODIA) {
+        if (nota.p !== enFrase) continue;
+        const fuerte = capa >= 2 ? 1.25 : 1;
+        this._melodia(nota.n, t, nota.d * stepDur, (0.075 + i * 0.05) * fuerte * respiro);
+        // Desde la tercera vuelta la dobla una octava abajo: la misma línea,
+        // pero con el peso de una sección entera detrás.
+        if (capa === 3) this._melodia(nota.n / 2, t, nota.d * stepDur, 0.05 * respiro);
+      }
+    }
+
     // ── Cuerdas: el ostinato, siempre ──
-    this._cuerdaGrave(n, t, 0.15 + i * 0.13);
+    this._cuerdaGrave(n, t, (0.15 + i * 0.13) * respiro);
     // Octava aguda doblando: el brillo que hace que se oiga por encima de todo.
-    if (i > 0.3) this._cuerdaAguda(n * 2, t, 0.045 + i * 0.05);
+    if (i > 0.3) this._cuerdaAguda(n * 2, t, (0.045 + i * 0.05) * respiro);
 
     // ── Metales: solo en la caza, y solo en tiempos fuertes ──
     // Un metal en cada corchea sería una pared de ruido; en el 1 y el 3 es un
     // acento y se nota mucho más.
     if (i > 0.55) {
       const ac = PROGRESION[this._acordeActual];
-      if (enCompas === 0) this._metal([ac.bajo, ac.bajo * 1.5], t, 0.75, 0.10 + i * 0.05);
-      if (enCompas === 4 && i > 0.8) this._metal([ac.bajo * 2], t, 0.4, 0.07);
+      if (enCompas === 0) this._metal([ac.bajo, ac.bajo * 1.5], t, 0.75, (0.10 + i * 0.05) * respiro);
+      if (enCompas === 4 && capa >= 2 && i > 0.8) this._metal([ac.bajo * 2], t, 0.4, 0.07);
     }
 
     // ── Percusión ──
     if (i > 0.5) {
       // Patrón completo de caza: bombo en 1 y 3, contratiempo, y redoble
       // agudo llenando — el "boom · boom-BOOM" de la percusión de cine.
-      if (enCompas === 0) this._taiko(t, 0.85);
-      if (enCompas === 4) this._taiko(t, 0.62);
+      if (enCompas === 0) this._taiko(t, 0.85 * respiro);
+      if (enCompas === 4) this._taiko(t, 0.62 * respiro);
       if (enCompas === 6) this._taiko(t + stepDur * 0.5, 0.3);
       if (i > 0.75 && (enCompas === 2 || enCompas === 5 || enCompas === 7)) {
         this._marco(t, 0.16 + Math.random() * 0.06);
+      }
+      // Redoble de cierre en el último compás: es lo que marca que la frase se
+      // acaba y viene otra. Sin él, ocho compases y los ocho siguientes suenan
+      // pegados sin costura y todo se vuelve una masa uniforme.
+      if (ultimoCompas && i > 0.6) {
+        const avance = (enFrase - 56) / 8;           // 0 → 1 a lo largo del compás
+        this._marco(t, 0.12 + avance * 0.3);
+        this._marco(t + stepDur * 0.5, 0.1 + avance * 0.26);
+        if (enFrase === 63) this._taiko(t + stepDur * 0.5, 0.5);
       }
     } else if (enCompas === 0 && paso % 16 === 0) {
       // En calma queda un pulso lejano, cada dos compases: un latido, no ritmo.
@@ -423,6 +502,48 @@ export class VoidScore {
     this._enviar(g, 0.35);
     o.start(t); o2.start(t);
     o.stop(t + 0.6); o2.stop(t + 0.6);
+  }
+
+  // ── La voz que canta la melodía ──
+  // Mitad chelo, mitad trompa: sierra filtrada, ataque lento y vibrato que
+  // ENTRA con la nota en vez de estar desde el principio, que es como toca un
+  // intérprete de verdad —primero afina el sonido, luego lo adorna—. Va muy
+  // cargada de sala porque tiene que sonar por encima de todo sin gritar.
+  _melodia(freq, t, dur, vel) {
+    const ctx = this.ctx;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vel, t + Math.min(0.16, dur * 0.28)); // arco entrando
+    g.gain.setValueAtTime(vel, t + dur * 0.72);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.Q.value = 1.1;
+    f.frequency.setValueAtTime(freq * 2.4, t);
+    f.frequency.linearRampToValueAtTime(freq * 5.5, t + dur * 0.35);
+    f.frequency.exponentialRampToValueAtTime(freq * 2.6, t + dur);
+    f.connect(g);
+    g.connect(this.music);
+    this._enviar(g, 0.75);
+
+    const vib = ctx.createOscillator();
+    vib.frequency.value = 5.2;
+    const vibAmp = ctx.createGain();
+    vibAmp.gain.setValueAtTime(0, t);                       // sin vibrato al atacar
+    vibAmp.gain.linearRampToValueAtTime(6, t + dur * 0.45); // ...y creciendo
+    vib.connect(vibAmp);
+
+    for (const det of [-7, 6]) {
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.value = freq;
+      o.detune.value = det;
+      vibAmp.connect(o.detune);
+      o.connect(f);
+      o.start(t); o.stop(t + dur + 0.15);
+    }
+    vib.start(t); vib.stop(t + dur + 0.2);
   }
 
   // Octava aguda, corta y con más aire: dobla la línea sin engordarla.

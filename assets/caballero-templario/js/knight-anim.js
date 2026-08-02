@@ -11,6 +11,12 @@
 
 import * as THREE from 'three';
 
+// Cuánto suelo cubre media zancada. Es lo que ata el ciclo de piernas al
+// terreno: ver la nota larga en _walk sobre por qué la fase NO puede depender
+// del reloj. Medido contra la velocidad de carrera (3.1) para que a paso
+// normal salgan ~3,3 pasos por segundo, que es cadencia humana.
+const LARGO_ZANCADA = 0.95;
+
 const IDLE_VARIANTS = ['respirar', 'mirar', 'peso', 'pomo', 'guardia', 'floritura', 'revisar_filo', 'desafio', 'alerta'];
 const TACKLE_VARIANTS = ['hombro', 'estocada', 'plancha'];
 const DODGE_STYLES = ['giro', 'deslizamiento'];
@@ -27,6 +33,7 @@ export class KnightAnimator {
 
     this.phase = Math.random() * Math.PI * 2;      // cada uno pisa distinto
     this.gaitFreq = 7.4 + Math.random() * 1.6;     // ...y a su propio ritmo
+    this.cicloFase = 0;                            // fase de zancada acumulada por distancia
     this._prevSpeed = 0;                            // para el lean de aceleración
     this._accelSm = 0;
 
@@ -102,23 +109,42 @@ export class KnightAnimator {
   // valores por defecto (1, 0) reproducen ese comportamiento para cualquier
   // llamada antigua.
   locomotion(dt, t, speed, turn = 0, avance = 1, lateral = 0) {
+    // `w` es la INTENSIDAD del ciclo (cuánto se exagera la pose) y va topada:
+    // por encima de cierta velocidad la animación no debe seguir creciendo o
+    // el muñeco acaba haciendo aspavientos. Pero la velocidad REAL se pasa
+    // aparte, porque el agarre al suelo no puede depender de ese tope: si se
+    // topa también la zancada, por encima del límite los pies vuelven a
+    // patinar justo cuando más se nota.
     const w = THREE.MathUtils.clamp(speed / 3.0, 0, 1.3);
-    if (w > 0.12) this._walk(dt, t, w, turn, avance, lateral);
+    if (w > 0.12) this._walk(dt, t, w, turn, avance, lateral, speed);
     else this._idleUpdate(dt, t);
   }
 
-  _walk(dt, t, w, turn, avance = 1, lateral = 0) {
-    const f = this.gaitFreq * (0.5 + 0.5 * Math.min(w, 1));
-    const th = t * f + this.phase;
+  _walk(dt, t, w, turn, avance = 1, lateral = 0, velReal = w * 3.0) {
+
+    // ── La zancada avanza con la DISTANCIA, no con el reloj ────────────────
+    //
+    // Antes era `t * frecuencia`: el ciclo de piernas corría a su ritmo
+    // mientras el cuerpo se desplazaba al suyo, y los dos solo coincidían a la
+    // velocidad exacta para la que se hubiera afinado la frecuencia. A
+    // cualquier otra, los pies PATINAN sobre el suelo. Es el motivo número uno
+    // por el que un personaje procedural parece flotar en vez de caminar, y no
+    // se arregla animando mejor: hay que atar el ciclo al suelo.
+    //
+    // Ahora la fase avanza media zancada por cada LARGO_ZANCADA recorrido, así
+    // que el pie se planta donde toca vaya a la velocidad que vaya —incluso
+    // frenando, acelerando o retrocediendo—.
+    this.cicloFase += (velReal * dt / LARGO_ZANCADA) * Math.PI;
+    const th = this.cicloFase + this.phase;
     const s = Math.sin(th);
+    const f = this.gaitFreq * (0.5 + 0.5 * Math.min(w, 1)); // solo para adornos lentos
     // zancada asimétrica: la pierna se lanza rápido y se recoge lenta
     const stride = s + 0.22 * Math.sin(2 * th + 1.3);
     // pisada con peso: el bob cae seco y sube suave
     const foot = Math.pow(Math.abs(s), 0.7);
     // lean de aceleración: arranca inclinándose, frena echándose atrás
-    const speed = w * 3.0;
-    const accel = (speed - this._prevSpeed) / Math.max(dt, 0.001);
-    this._prevSpeed = speed;
+    const accel = (velReal - this._prevSpeed) / Math.max(dt, 0.001);
+    this._prevSpeed = velReal;
     this._accelSm += (THREE.MathUtils.clamp(accel, -6, 6) - this._accelSm) *
       Math.min(1, dt * 6);
 
@@ -150,11 +176,22 @@ export class KnightAnimator {
       THREE.MathUtils.clamp(this._accelSm * 0.028, -0.16, 0.16);
     T.torsoZ = s * 0.042 * w - turn * 0.3 - lat * 0.14 * w;
     T.torsoYaw = -s * 0.12 * w + lat * 0.16 * w;
-    T.torsoY = (foot * 0.045 + Math.sin(t * f * 2 + 0.7) * 0.011) * w;
+    // El bob va con th (la zancada), no con el reloj: si la cadera sube cuando
+    // no toca pisar, el cuerpo va por libre respecto a los pies.
+    T.torsoY = (foot * 0.055 + Math.sin(th * 2 + 0.7) * 0.012) * w;
+
+    // ── El eje que faltaba: el cuerpo entero cabecea ──────────────────────
+    // Hasta ahora la raíz solo banqueaba de lado; en marcha se quedaba tiesa
+    // como una pieza de ajedrez deslizándose. Un cuerpo que anda se inclina al
+    // arrancar, se echa atrás al frenar y da un tirón corto en cada pisada.
+    // Sin esto el movimiento es plano por mucho que las piernas se muevan.
+    T.rootX = THREE.MathUtils.clamp(this._accelSm * 0.022, -0.12, 0.15)
+      + foot * 0.022 * w
+      + (atras ? -0.05 : 0) * w;
     T.rootZ = -turn * 0.09 - lat * 0.07 * w; // banquea hacia la curva y hacia el lado
     // Mira hacia donde se desplaza aunque el cuerpo apunte a otro sitio: es lo
     // que vende que está rodeando a algo sin quitarle la vista de encima.
-    T.headYaw = turn * 0.45 + lat * 0.34 + Math.sin(t * f * 0.5 + this.phase) * 0.05;
+    T.headYaw = turn * 0.45 + lat * 0.34 + Math.sin(th * 0.5 + this.phase) * 0.05;
     T.headX = (atras ? 0.04 : -0.06) * w;
     // Retrocediendo la espada se cruza al frente, en guardia, en vez de ir
     // colgando hacia atrás como cuando se corre.
@@ -162,7 +199,7 @@ export class KnightAnimator {
     if (this.cape) {
       this.cape.rotation.x =
         Math.sin(t * 0.5 + this.phase) * 0.015 + (atras ? -0.12 : 0.32) * w +
-        Math.sin(t * f + this.phase) * 0.03 * w;
+        Math.sin(th + this.phase) * 0.03 * w;
     }
     this._apply(dt);
     this._idle.t = 0;
