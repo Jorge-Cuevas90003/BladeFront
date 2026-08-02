@@ -3,40 +3,158 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>BladeFront · Elegir configuración</title>
+  <title>BladeFront · Menú</title>
   <style>
     *{box-sizing:border-box} body{margin:0;min-height:100vh;display:grid;place-items:center;
       background:radial-gradient(circle at 50% 20%,#202b39,#05080d 65%);color:#edf2f6;
-      font:14px system-ui,sans-serif}.panel{width:min(760px,92vw);padding:42px;border:1px solid #364656;
+      font:14px system-ui,sans-serif;padding:24px 0}
+    .panel{width:min(860px,94vw);padding:42px;border:1px solid #364656;
       background:rgba(6,10,16,.94)}h1{margin:0;color:#ffb638;font:700 30px Georgia,serif;
-      letter-spacing:.12em;text-transform:uppercase}.sub{color:#8295a6;margin:8px 0 30px;letter-spacing:.1em;
-      text-transform:uppercase;font-size:11px}.roles{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-    button{min-height:190px;padding:25px;text-align:left;color:#eef4f8;background:#09111b;
-      border:1px solid #304153;cursor:pointer;transition:.2s}button:hover{transform:translateY(-3px);
-      border-color:#ffb638;background:#111a24}.icono{display:block;font-size:30px;margin-bottom:18px}
+      letter-spacing:.12em;text-transform:uppercase}.sub{color:#8295a6;margin:8px 0 26px;letter-spacing:.1em;
+      text-transform:uppercase;font-size:11px}
+    .grupo{color:#6f8496;font-size:10px;letter-spacing:.24em;text-transform:uppercase;
+      margin:0 0 12px;padding-bottom:7px;border-bottom:1px solid #24313e}
+    .roles{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .tarjeta{min-height:186px;padding:24px;text-align:left;color:#eef4f8;background:#09111b;
+      border:1px solid #304153;cursor:pointer;transition:.2s;font:inherit;display:block;
+      text-decoration:none;width:100%}
+    .tarjeta:hover{transform:translateY(-3px);border-color:#ffb638;background:#111a24}
+    .icono{display:block;font-size:30px;margin-bottom:16px}
     b{display:block;color:#ffb638;font:700 18px Georgia,serif;text-transform:uppercase;margin-bottom:9px}
-    span{color:#91a3b2;line-height:1.6}button:disabled{opacity:.45;cursor:wait;transform:none}
-    #estado{min-height:20px;margin:20px 0 0;color:#ff8585;text-align:center}
-    @media(max-width:620px){.roles{grid-template-columns:1fr}.panel{padding:26px}}
+    span{color:#91a3b2;line-height:1.6;display:block}
+    .tarjeta:disabled{opacity:.45;cursor:wait;transform:none}
+    .solo{grid-column:1/-1;min-height:0;display:flex;align-items:center;gap:20px}
+    .solo .icono{margin:0;font-size:26px;flex:none}
+    .solo b{margin-bottom:5px}
+    #estado{min-height:20px;margin:18px 0 0;color:#ff8585;text-align:center}
+    .pie{margin:26px 0 0;text-align:center}
+    .comojugar{background:none;border:1px solid #304153;color:#9fb2c2;cursor:pointer;
+      padding:10px 26px;font:600 11px system-ui,sans-serif;letter-spacing:.22em;
+      text-transform:uppercase;transition:.2s}
+    .comojugar:hover{border-color:#ffb638;color:#ffb638}
+
+    /* ── Cómo se juega ── */
+    #ayuda{position:fixed;inset:0;z-index:9;display:none;padding:24px;overflow:auto;
+      background:rgba(3,6,10,.93)}
+    #ayuda.abierta{display:block}
+    .hoja{width:min(880px,94vw);margin:0 auto;padding:36px;border:1px solid #364656;
+      background:#080d14}
+    .hoja h2{margin:0 0 4px;color:#ffb638;font:700 22px Georgia,serif;letter-spacing:.1em;
+      text-transform:uppercase}
+    .hoja h3{margin:30px 0 10px;color:#dce6ee;font:600 13px system-ui,sans-serif;
+      letter-spacing:.2em;text-transform:uppercase;padding-bottom:6px;border-bottom:1px solid #24313e}
+    .hoja p{margin:0 0 12px;color:#9fb2c2;line-height:1.75}
+    .hoja em{color:#ffb638;font-style:normal}
+    table{width:100%;border-collapse:collapse;margin:0 0 6px}
+    td{padding:7px 10px;border-bottom:1px solid #1b2530;color:#9fb2c2;line-height:1.5;
+      vertical-align:top}
+    td:first-child{width:170px;color:#dce6ee;font-weight:600}
+    kbd{display:inline-block;padding:2px 7px;border:1px solid #3c4c5c;border-bottom-width:2px;
+      border-radius:3px;background:#0e1620;color:#e8f0f6;font:600 11px ui-monospace,monospace}
+    .cerrar{margin-top:28px;width:100%;padding:13px;background:#0e1822;color:#ffb638;
+      border:1px solid #3a4c5e;cursor:pointer;font:600 11px system-ui,sans-serif;
+      letter-spacing:.24em;text-transform:uppercase}
+    .cerrar:hover{background:#152130}
+    @media(max-width:620px){.roles{grid-template-columns:1fr}.panel,.hoja{padding:24px}
+      .solo{display:block}.solo .icono{margin-bottom:12px}
+      td{display:block;border:0;padding:2px 0}
+      td:first-child{width:auto;padding-top:10px}}
   </style>
 </head>
 <body>
   <main class="panel">
-    <h1>Captura la Bandera</h1>
-    <div class="sub">Selecciona cómo se configurará esta computadora</div>
+    <h1>BladeFront</h1>
+    <div class="sub">Arena del Vacío · Proyecto 1</div>
+
+    <p class="grupo">Captura la Bandera · en red con tus compañeros</p>
     <div class="roles">
-      <button data-rol="servidor">
+      <button class="tarjeta" data-rol="servidor">
         <i class="icono">◉</i><b>Servidor</b>
         <span>Aloja la partida y muestra a todos los jugadores. Esta computadora no participa ni controla un personaje.</span>
       </button>
-      <button data-rol="cliente">
+      <button class="tarjeta" data-rol="cliente">
         <i class="icono">⚔</i><b>Cliente</b>
         <span>Busca una partida en la red y entra como jugador. Esta computadora no aloja un servidor propio.</span>
       </button>
     </div>
+
+    <p class="grupo" style="margin-top:30px">Un solo jugador · sin red</p>
+    <div class="roles">
+      <a class="tarjeta solo" href="/assets/modo-juggernaut/">
+        <i class="icono">☠</i>
+        <div>
+          <b>Modo Juggernaut</b>
+          <span>Once templarios contra un jefe monstruoso sobre la isla flotante. No necesita servidor, bridge ni compañeros: se juega al instante.</span>
+        </div>
+      </a>
+    </div>
+
     <p id="estado"></p>
+    <p class="pie"><button class="comojugar" id="abrirAyuda">Cómo se juega</button></p>
   </main>
+
+  <div id="ayuda" role="dialog" aria-modal="true" aria-labelledby="tituloAyuda">
+    <div class="hoja">
+      <h2 id="tituloAyuda">Cómo se juega</h2>
+      <p>Dos juegos sobre la misma arena y los mismos caballeros, con reglas distintas.</p>
+
+      <h3>☠ Modo Juggernaut — un jugador</h3>
+      <p>
+        Quien toca el Ciber-Estandarte del centro se corrompe al instante en el
+        <em>Ejecutor del Vacío</em>, un jefe enorme. Los otros once tienen que
+        derribarlo a placajes antes de que acumule <em>45 segundos de Dominio</em>.
+        Si los acumula, gana la ronda.
+      </p>
+      <p>
+        Todo pasa sobre una isla flotando en un abismo, así que <em>caerse del borde
+        también es perder</em>. Un placaje bien puesto manda por los aires: conviene
+        pelear lejos del filo.
+      </p>
+      <table>
+        <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td>Moverse, relativo a la cámara</td></tr>
+        <tr><td><kbd>Espacio</kbd> / <kbd>F</kbd></td><td>Placaje — o <em>Ground Slam</em> si eres el Juggernaut</td></tr>
+        <tr><td><kbd>Shift</kbd> / <kbd>Q</kbd></td><td>Esquiva: voltereta o deslizamiento</td></tr>
+        <tr><td><kbd>C</kbd></td><td>Ceder o retomar el control de tu templario a la IA</td></tr>
+        <tr><td><kbd>P</kbd> · <kbd>M</kbd> · <kbd>R</kbd></td><td>Pausa · silenciar la música · reiniciar al terminar</td></tr>
+        <tr><td>Ratón</td><td>Orbitar y acercar la cámara</td></tr>
+      </table>
+      <p>
+        La <em>dificultad de la IA</em> se elige arriba a la derecha durante la
+        partida, y se puede cambiar sin perder la ronda que llevas. Afecta a los
+        rivales, no a ti: tu templario corre igual en los tres niveles.
+      </p>
+
+      <h3>⚑ Captura la Bandera — en red</h3>
+      <p>
+        Todos los equipos del curso hablan el mismo protocolo, así que se juega
+        entre implementaciones distintas. Hay <em>una sola bandera</em> en el centro
+        del círculo: tómala y <em>sal del círculo dorado</em> con ella para ganar.
+      </p>
+      <p>
+        A quien la lleva se la puede <em>robar</em> cualquiera que se le acerque, así
+        que correr en línea recta hacia el borde casi nunca funciona.
+      </p>
+      <table>
+        <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / flechas</td><td>Moverse, relativo a la cámara</td></tr>
+        <tr><td><kbd>E</kbd></td><td>Tomar la bandera, o robársela a quien la lleve</td></tr>
+        <tr><td><kbd>M</kbd></td><td>Vista 2D con los datos crudos del protocolo</td></tr>
+      </table>
+
+      <h3>Montar una partida en red</h3>
+      <table>
+        <tr><td>Una computadora</td><td>Elige <em>Servidor</em>: aloja la partida y no juega. Desde su pantalla se da la salida cuando ya entraron todos.</td></tr>
+        <tr><td>Las demás</td><td>Eligen <em>Cliente</em>. Buscan la partida en la red solas; si no aparece, se puede escribir la IP a mano.</td></tr>
+        <tr><td>Radmin VPN</td><td>Tiene que estar encendido en todas las máquinas para que se vean entre sí.</td></tr>
+      </table>
+
+      <button class="cerrar" id="cerrarAyuda">Cerrar</button>
+    </div>
+  </div>
+
   <script>
+    // ── Elegir rol de red ──
+    // El Modo Juggernaut es un enlace normal y NO pasa por /__rol: no levanta
+    // servidor ni bridge, así que no hay nada que configurar en la máquina.
     const botones=[...document.querySelectorAll('[data-rol]')];
     const estado=document.getElementById('estado');
     for(const boton of botones) boton.addEventListener('click',async()=>{
@@ -55,6 +173,19 @@
         estado.textContent=e.message;
         botones.forEach(b=>b.disabled=false);
       }
+    });
+
+    // ── Cómo se juega ──
+    const ayuda=document.getElementById('ayuda');
+    const btnAbrir=document.getElementById('abrirAyuda');
+    const btnCerrar=document.getElementById('cerrarAyuda');
+    const abrir=()=>{ayuda.classList.add('abierta');btnCerrar.focus()};
+    const cerrar=()=>{ayuda.classList.remove('abierta');btnAbrir.focus()};
+    btnAbrir.addEventListener('click',abrir);
+    btnCerrar.addEventListener('click',cerrar);
+    ayuda.addEventListener('click',(e)=>{if(e.target===ayuda)cerrar()});
+    document.addEventListener('keydown',(e)=>{
+      if(e.key==='Escape'&&ayuda.classList.contains('abierta'))cerrar();
     });
   </script>
 </body>

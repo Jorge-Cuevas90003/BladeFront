@@ -16,6 +16,7 @@ import { createKnight } from '../../caballero-templario/js/knight.js';
 import { createExecutor } from '../../ejecutor-del-vacio/js/executor.js';
 import { createCyberBanner } from './flag.js';
 import { JuggernautMode, NetworkBus } from './juggernaut-mode.js';
+import { NIVELES, NIVEL_POR_DEFECTO } from './dificultad.js';
 import { VoidScore } from './audio.js';
 
 // ---------- Renderer ----------
@@ -99,12 +100,23 @@ const flag = createCyberBanner();
 flag.position.set(0, 0, 0); // el Ciber-Estandarte nace en el origen
 scene.add(flag);
 
+// Dificultad recordada entre partidas. Se valida contra NIVELES en vez de
+// confiar en lo guardado: un localStorage de una versión anterior (o editado a
+// mano) no debe dejar la IA sin tabla.
+const CLAVE_NIVEL = 'bladefront:juggernaut:dificultad';
+let nivelIA = NIVEL_POR_DEFECTO;
+try {
+  const guardado = localStorage.getItem(CLAVE_NIVEL);
+  if (NIVELES.includes(guardado)) nivelIA = guardado;
+} catch { /* modo privado o almacenamiento bloqueado: se juega en medio */ }
+
 const mode = new JuggernautMode(scene, {
   arenaRadius: R,
   hunterCount: 11,
   knightFactory: createKnight,
   executorFactory: createExecutor,
   flag,
+  dificultad: nivelIA,
 });
 
 // ---------- Ambiente vivo ----------
@@ -317,6 +329,19 @@ for (const [type, fmt] of Object.entries(FEED_TEXT)) {
   });
 }
 
+// ---------- Selector de dificultad ----------
+const selNivel = document.getElementById('dificultad');
+selNivel.value = nivelIA;
+selNivel.addEventListener('change', () => {
+  nivelIA = selNivel.value;
+  mode.setDificultad(nivelIA);
+  try { localStorage.setItem(CLAVE_NIVEL, nivelIA); } catch { /* da igual */ }
+  // Devolver el foco al juego: con el <select> enfocado, WASD y Espacio los
+  // consumiría el desplegable en vez de mover al templario.
+  selNivel.blur();
+  renderer.domElement.focus();
+});
+
 // ---------- Interacción ----------
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -328,7 +353,12 @@ window.addEventListener('resize', () => {
 let paused = false;
 let gameOver = false;
 const WIN_DOMINIO = 45; // segundos acumulados como Juggernaut para ganar
+// Mientras se navega el desplegable con el teclado, las teclas son suyas: si
+// no, elegir "Alto" con las flechas movería además al templario.
+const enControl = (e) => e.target instanceof HTMLSelectElement;
+
 window.addEventListener('keydown', (e) => {
+  if (enControl(e)) return;
   const k = e.key.toLowerCase();
   if (k === 'p') paused = !paused;
   if (k === 'c') {
@@ -352,6 +382,7 @@ window.addEventListener('keydown', (e) => {
   }
 });
 window.addEventListener('keyup', (e) => {
+  if (enControl(e)) return;
   const k = e.key.toLowerCase();
   if (k === 'w' || k === 'arrowup') keys.w = false;
   if (k === 'a' || k === 'arrowleft') keys.a = false;

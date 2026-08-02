@@ -19,6 +19,14 @@ export class EnemySystem {
     knockbackForce = 13,    // impulso explosivo del impacto
     visorBase = 22,         // intensidad de reposo del visor
     visorFlash = 50,        // intensidad durante el impacto (5 frames)
+
+    // ── Astucia (ambos a 0 = comportamiento original, literal) ──
+    // Existen para que el Modo Juggernaut module la dificultad del jefe sin
+    // tocar esta clase, que también usa la demo del Ejecutor. Con los valores
+    // por defecto esta clase se comporta EXACTAMENTE como antes de existir.
+    prediccion = 0,         // 0 = va a donde estás; 1 = a donde vas a estar
+    sesgoBorde = 0,         // 0 = siempre al más cercano; >0 = prefiere al que
+                            //     ya está cerca del abismo (sacarlo cuesta menos)
   } = {}) {
     this.enemy = enemy;
     this.speed = speed;
@@ -27,6 +35,8 @@ export class EnemySystem {
     this.knockbackForce = knockbackForce;
     this.visorBase = visorBase;
     this.visorFlash = visorFlash;
+    this.prediccion = prediccion;
+    this.sesgoBorde = sesgoBorde;
 
     // Estado espacial (equivalente al useRef de la spec)
     this.position = enemy.position;
@@ -38,6 +48,14 @@ export class EnemySystem {
     this._cooldown = new Map(); // anti multi-golpe por jugador
   }
 
+  // Reajuste en caliente: cambiar de dificultad a mitad de ronda no debe
+  // obligar a reconstruir el jefe (perdería posición, cooldowns y visor).
+  configurar({ velocidad, prediccion, sesgoBorde } = {}) {
+    if (velocidad !== undefined) this.speed = velocidad;
+    if (prediccion !== undefined) this.prediccion = prediccion;
+    if (sesgoBorde !== undefined) this.sesgoBorde = sesgoBorde;
+  }
+
   // overrideDir (opcional): dirección manual normalizable — si se pasa, el
   // steering la usa en vez de perseguir (modo jugador-jefe); la detección de
   // colisión sigue funcionando contra el jugador más cercano.
@@ -45,14 +63,29 @@ export class EnemySystem {
     const e = this.position;
 
     // --- 1. Escaneo de proximidad: jugador activo más cercano (euclídea en XZ) ---
+    //
+    // Se distinguen DOS cosas que antes eran la misma:
+    //   · `closest` — el más cercano de verdad. Manda en la colisión, siempre.
+    //   · `objetivo` — a quién persigue. Con sesgoBorde = 0 es el mismo, así
+    //     que el comportamiento original queda intacto; con sesgoBorde > 0 el
+    //     jefe prefiere a quien ya está pegado al abismo, porque empujarlo
+    //     cuesta un golpe en vez de tres.
     let closest = null;
     let best = Infinity;
+    let objetivo = null;
+    let mejorPuntos = Infinity;
     for (const p of players) {
       if (p.falling) continue;
       const dist = Math.sqrt((e.x - p.position.x) ** 2 + (e.z - p.position.z) ** 2);
       if (dist < best) { best = dist; closest = p; }
+
+      // Cuanto más cerca del filo esté el jugador, más se le descuenta de la
+      // distancia: pasa a "parecer" más cerca de lo que está y gana prioridad.
+      const rBorde = Math.hypot(p.position.x, p.position.z) / this.arenaRadius;
+      const puntos = dist - rBorde * rBorde * this.sesgoBorde * this.arenaRadius * 0.6;
+      if (puntos < mejorPuntos) { mejorPuntos = puntos; objetivo = p; }
     }
-    this.targetPlayerId = closest ? closest.id : null;
+    this.targetPlayerId = objetivo ? objetivo.id : null;
 
     const manual = overrideDir !== null;
     const manualIdle = manual && overrideDir.lengthSq() < 0.01;
@@ -64,8 +97,19 @@ export class EnemySystem {
         this._dir.y = 0;
         if (this._dir.lengthSq() > 0) this._dir.normalize();
       } else {
-        this._dir.subVectors(closest.position, e);
+        this._dir.subVectors(objetivo.position, e);
         this._dir.y = 0;
+
+        // Interceptar en vez de seguir. Persiguiendo la posición actual el
+        // jefe va siempre por detrás y basta con correr en círculos para
+        // torearlo eternamente; apuntando a donde ESTARÁ, corta el ángulo.
+        // El adelanto es el tiempo que tardaría en llegar, y se limita a 1.2 s
+        // para que un objetivo lejano no lo mande a perseguir el horizonte.
+        if (this.prediccion > 0 && objetivo.velocity) {
+          const adelanto = Math.min(this._dir.length() / Math.max(this.speed, 0.001), 1.2);
+          this._dir.x += objetivo.velocity.x * adelanto * this.prediccion;
+          this._dir.z += objetivo.velocity.z * adelanto * this.prediccion;
+        }
         this._dir.normalize();
       }
 

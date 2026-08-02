@@ -35,6 +35,10 @@ export class KnightAnimator {
 
     this._T = {
       legR: 0, legL: 0,
+      // Apertura lateral de cada pierna. El pivote está en la cadera, así que
+      // girar en Z separa el pie del eje del cuerpo: es lo que permite un paso
+      // lateral de verdad en vez de girar el muñeco y andar siempre de frente.
+      legRZ: 0, legLZ: 0,
       torsoX: 0, torsoZ: 0, torsoYaw: 0, torsoY: 0,
       headYaw: 0, headX: 0,
       swordX: 0,
@@ -51,8 +55,14 @@ export class KnightAnimator {
 
   _apply(dt, k = 14) {
     const a = Math.min(1, dt * k), T = this._T;
-    if (this.legR) this.legR.rotation.x += (T.legR - this.legR.rotation.x) * a;
-    if (this.legL) this.legL.rotation.x += (T.legL - this.legL.rotation.x) * a;
+    if (this.legR) {
+      this.legR.rotation.x += (T.legR - this.legR.rotation.x) * a;
+      this.legR.rotation.z += (T.legRZ - this.legR.rotation.z) * a;
+    }
+    if (this.legL) {
+      this.legL.rotation.x += (T.legL - this.legL.rotation.x) * a;
+      this.legL.rotation.z += (T.legLZ - this.legL.rotation.z) * a;
+    }
     if (this.torso) {
       this.torso.rotation.x += (T.torsoX - this.torso.rotation.x) * a;
       this.torso.rotation.z += (T.torsoZ - this.torso.rotation.z) * a;
@@ -74,19 +84,30 @@ export class KnightAnimator {
 
   _resetTargets() {
     const T = this._T;
-    T.legR = 0; T.legL = 0;
+    T.legR = 0; T.legL = 0; T.legRZ = 0; T.legLZ = 0;
     T.torsoX = 0; T.torsoZ = 0; T.torsoYaw = 0; T.torsoY = 0;
     T.headYaw = 0; T.headX = 0; T.swordX = 0; T.rootX = 0; T.rootZ = 0;
   }
 
   // ---------- Locomoción ----------
-  locomotion(dt, t, speed, turn = 0) {
+  //
+  // `avance` y `lateral` son el movimiento EN EL MARCO DEL PROPIO CABALLERO,
+  // normalizados a [-1, 1]: +1 de avance es ir de frente, -1 es retroceder, y
+  // el lateral es cuánto se desplaza a su derecha. Con ellos hay tres marchas
+  // distintas —frente, espaldas y paso lateral— en vez de una sola.
+  //
+  // Antes solo llegaba la RAPIDEZ, un escalar. Como el cuerpo giraba siempre
+  // hacia donde se movía, todo se animaba como una marcha al frente: retroceder
+  // era darse la vuelta y correr, y esquivar de lado era un giro de 90°. Los
+  // valores por defecto (1, 0) reproducen ese comportamiento para cualquier
+  // llamada antigua.
+  locomotion(dt, t, speed, turn = 0, avance = 1, lateral = 0) {
     const w = THREE.MathUtils.clamp(speed / 3.0, 0, 1.3);
-    if (w > 0.12) this._walk(dt, t, w, turn);
+    if (w > 0.12) this._walk(dt, t, w, turn, avance, lateral);
     else this._idleUpdate(dt, t);
   }
 
-  _walk(dt, t, w, turn) {
+  _walk(dt, t, w, turn, avance = 1, lateral = 0) {
     const f = this.gaitFreq * (0.5 + 0.5 * Math.min(w, 1));
     const th = t * f + this.phase;
     const s = Math.sin(th);
@@ -101,22 +122,46 @@ export class KnightAnimator {
     this._accelSm += (THREE.MathUtils.clamp(accel, -6, 6) - this._accelSm) *
       Math.min(1, dt * 6);
 
+    const av = THREE.MathUtils.clamp(avance, -1, 1);
+    const lat = THREE.MathUtils.clamp(lateral, -1, 1);
+    const atras = av < -0.15;
+    // Cuanto más de lado va, menos zancada frontal le queda.
+    const frontal = 1 - Math.abs(lat) * 0.65;
+    // El paso hacia atrás es más corto y más cauto que el de frente: nadie
+    // retrocede con la misma zancada con la que carga.
+    const largoPaso = (atras ? -0.62 : 1) * frontal;
+
     const T = this._T;
     this._resetTargets();
-    T.legR = stride * 0.58 * w;
+    T.legR = stride * 0.58 * w * largoPaso;
     T.legL = -T.legR;
-    T.torsoX = 0.14 * w + 0.02 * Math.sin(t * 1.6 + this.phase) +
+
+    // Paso lateral: las dos piernas se inclinan hacia el lado del
+    // desplazamiento y se turnan para abrir y cerrar — el clásico
+    // "sale una, cierra la otra" en vez de alternar hacia delante.
+    if (Math.abs(lat) > 0.05) {
+      const abre = 0.16 * Math.sin(th) * w;
+      T.legRZ = lat * (0.15 * w + abre);
+      T.legLZ = lat * (0.15 * w - abre);
+    }
+
+    // De espaldas el torso se yergue y se echa atrás; de frente se inclina.
+    T.torsoX = (atras ? -0.09 : 0.14) * w + 0.02 * Math.sin(t * 1.6 + this.phase) +
       THREE.MathUtils.clamp(this._accelSm * 0.028, -0.16, 0.16);
-    T.torsoZ = s * 0.042 * w - turn * 0.3;
-    T.torsoYaw = -s * 0.12 * w;
+    T.torsoZ = s * 0.042 * w - turn * 0.3 - lat * 0.14 * w;
+    T.torsoYaw = -s * 0.12 * w + lat * 0.16 * w;
     T.torsoY = (foot * 0.045 + Math.sin(t * f * 2 + 0.7) * 0.011) * w;
-    T.rootZ = -turn * 0.09; // el cuerpo banquea hacia la curva
-    T.headYaw = turn * 0.45 + Math.sin(t * f * 0.5 + this.phase) * 0.05;
-    T.headX = -0.06 * w;
-    T.swordX = -0.5 * w;
+    T.rootZ = -turn * 0.09 - lat * 0.07 * w; // banquea hacia la curva y hacia el lado
+    // Mira hacia donde se desplaza aunque el cuerpo apunte a otro sitio: es lo
+    // que vende que está rodeando a algo sin quitarle la vista de encima.
+    T.headYaw = turn * 0.45 + lat * 0.34 + Math.sin(t * f * 0.5 + this.phase) * 0.05;
+    T.headX = (atras ? 0.04 : -0.06) * w;
+    // Retrocediendo la espada se cruza al frente, en guardia, en vez de ir
+    // colgando hacia atrás como cuando se corre.
+    T.swordX = (atras ? 0.28 : -0.5) * w;
     if (this.cape) {
       this.cape.rotation.x =
-        Math.sin(t * 0.5 + this.phase) * 0.015 + 0.32 * w +
+        Math.sin(t * 0.5 + this.phase) * 0.015 + (atras ? -0.12 : 0.32) * w +
         Math.sin(t * f + this.phase) * 0.03 * w;
     }
     this._apply(dt);

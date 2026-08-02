@@ -83,6 +83,17 @@ npx http-server . -p 8145 -c-1
 | `M` | Silenciar la música |
 | `P` | Pausa · `R` reinicia tras la victoria |
 
+La **dificultad de la IA** (Bajo / Medio / Alto) se elige en el panel de estado,
+arriba a la derecha. Se puede cambiar a mitad de ronda sin perder lo jugado, y
+el nivel queda recordado para la próxima vez.
+
+Sube los dos bandos a la vez. Los otros diez cazadores reaccionan antes, apuntan
+adelantado al placar, se reparten el círculo para rodear en vez de amontonarse
+todos en el mismo punto, y esquivan hacia dentro del ruedo en lugar de a un lado
+al azar. El Juggernaut se mueve más rápido, intercepta en vez de perseguir por
+detrás, y prefiere a quien ya está cerca del abismo. Lo que **no** cambia es tu
+personaje: corre igual en los tres niveles.
+
 **Captura la Bandera**
 
 | Tecla | Acción |
