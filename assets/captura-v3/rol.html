@@ -3,189 +3,619 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>BladeFront · Menú</title>
+  <title>BladeFront · Arena del Vacío</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-    *{box-sizing:border-box} body{margin:0;min-height:100vh;display:grid;place-items:center;
-      background:radial-gradient(circle at 50% 20%,#202b39,#05080d 65%);color:#edf2f6;
-      font:14px system-ui,sans-serif;padding:24px 0}
-    .panel{width:min(860px,94vw);padding:42px;border:1px solid #364656;
-      background:rgba(6,10,16,.94)}h1{margin:0;color:#ffb638;font:700 30px Georgia,serif;
-      letter-spacing:.12em;text-transform:uppercase}.sub{color:#8295a6;margin:8px 0 26px;letter-spacing:.1em;
-      text-transform:uppercase;font-size:11px}
-    .grupo{color:#6f8496;font-size:10px;letter-spacing:.24em;text-transform:uppercase;
-      margin:0 0 12px;padding-bottom:7px;border-bottom:1px solid #24313e}
-    .roles{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-    .tarjeta{min-height:186px;padding:24px;text-align:left;color:#eef4f8;background:#09111b;
-      border:1px solid #304153;cursor:pointer;transition:.2s;font:inherit;display:block;
-      text-decoration:none;width:100%}
-    .tarjeta:hover{transform:translateY(-3px);border-color:#ffb638;background:#111a24}
-    .icono{display:block;font-size:30px;margin-bottom:16px}
-    b{display:block;color:#ffb638;font:700 18px Georgia,serif;text-transform:uppercase;margin-bottom:9px}
-    span{color:#91a3b2;line-height:1.6;display:block}
-    .tarjeta:disabled{opacity:.45;cursor:wait;transform:none}
-    .solo{grid-column:1/-1;min-height:0;display:flex;align-items:center;gap:20px}
-    .solo .icono{margin:0;font-size:26px;flex:none}
-    .solo b{margin-bottom:5px}
-    #estado{min-height:20px;margin:18px 0 0;color:#ff8585;text-align:center}
-    .pie{margin:26px 0 0;text-align:center}
-    .comojugar{background:none;border:1px solid #304153;color:#9fb2c2;cursor:pointer;
-      padding:10px 26px;font:600 11px system-ui,sans-serif;letter-spacing:.22em;
-      text-transform:uppercase;transition:.2s}
-    .comojugar:hover{border-color:#ffb638;color:#ffb638}
+    /* ========================================================================
+       BladeFront · menú
+       ------------------------------------------------------------------------
+       Dirección: un CÓDICE RITUAL grabado en piedra negra. El menú no es una
+       pantalla de configuración, es el altar donde se elige el papel antes de
+       entrar a la arena.
 
-    /* ── Cómo se juega ── */
-    #ayuda{position:fixed;inset:0;z-index:9;display:none;padding:24px;overflow:auto;
-      background:rgba(3,6,10,.93)}
-    #ayuda.abierta{display:block}
-    .hoja{width:min(880px,94vw);margin:0 auto;padding:36px;border:1px solid #364656;
-      background:#080d14}
-    .hoja h2{margin:0 0 4px;color:#ffb638;font:700 22px Georgia,serif;letter-spacing:.1em;
-      text-transform:uppercase}
-    .hoja h3{margin:30px 0 10px;color:#dce6ee;font:600 13px system-ui,sans-serif;
-      letter-spacing:.2em;text-transform:uppercase;padding-bottom:6px;border-bottom:1px solid #24313e}
-    .hoja p{margin:0 0 12px;color:#9fb2c2;line-height:1.75}
-    .hoja em{color:#ffb638;font-style:normal}
-    table{width:100%;border-collapse:collapse;margin:0 0 6px}
-    td{padding:7px 10px;border-bottom:1px solid #1b2530;color:#9fb2c2;line-height:1.5;
-      vertical-align:top}
-    td:first-child{width:170px;color:#dce6ee;font-weight:600}
-    kbd{display:inline-block;padding:2px 7px;border:1px solid #3c4c5c;border-bottom-width:2px;
-      border-radius:3px;background:#0e1620;color:#e8f0f6;font:600 11px ui-monospace,monospace}
-    .cerrar{margin-top:28px;width:100%;padding:13px;background:#0e1822;color:#ffb638;
-      border:1px solid #3a4c5e;cursor:pointer;font:600 11px system-ui,sans-serif;
-      letter-spacing:.24em;text-transform:uppercase}
-    .cerrar:hover{background:#152130}
-    @media(max-width:620px){.roles{grid-template-columns:1fr}.panel,.hoja{padding:24px}
-      .solo{display:block}.solo .icono{margin-bottom:12px}
-      td{display:block;border:0;padding:2px 0}
-      td:first-child{width:auto;padding-top:10px}}
+       El color cuenta la premisa del juego: ORO disciplinado para las opciones
+       de red —la orden templaria, la parte reglada, el protocolo— y CARMESÍ
+       corrompido para el Modo Juggernaut, que es justo lo que le pasa a quien
+       toca el estandarte. No es decoración: es la misma historia que cuenta el
+       juego, dicha con dos colores.
+
+       Tipografías heredadas del HUD del juego a propósito (Cinzel grabada +
+       Rajdhani técnica): el menú tiene que ser la misma pieza que la partida,
+       no otra aplicación pegada delante.
+       ======================================================================== */
+
+    :root {
+      --vacio:    #04060a;   /* el fondo: negro con un punto de azul frío */
+      --piedra:   #0a1018;
+      --piedra-2: #0d151f;
+      --oro:      #d9a441;
+      --oro-vivo: #ffc766;
+      --cian:     #49e6ff;
+      --sangre:   #c9402a;
+      --sangre-viva: #ff5c3d;
+      --acero:    #d3dde6;
+      --tenue:    #64798a;
+      --linea:    #1e2a36;
+      --serif: 'Cinzel', Georgia, serif;
+      --tec: 'Rajdhani', system-ui, sans-serif;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      min-height: 100vh;
+      background: var(--vacio);
+      color: var(--acero);
+      font-family: var(--tec);
+      display: grid;
+      place-items: center;
+      padding: 48px 20px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* ── El Eclipse: el halo que preside la arena, detrás de todo ──────────
+       Dos radiales desplazados del centro. Descentrarlo es lo que evita que
+       parezca un "glow" genérico puesto por defecto detrás de un título. */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 60% 42% at 50% 4%,  rgba(217,164,65,.16), transparent 62%),
+        radial-gradient(ellipse 78% 60% at 72% 84%, rgba(73,230,255,.055), transparent 68%),
+        radial-gradient(ellipse 50% 40% at 12% 62%, rgba(201,64,42,.05), transparent 70%);
+    }
+
+    /* ── Grano de película + rayado de tubo ────────────────────────────────
+       El grano rompe el degradado plano: sin él los radiales se ven a bandas
+       en pantallas de 8 bits, y todo queda con ese acabado "de plantilla". */
+    body::after {
+      content: '';
+      position: fixed; inset: 0; z-index: 90; pointer-events: none;
+      opacity: .5;
+      background-image:
+        url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='r'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/></filter><rect width='140' height='140' filter='url(%23r)' opacity='.42'/></svg>"),
+        repeating-linear-gradient(0deg, rgba(255,255,255,.014) 0 1px, transparent 1px 3px);
+      mix-blend-mode: overlay;
+    }
+
+    /* ── Motas de ceniza dorada subiendo, como en la arena ─────────────── */
+    .cenizas { position: fixed; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+    .ceniza {
+      position: absolute; bottom: -12px;
+      width: 2px; height: 2px; border-radius: 50%;
+      background: var(--oro); opacity: 0;
+      box-shadow: 0 0 6px rgba(217,164,65,.85);
+      animation: subir var(--dur) linear var(--reta) infinite;
+      left: var(--x);
+    }
+    @keyframes subir {
+      0%   { transform: translateY(0)      scale(.6); opacity: 0; }
+      12%  { opacity: .75; }
+      70%  { opacity: .5; }
+      100% { transform: translateY(-104vh) scale(1.1); opacity: 0; }
+    }
+
+    /* ── Composición ─────────────────────────────────────────────────────── */
+    .codice {
+      position: relative; z-index: 2;
+      width: min(1000px, 100%);
+      opacity: 0;
+      animation: entrar .9s cubic-bezier(.22,1,.36,1) forwards;
+    }
+    @keyframes entrar { to { opacity: 1; } }
+
+    /* ── Cabecera ─────────────────────────────────────────────────────────
+       El sello gira detrás del título: es el anillo de runas de la arena, y
+       ata el menú al sitio donde se juega. Muy lento — tiene que notarse solo
+       si te quedas mirando. */
+    .cabecera { position: relative; text-align: center; padding: 26px 0 46px; }
+
+    .sello {
+      position: absolute; top: 50%; left: 50%;
+      width: 340px; height: 340px; margin: -190px 0 0 -170px;
+      pointer-events: none; opacity: .5;
+    }
+    .sello circle { fill: none; }
+    .sello .anillo-1 { stroke: rgba(217,164,65,.34); stroke-width: 1;
+      stroke-dasharray: 3 13; transform-origin: 50% 50%; animation: girar 150s linear infinite; }
+    .sello .anillo-2 { stroke: rgba(73,230,255,.16); stroke-width: 1;
+      stroke-dasharray: 34 20; transform-origin: 50% 50%; animation: girar 96s linear infinite reverse; }
+    .sello .anillo-3 { stroke: rgba(217,164,65,.13); stroke-width: 1; }
+    @keyframes girar { to { transform: rotate(360deg); } }
+
+    .titulo {
+      position: relative;
+      font-family: var(--serif); font-weight: 900;
+      font-size: clamp(38px, 8.2vw, 82px);
+      letter-spacing: .19em; text-indent: .19em;
+      line-height: 1;
+      /* Metal grabado: claro arriba, apagado abajo, con un filo de luz. */
+      background: linear-gradient(176deg, #fff6e2 4%, var(--oro-vivo) 34%, #a97a2c 76%, #6e4d18 100%);
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+      filter: drop-shadow(0 3px 26px rgba(217,164,65,.3));
+      animation: aparecer .95s cubic-bezier(.22,1,.36,1) .05s backwards;
+    }
+
+    .filo {
+      width: 132px; height: 1px; margin: 22px auto 0;
+      background: linear-gradient(90deg, transparent, var(--oro), transparent);
+      position: relative;
+      animation: aparecer .8s ease .22s backwards;
+    }
+    .filo::after {
+      content: '◆'; position: absolute; left: 50%; top: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 8px; color: var(--oro-vivo);
+      text-shadow: 0 0 10px var(--oro);
+    }
+
+    .lema {
+      margin-top: 20px;
+      font-size: clamp(9px, 1.3vw, 11px); font-weight: 600;
+      letter-spacing: .46em; text-indent: .46em;
+      text-transform: uppercase; color: var(--tenue);
+      animation: aparecer .8s ease .34s backwards;
+    }
+
+    @keyframes aparecer {
+      from { opacity: 0; transform: translateY(16px); filter: blur(5px); }
+      to   { opacity: 1; transform: none; filter: blur(0); }
+    }
+
+    /* ── Rótulo de sección: numeral romano + regla ────────────────────────
+       El numeral es lo que convierte una lista de botones en las entradas de
+       un códice. Cinzel son capitales romanas: los números romanos son
+       literalmente para lo que se dibujó esa letra. */
+    .seccion {
+      display: flex; align-items: center; gap: 16px;
+      margin: 0 0 18px;
+      animation: aparecer .7s ease var(--reta, .4s) backwards;
+    }
+    .seccion .num {
+      font-family: var(--serif); font-weight: 600; font-size: 13px;
+      color: var(--oro); letter-spacing: .1em;
+      padding: 3px 11px; border: 1px solid rgba(217,164,65,.32);
+      clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+    }
+    .seccion .rotulo {
+      font-size: 10px; font-weight: 700; letter-spacing: .34em;
+      text-transform: uppercase; color: #8fa3b3; white-space: nowrap;
+    }
+    .seccion .regla { flex: 1; height: 1px; background: linear-gradient(90deg, var(--linea), transparent); }
+
+    /* ── Tarjetas ─────────────────────────────────────────────────────────── */
+    .fila { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .fila.una { grid-template-columns: 1fr; }
+
+    .puerta {
+      --tinte: var(--oro);
+      --tinte-vivo: var(--oro-vivo);
+      position: relative; display: block; overflow: hidden;
+      padding: 30px 30px 28px;
+      text-align: left; text-decoration: none; color: inherit;
+      font: inherit; cursor: pointer;
+      background: linear-gradient(158deg, var(--piedra-2), var(--piedra) 62%);
+      border: 1px solid var(--linea);
+      clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
+      transition: transform .38s cubic-bezier(.22,1,.36,1),
+                  border-color .38s ease, background .38s ease;
+      animation: aparecer .75s cubic-bezier(.22,1,.36,1) var(--reta, .5s) backwards;
+    }
+    .puerta:hover, .puerta:focus-visible {
+      transform: translateY(-5px);
+      border-color: color-mix(in srgb, var(--tinte) 62%, transparent);
+      background: linear-gradient(158deg, #101a25, var(--piedra-2) 62%);
+      outline: none;
+    }
+    .puerta:focus-visible { box-shadow: 0 0 0 2px var(--vacio), 0 0 0 3px var(--tinte); }
+
+    /* Barrido de luz que cruza al pasar por encima: el brillo del oro al
+       inclinar una lámina. Empieza fuera y sale por el otro lado. */
+    .puerta::before {
+      content: ''; position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(104deg, transparent 32%,
+        color-mix(in srgb, var(--tinte) 15%, transparent) 48%, transparent 64%);
+      transform: translateX(-120%);
+      transition: transform .85s cubic-bezier(.3,.9,.3,1);
+    }
+    .puerta:hover::before, .puerta:focus-visible::before { transform: translateX(120%); }
+
+    /* Glifo enorme, fantasma, mordido por el borde: rompe la caja y da la
+       sensación de que la tarjeta es un fragmento de algo mayor. */
+    .puerta .glifo {
+      position: absolute; right: -18px; bottom: -40px;
+      font-size: 148px; line-height: 1;
+      color: var(--tinte); opacity: .05;
+      transition: opacity .38s ease, transform .55s cubic-bezier(.22,1,.36,1);
+      pointer-events: none; user-select: none;
+    }
+    .puerta:hover .glifo, .puerta:focus-visible .glifo {
+      opacity: .12; transform: translate(-6px, -8px) rotate(-5deg);
+    }
+
+    .puerta .marca {
+      display: inline-flex; align-items: center; gap: 9px;
+      font-size: 9px; font-weight: 700; letter-spacing: .3em;
+      text-transform: uppercase; color: var(--tinte);
+      margin-bottom: 16px;
+    }
+    .puerta .marca::before {
+      content: ''; width: 20px; height: 1px; background: var(--tinte);
+      transition: width .38s cubic-bezier(.22,1,.36,1);
+    }
+    .puerta:hover .marca::before, .puerta:focus-visible .marca::before { width: 42px; }
+
+    .puerta h2 {
+      font-family: var(--serif); font-weight: 600;
+      font-size: clamp(19px, 2.4vw, 25px);
+      letter-spacing: .12em; text-transform: uppercase;
+      color: #f2ece0; margin-bottom: 11px;
+    }
+    .puerta p {
+      font-size: 14px; font-weight: 400; line-height: 1.68;
+      color: #93a7b6; max-width: 46ch;
+    }
+
+    .puerta .pie {
+      margin-top: 20px; display: flex; align-items: center; gap: 9px;
+      font-size: 10px; font-weight: 700; letter-spacing: .26em;
+      text-transform: uppercase; color: var(--tenue);
+      transition: color .38s ease;
+    }
+    .puerta:hover .pie, .puerta:focus-visible .pie { color: var(--tinte-vivo); }
+    .puerta .pie .flecha { transition: transform .38s cubic-bezier(.22,1,.36,1); }
+    .puerta:hover .pie .flecha, .puerta:focus-visible .pie .flecha { transform: translateX(6px); }
+
+    /* La puerta corrompida: mismo molde, otra sangre. */
+    .puerta.corrupta { --tinte: var(--sangre); --tinte-vivo: var(--sangre-viva); }
+    .puerta.corrupta { background: linear-gradient(158deg, #150e0d, #0b0808 64%); }
+    .puerta.corrupta:hover, .puerta.corrupta:focus-visible {
+      background: linear-gradient(158deg, #1d1210, #100a09 64%);
+    }
+    .puerta.corrupta h2 { color: #f6e4de; }
+    /* Latido lento del borde: está viva y no del todo domesticada. */
+    .puerta.corrupta::after {
+      content: ''; position: absolute; inset: -1px; pointer-events: none;
+      border: 1px solid transparent;
+      clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
+      animation: latido 3.6s ease-in-out infinite;
+    }
+    @keyframes latido {
+      0%, 100% { border-color: transparent; }
+      50%      { border-color: rgba(201,64,42,.3); }
+    }
+
+    /* Estado "configurando" */
+    .puerta[disabled] { opacity: .34; cursor: wait; transform: none; }
+    .puerta.cargando { opacity: 1; border-color: var(--tinte); }
+    .puerta.cargando .pie { color: var(--tinte-vivo); }
+
+    .separador { height: 34px; }
+
+    #estado {
+      min-height: 22px; margin-top: 22px; text-align: center;
+      font-size: 12px; font-weight: 600; letter-spacing: .16em;
+      text-transform: uppercase; color: #ff7a68;
+    }
+
+    /* ── Pie: cómo se juega ───────────────────────────────────────────────── */
+    .pergamino { margin-top: 40px; text-align: center;
+      animation: aparecer .8s ease .78s backwards; }
+    .abrir {
+      position: relative; background: none; cursor: pointer;
+      border: 1px solid var(--linea); color: #a3b6c4;
+      padding: 13px 34px; font-family: var(--tec);
+      font-size: 10px; font-weight: 700; letter-spacing: .34em;
+      text-transform: uppercase; overflow: hidden;
+      clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
+      transition: color .3s ease, border-color .3s ease, letter-spacing .3s ease;
+    }
+    .abrir:hover, .abrir:focus-visible {
+      color: var(--oro-vivo); border-color: rgba(217,164,65,.55);
+      letter-spacing: .4em; outline: none;
+    }
+
+    /* ── El códice desplegado ─────────────────────────────────────────────── */
+    #ayuda {
+      position: fixed; inset: 0; z-index: 99;
+      display: none; padding: 30px 20px; overflow-y: auto;
+      background: rgba(3, 5, 8, .93);
+      backdrop-filter: blur(7px);
+    }
+    #ayuda.abierta { display: block; animation: velo .35s ease; }
+    @keyframes velo { from { opacity: 0; } to { opacity: 1; } }
+
+    .hoja {
+      width: min(940px, 100%); margin: 0 auto;
+      background: linear-gradient(170deg, var(--piedra-2), #070c12 70%);
+      border: 1px solid var(--linea);
+      padding: clamp(26px, 4.4vw, 52px);
+      clip-path: polygon(22px 0, 100% 0, 100% calc(100% - 22px), calc(100% - 22px) 100%, 0 100%, 0 22px);
+      animation: alzar .45s cubic-bezier(.22,1,.36,1);
+    }
+    @keyframes alzar { from { opacity: 0; transform: translateY(26px); } to { opacity: 1; transform: none; } }
+
+    .hoja > h2 {
+      font-family: var(--serif); font-weight: 900;
+      font-size: clamp(24px, 4vw, 36px); letter-spacing: .15em;
+      text-transform: uppercase; color: var(--oro-vivo);
+      margin-bottom: 8px;
+    }
+    .hoja .intro {
+      color: #93a7b6; font-size: 15px; line-height: 1.7;
+      padding-bottom: 26px; border-bottom: 1px solid var(--linea);
+    }
+
+    .capitulo { margin-top: 34px; }
+    .capitulo > h3 {
+      display: flex; align-items: center; gap: 13px;
+      font-family: var(--serif); font-weight: 600;
+      font-size: 15px; letter-spacing: .19em; text-transform: uppercase;
+      color: var(--acero); margin-bottom: 16px;
+    }
+    .capitulo > h3 .rombo { color: var(--oro); font-size: 9px; }
+    .capitulo > h3 .regla { flex: 1; height: 1px; background: linear-gradient(90deg, var(--linea), transparent); }
+    .capitulo.corrupto > h3 .rombo { color: var(--sangre-viva); }
+
+    .capitulo p { color: #93a7b6; font-size: 14.5px; line-height: 1.78; margin-bottom: 13px; }
+    .capitulo em {
+      font-style: normal; font-weight: 600;
+      color: var(--oro-vivo);
+    }
+    .capitulo.corrupto em { color: #ff8d75; }
+
+    .mandos { width: 100%; border-collapse: collapse; margin: 6px 0 4px; }
+    .mandos td { padding: 9px 0; border-bottom: 1px solid rgba(30,42,54,.6);
+      color: #93a7b6; font-size: 14px; line-height: 1.55; vertical-align: top; }
+    .mandos td:first-child { width: 200px; padding-right: 20px; color: var(--acero); }
+    .mandos tr:last-child td { border-bottom: 0; }
+
+    kbd {
+      display: inline-block; padding: 3px 9px; margin: 1px 2px 1px 0;
+      background: linear-gradient(180deg, #16202b, #0c141d);
+      border: 1px solid #2b3a48; border-bottom-width: 2px; border-radius: 3px;
+      color: #dbe6ee; font-family: var(--tec);
+      font-size: 12px; font-weight: 700; letter-spacing: .06em;
+    }
+
+    .cerrar {
+      margin-top: 38px; width: 100%; padding: 16px;
+      background: linear-gradient(180deg, #131d27, #0b131b);
+      border: 1px solid #33455a; color: var(--oro-vivo);
+      font-family: var(--tec); font-size: 11px; font-weight: 700;
+      letter-spacing: .34em; text-transform: uppercase; cursor: pointer;
+      clip-path: polygon(11px 0, 100% 0, 100% calc(100% - 11px), calc(100% - 11px) 100%, 0 100%, 0 11px);
+      transition: border-color .3s ease, letter-spacing .3s ease;
+    }
+    .cerrar:hover, .cerrar:focus-visible {
+      border-color: var(--oro); letter-spacing: .4em; outline: none;
+    }
+
+    /* ── Adaptación ───────────────────────────────────────────────────────── */
+    @media (max-width: 720px) {
+      .fila { grid-template-columns: 1fr; }
+      .puerta { padding: 24px; }
+      .puerta .glifo { font-size: 104px; }
+      .sello { width: 250px; height: 250px; margin: -140px 0 0 -125px; }
+      .mandos td:first-child { width: auto; display: block; border: 0; padding-bottom: 2px; }
+      .mandos td { display: block; }
+    }
+
+    /* Quien pide menos movimiento no debería tener que aguantar un sello
+       girando ni ceniza subiendo para leer un menú. */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+      }
+      .cenizas { display: none; }
+    }
   </style>
 </head>
 <body>
-  <main class="panel">
-    <h1>BladeFront</h1>
-    <div class="sub">Arena del Vacío · Proyecto 1</div>
+  <div class="cenizas" aria-hidden="true"></div>
 
-    <p class="grupo">Captura la Bandera · en red con tus compañeros</p>
-    <div class="roles">
-      <button class="tarjeta" data-rol="servidor">
-        <i class="icono">◉</i><b>Servidor</b>
-        <span>Aloja la partida y muestra a todos los jugadores. Esta computadora no participa ni controla un personaje.</span>
-      </button>
-      <button class="tarjeta" data-rol="cliente">
-        <i class="icono">⚔</i><b>Cliente</b>
-        <span>Busca una partida en la red y entra como jugador. Esta computadora no aloja un servidor propio.</span>
-      </button>
+  <main class="codice">
+    <header class="cabecera">
+      <svg class="sello" viewBox="0 0 340 340" aria-hidden="true">
+        <circle class="anillo-1" cx="170" cy="170" r="166" />
+        <circle class="anillo-2" cx="170" cy="170" r="143" />
+        <circle class="anillo-3" cx="170" cy="170" r="112" />
+      </svg>
+      <h1 class="titulo">BladeFront</h1>
+      <div class="filo"></div>
+      <p class="lema">Arena del Vacío · Computer Science 8</p>
+    </header>
+
+    <section aria-labelledby="rotulo-red">
+      <div class="seccion" style="--reta:.42s">
+        <span class="num">I</span>
+        <span class="rotulo" id="rotulo-red">En red · con tus compañeros</span>
+        <span class="regla"></span>
+      </div>
+      <div class="fila">
+        <button class="puerta" data-rol="servidor" style="--reta:.5s">
+          <span class="glifo" aria-hidden="true">◉</span>
+          <span class="marca">Captura la Bandera</span>
+          <h2>Servidor</h2>
+          <p>Aloja la partida y muestra a todos los jugadores desde arriba. Esta computadora no participa ni controla un personaje: da la salida cuando ya entraron todos.</p>
+          <span class="pie">Alojar la arena <span class="flecha">→</span></span>
+        </button>
+
+        <button class="puerta" data-rol="cliente" style="--reta:.58s">
+          <span class="glifo" aria-hidden="true">⚔</span>
+          <span class="marca">Captura la Bandera</span>
+          <h2>Cliente</h2>
+          <p>Busca partidas en la red y entra a jugar como templario. Esta computadora no aloja un servidor propio; solo necesita que alguien más lo haya levantado.</p>
+          <span class="pie">Entrar a la arena <span class="flecha">→</span></span>
+        </button>
+      </div>
+    </section>
+
+    <div class="separador"></div>
+
+    <section aria-labelledby="rotulo-solo">
+      <div class="seccion" style="--reta:.66s">
+        <span class="num">II</span>
+        <span class="rotulo" id="rotulo-solo">Un solo jugador · sin red</span>
+        <span class="regla"></span>
+      </div>
+      <div class="fila una">
+        <a class="puerta corrupta" href="/assets/modo-juggernaut/" style="--reta:.72s">
+          <span class="glifo" aria-hidden="true">☠</span>
+          <span class="marca">El juego original</span>
+          <h2>Modo Juggernaut</h2>
+          <p>Once templarios contra un jefe monstruoso sobre una isla que flota en el abismo. Quien toca el estandarte se corrompe. No necesita servidor, bridge ni compañeros: se juega al instante.</p>
+          <span class="pie">Descender al vacío <span class="flecha">→</span></span>
+        </a>
+      </div>
+    </section>
+
+    <p id="estado" role="status" aria-live="polite"></p>
+
+    <div class="pergamino">
+      <button class="abrir" id="abrirAyuda" aria-haspopup="dialog">Cómo se juega</button>
     </div>
-
-    <p class="grupo" style="margin-top:30px">Un solo jugador · sin red</p>
-    <div class="roles">
-      <a class="tarjeta solo" href="/assets/modo-juggernaut/">
-        <i class="icono">☠</i>
-        <div>
-          <b>Modo Juggernaut</b>
-          <span>Once templarios contra un jefe monstruoso sobre la isla flotante. No necesita servidor, bridge ni compañeros: se juega al instante.</span>
-        </div>
-      </a>
-    </div>
-
-    <p id="estado"></p>
-    <p class="pie"><button class="comojugar" id="abrirAyuda">Cómo se juega</button></p>
   </main>
 
   <div id="ayuda" role="dialog" aria-modal="true" aria-labelledby="tituloAyuda">
-    <div class="hoja">
+    <article class="hoja">
       <h2 id="tituloAyuda">Cómo se juega</h2>
-      <p>Dos juegos sobre la misma arena y los mismos caballeros, con reglas distintas.</p>
-
-      <h3>☠ Modo Juggernaut — un jugador</h3>
-      <p>
-        Quien toca el Ciber-Estandarte del centro se corrompe al instante en el
-        <em>Ejecutor del Vacío</em>, un jefe enorme. Los otros once tienen que
-        derribarlo a placajes antes de que acumule <em>45 segundos de Dominio</em>.
-        Si los acumula, gana la ronda.
-      </p>
-      <p>
-        Todo pasa sobre una isla flotando en un abismo, así que <em>caerse del borde
-        también es perder</em>. Un placaje bien puesto manda por los aires: conviene
-        pelear lejos del filo.
-      </p>
-      <table>
-        <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td>Moverse, relativo a la cámara</td></tr>
-        <tr><td><kbd>Espacio</kbd> / <kbd>F</kbd></td><td>Placaje — o <em>Ground Slam</em> si eres el Juggernaut</td></tr>
-        <tr><td><kbd>Shift</kbd> / <kbd>Q</kbd></td><td>Esquiva: voltereta o deslizamiento</td></tr>
-        <tr><td><kbd>C</kbd></td><td>Ceder o retomar el control de tu templario a la IA</td></tr>
-        <tr><td><kbd>P</kbd> · <kbd>M</kbd> · <kbd>R</kbd></td><td>Pausa · silenciar la música · reiniciar al terminar</td></tr>
-        <tr><td>Ratón</td><td>Orbitar y acercar la cámara</td></tr>
-      </table>
-      <p>
-        La <em>dificultad de la IA</em> se elige arriba a la derecha durante la
-        partida, y se puede cambiar sin perder la ronda que llevas. Afecta a los
-        rivales, no a ti: tu templario corre igual en los tres niveles.
+      <p class="intro">
+        Dos juegos sobre la misma arena y los mismos caballeros, con reglas
+        distintas. Uno se juega solo; el otro, contra las implementaciones de
+        los demás equipos del curso.
       </p>
 
-      <h3>⚑ Captura la Bandera — en red</h3>
-      <p>
-        Todos los equipos del curso hablan el mismo protocolo, así que se juega
-        entre implementaciones distintas. Hay <em>una sola bandera</em> en el centro
-        del círculo: tómala y <em>sal del círculo dorado</em> con ella para ganar.
-      </p>
-      <p>
-        A quien la lleva se la puede <em>robar</em> cualquiera que se le acerque, así
-        que correr en línea recta hacia el borde casi nunca funciona.
-      </p>
-      <table>
-        <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / flechas</td><td>Moverse, relativo a la cámara</td></tr>
-        <tr><td><kbd>E</kbd></td><td>Tomar la bandera, o robársela a quien la lleve</td></tr>
-        <tr><td><kbd>M</kbd></td><td>Vista 2D con los datos crudos del protocolo</td></tr>
-      </table>
+      <section class="capitulo corrupto">
+        <h3><span class="rombo">◆</span> Modo Juggernaut <span class="regla"></span></h3>
+        <p>
+          Quien toca el Ciber-Estandarte del centro se corrompe al instante en el
+          <em>Ejecutor del Vacío</em>, un jefe enorme. Los otros once tienen que
+          derribarlo a placajes antes de que acumule <em>45 segundos de Dominio</em>.
+          Si los acumula, gana la ronda.
+        </p>
+        <p>
+          Todo pasa sobre una isla flotando en un abismo, así que <em>caerse del
+          borde también es perder</em>. Un placaje bien puesto manda por los aires:
+          conviene pelear lejos del filo.
+        </p>
+        <table class="mandos">
+          <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td>Moverse, relativo a la cámara</td></tr>
+          <tr><td><kbd>Espacio</kbd> / <kbd>F</kbd></td><td>Placaje — o <em>Ground Slam</em> si eres el Juggernaut</td></tr>
+          <tr><td><kbd>Shift</kbd> / <kbd>Q</kbd></td><td>Esquiva: voltereta o deslizamiento</td></tr>
+          <tr><td><kbd>C</kbd></td><td>Ceder o retomar el control de tu templario a la IA</td></tr>
+          <tr><td><kbd>P</kbd> <kbd>M</kbd> <kbd>R</kbd></td><td>Pausa · silenciar la música · reiniciar al terminar</td></tr>
+          <tr><td>Ratón</td><td>Orbitar y acercar la cámara</td></tr>
+        </table>
+        <p>
+          La <em>dificultad de la IA</em> se elige arriba a la derecha durante la
+          partida y se puede cambiar sin perder la ronda que llevas. Afecta a los
+          rivales, no a ti: tu templario corre igual en los tres niveles.
+        </p>
+      </section>
 
-      <h3>Montar una partida en red</h3>
-      <table>
-        <tr><td>Una computadora</td><td>Elige <em>Servidor</em>: aloja la partida y no juega. Desde su pantalla se da la salida cuando ya entraron todos.</td></tr>
-        <tr><td>Las demás</td><td>Eligen <em>Cliente</em>. Buscan la partida en la red solas; si no aparece, se puede escribir la IP a mano.</td></tr>
-        <tr><td>Radmin VPN</td><td>Tiene que estar encendido en todas las máquinas para que se vean entre sí.</td></tr>
-      </table>
+      <section class="capitulo">
+        <h3><span class="rombo">◆</span> Captura la Bandera <span class="regla"></span></h3>
+        <p>
+          Todos los equipos del curso hablan el mismo protocolo, así que se juega
+          entre implementaciones distintas. Hay <em>una sola bandera</em> en el
+          centro del círculo: tómala y <em>sal del círculo dorado</em> con ella
+          para ganar.
+        </p>
+        <p>
+          A quien la lleva se la puede <em>robar</em> cualquiera que se le acerque,
+          así que correr en línea recta hacia el borde casi nunca funciona.
+        </p>
+        <table class="mandos">
+          <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / flechas</td><td>Moverse, relativo a la cámara</td></tr>
+          <tr><td><kbd>E</kbd></td><td>Tomar la bandera, o robársela a quien la lleve</td></tr>
+          <tr><td><kbd>M</kbd></td><td>Vista 2D con los datos crudos del protocolo</td></tr>
+        </table>
+      </section>
 
-      <button class="cerrar" id="cerrarAyuda">Cerrar</button>
-    </div>
+      <section class="capitulo">
+        <h3><span class="rombo">◆</span> Montar una partida en red <span class="regla"></span></h3>
+        <table class="mandos">
+          <tr><td>Una computadora</td><td>Elige <em>Servidor</em>: aloja la partida y no juega. Desde su pantalla se da la salida cuando ya entraron todos.</td></tr>
+          <tr><td>Las demás</td><td>Eligen <em>Cliente</em>. Buscan la partida en la red solas; si no aparece, se puede escribir la IP a mano.</td></tr>
+          <tr><td>Radmin VPN</td><td>Tiene que estar encendido en todas las máquinas para que se vean entre sí.</td></tr>
+        </table>
+      </section>
+
+      <button class="cerrar" id="cerrarAyuda">Cerrar el códice</button>
+    </article>
   </div>
 
   <script>
-    // ── Elegir rol de red ──
+    // ── Ceniza dorada ────────────────────────────────────────────────────
+    // Generada aquí y no escrita a mano en el HTML: son solo posiciones y
+    // retardos, y repetir catorce <span> casi idénticos en el marcado no
+    // aporta nada a quien lo lea.
+    const cenizas = document.querySelector('.cenizas');
+    for (let i = 0; i < 16; i++) {
+      const c = document.createElement('i');
+      c.className = 'ceniza';
+      c.style.setProperty('--x', (Math.random() * 100).toFixed(2) + '%');
+      c.style.setProperty('--dur', (13 + Math.random() * 15).toFixed(1) + 's');
+      c.style.setProperty('--reta', (-Math.random() * 20).toFixed(1) + 's');
+      cenizas.appendChild(c);
+    }
+
+    // ── Elegir rol de red ────────────────────────────────────────────────
     // El Modo Juggernaut es un enlace normal y NO pasa por /__rol: no levanta
     // servidor ni bridge, así que no hay nada que configurar en la máquina.
-    const botones=[...document.querySelectorAll('[data-rol]')];
-    const estado=document.getElementById('estado');
-    for(const boton of botones) boton.addEventListener('click',async()=>{
-      botones.forEach(b=>b.disabled=true);
-      estado.textContent='Configurando…';
-      try{
-        const r=await fetch('/__rol',{
-          method:'POST',
-          headers:{'content-type':'application/json'},
-          body:JSON.stringify({rol:boton.dataset.rol}),
+    const puertas = [...document.querySelectorAll('[data-rol]')];
+    const estado = document.getElementById('estado');
+    for (const puerta of puertas) puerta.addEventListener('click', async () => {
+      puertas.forEach((p) => { p.disabled = true; });
+      puerta.classList.add('cargando');
+      puerta.querySelector('.pie').innerHTML = 'Configurando<span class="flecha">…</span>';
+      estado.textContent = '';
+      try {
+        const r = await fetch('/__rol', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ rol: puerta.dataset.rol }),
         });
-        const d=await r.json();
-        if(!r.ok) throw new Error(d.error||`HTTP ${r.status}`);
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
         location.replace(d.destino);
-      }catch(e){
-        estado.textContent=e.message;
-        botones.forEach(b=>b.disabled=false);
+      } catch (e) {
+        estado.textContent = e.message;
+        puertas.forEach((p) => { p.disabled = false; });
+        puerta.classList.remove('cargando');
+        puerta.querySelector('.pie').innerHTML =
+          (puerta.dataset.rol === 'servidor' ? 'Alojar la arena ' : 'Entrar a la arena ')
+          + '<span class="flecha">→</span>';
       }
     });
 
-    // ── Cómo se juega ──
-    const ayuda=document.getElementById('ayuda');
-    const btnAbrir=document.getElementById('abrirAyuda');
-    const btnCerrar=document.getElementById('cerrarAyuda');
-    const abrir=()=>{ayuda.classList.add('abierta');btnCerrar.focus()};
-    const cerrar=()=>{ayuda.classList.remove('abierta');btnAbrir.focus()};
-    btnAbrir.addEventListener('click',abrir);
-    btnCerrar.addEventListener('click',cerrar);
-    ayuda.addEventListener('click',(e)=>{if(e.target===ayuda)cerrar()});
-    document.addEventListener('keydown',(e)=>{
-      if(e.key==='Escape'&&ayuda.classList.contains('abierta'))cerrar();
+    // ── El códice ────────────────────────────────────────────────────────
+    const ayuda = document.getElementById('ayuda');
+    const btnAbrir = document.getElementById('abrirAyuda');
+    const btnCerrar = document.getElementById('cerrarAyuda');
+    const abrir = () => {
+      ayuda.classList.add('abierta');
+      document.body.style.overflow = 'hidden';
+      btnCerrar.focus();
+    };
+    const cerrar = () => {
+      ayuda.classList.remove('abierta');
+      document.body.style.overflow = '';
+      btnAbrir.focus();
+    };
+    btnAbrir.addEventListener('click', abrir);
+    btnCerrar.addEventListener('click', cerrar);
+    ayuda.addEventListener('click', (e) => { if (e.target === ayuda) cerrar(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && ayuda.classList.contains('abierta')) cerrar();
     });
   </script>
 </body>
