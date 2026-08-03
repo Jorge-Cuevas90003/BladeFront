@@ -48,7 +48,7 @@ export class KnightAnimator {
       legRZ: 0, legLZ: 0,
       torsoX: 0, torsoZ: 0, torsoYaw: 0, torsoY: 0,
       headYaw: 0, headX: 0,
-      swordX: 0,
+      swordX: 0, swordZ: 0,
       rootX: 0, // inclinación de todo el cuerpo (null → no tocar la raíz)
       rootZ: 0, // banqueo lateral de la raíz (null → no tocar)
     };
@@ -80,7 +80,10 @@ export class KnightAnimator {
       this.head.rotation.y += (T.headYaw - this.head.rotation.y) * a;
       this.head.rotation.x += (T.headX - this.head.rotation.x) * a;
     }
-    if (this.sword) this.sword.rotation.x += (T.swordX - this.sword.rotation.x) * a;
+    if (this.sword) {
+      this.sword.rotation.x += (T.swordX - this.sword.rotation.x) * a;
+      this.sword.rotation.z += (T.swordZ - this.sword.rotation.z) * a;
+    }
     if (T.rootX !== null) {
       this.root.rotation.x += (T.rootX - this.root.rotation.x) * a;
     }
@@ -93,7 +96,7 @@ export class KnightAnimator {
     const T = this._T;
     T.legR = 0; T.legL = 0; T.legRZ = 0; T.legLZ = 0;
     T.torsoX = 0; T.torsoZ = 0; T.torsoYaw = 0; T.torsoY = 0;
-    T.headYaw = 0; T.headX = 0; T.swordX = 0; T.rootX = 0; T.rootZ = 0;
+    T.headYaw = 0; T.headX = 0; T.swordX = 0; T.swordZ = 0; T.rootX = 0; T.rootZ = 0;
   }
 
   // ---------- Locomoción ----------
@@ -174,7 +177,7 @@ export class KnightAnimator {
     // De espaldas el torso se yergue y se echa atrás; de frente se inclina.
     T.torsoX = (atras ? -0.09 : 0.14) * w + 0.02 * Math.sin(t * 1.6 + this.phase) +
       THREE.MathUtils.clamp(this._accelSm * 0.028, -0.16, 0.16);
-    T.torsoZ = s * 0.042 * w - turn * 0.3 - lat * 0.14 * w;
+    T.torsoZ = s * 0.07 * w - turn * 0.3 - lat * 0.14 * w;
     T.torsoYaw = -s * 0.12 * w + lat * 0.16 * w;
     // El bob va con th (la zancada), no con el reloj: si la cadera sube cuando
     // no toca pisar, el cuerpo va por libre respecto a los pies.
@@ -196,6 +199,12 @@ export class KnightAnimator {
     // Retrocediendo la espada se cruza al frente, en guardia, en vez de ir
     // colgando hacia atrás como cuando se corre.
     T.swordX = (atras ? 0.28 : -0.5) * w;
+    // Balanceo lateral de la hoja: como las manos nunca sueltan el pomo no hay
+    // brazo suelto que contrapese el paso, pero el arma sí puede "colgar" un
+    // poco por detrás del giro del torso —igual que un objeto sujeto a dos
+    // manos se retrasa un poco respecto al cuerpo que lo lleva—, dando un
+    // tercer eje de movimiento propio que antes estaba completamente quieto.
+    T.swordZ = -s * 0.1 * w + lat * 0.12 * w;
     if (this.cape) {
       this.cape.rotation.x =
         Math.sin(t * 0.5 + this.phase) * 0.015 + (atras ? -0.12 : 0.32) * w +

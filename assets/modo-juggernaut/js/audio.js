@@ -44,11 +44,12 @@
 // grave para que el sub se sienta en el pecho, y con las cuerdas al aire de un
 // violonchelo cerca, que es donde la madera resuena de verdad.
 const N = {
-  Bb0: 29.14, C1: 32.70, D1: 36.71, F1: 43.65,
-  Bb1: 58.27, C2: 65.41, D2: 73.42, F2: 87.31, A2: 110.00,
+  Bb0: 29.14, C1: 32.70, D1: 36.71, F1: 43.65, G1: 49.00,
+  Bb1: 58.27, C2: 65.41, D2: 73.42, F2: 87.31, G2: 98.00, A2: 110.00,
   Bb2: 116.54, C3: 130.81, D3: 146.83, E3: 164.81, F3: 174.61,
   G3: 196.00, A3: 220.00, Bb3: 233.08, C4: 261.63, D4: 293.66,
   E4: 329.63, F4: 349.23, A4: 440.00, D5: 587.33,
+  A1: 55.00, // raíz grave del la menor (v de la progresión B)
   Fs3: 185.00, Fs4: 370.00, // solo para la resolución a RE MAYOR de la victoria
 };
 
@@ -102,6 +103,19 @@ const PROGRESION = [
   { nombre: 'C',  sub: N.C1,  bajo: N.C2,  coro: [N.C3, N.E3, N.G3] },
 ];
 
+// Segunda progresión: i – iv – VII – v. Diatónica de la misma tonalidad, pero
+// con acordes que la primera nunca toca (sol y la menor), así que cuando entra
+// se siente un giro real, no solo una repetición con otro timbre encima. Sin
+// esto, por muchas capas y melodía que tuviera, la armonía era un único bucle
+// de 4 acordes sonando para siempre: el oído lo aprende en veinte segundos y
+// ya no suelta esa sensación de "está sonando lo mismo".
+const PROGRESION_B = [
+  { nombre: 'Dm', sub: N.D1, bajo: N.D2, coro: [N.D3, N.F3, N.A3] },
+  { nombre: 'Gm', sub: N.G1, bajo: N.G2, coro: [N.G3, N.Bb3, N.D4] },
+  { nombre: 'C',  sub: N.C1, bajo: N.C2, coro: [N.C3, N.E3, N.G3] },
+  { nombre: 'Am', sub: N.A1, bajo: N.A2, coro: [N.A3, N.C4, N.E4] },
+];
+
 const BPM = 96;              // algo más lento que antes: pesa más
 const PASOS_POR_ACORDE = 16; // dos compases de 4/4 en corcheas
 
@@ -114,6 +128,7 @@ export class VoidScore {
     this._nextNote = 0;
     this._victoryPlayed = false;
     this._acordeActual = -1;
+    this._acordeObj = PROGRESION[0];
   }
 
   ensure() {
@@ -393,13 +408,19 @@ export class VoidScore {
     const conMelodia = i > 0.25 && capa !== 0;
 
     // ── Cambio de acorde cada dos compases ──
-    const idx = Math.floor(paso / PASOS_POR_ACORDE) % PROGRESION.length;
-    if (idx !== this._acordeActual) {
-      this._acordeActual = idx;
-      this._cambiarAcorde(PROGRESION[idx], t);
+    // La progresión también rota, no solo el acorde dentro de ella: cada 4
+    // frases se cambia a la otra tabla armónica, así el bucle de verdad no es
+    // "4 acordes para siempre" sino "8 acordes en dos bloques de 4 frases".
+    const progresion = Math.floor(frase / 4) % 2 === 0 ? PROGRESION : PROGRESION_B;
+    const idx = Math.floor(paso / PASOS_POR_ACORDE) % progresion.length;
+    const claveAcorde = progresion === PROGRESION ? idx : idx + 100;
+    if (claveAcorde !== this._acordeActual) {
+      this._acordeActual = claveAcorde;
+      this._acordeObj = progresion[idx];
+      this._cambiarAcorde(progresion[idx], t);
       // Golpe grave que marca la llegada del acorde nuevo: es lo que hace que
       // el cambio se SIENTA además de oírse.
-      if (i > 0.35) this._sub(PROGRESION[idx].sub, t, 1.6, 0.42);
+      if (i > 0.35) this._sub(progresion[idx].sub, t, 1.6, 0.42);
     }
 
     // ── La melodía de la frase ──
@@ -425,7 +446,7 @@ export class VoidScore {
     // Un metal en cada corchea sería una pared de ruido; en el 1 y el 3 es un
     // acento y se nota mucho más.
     if (i > 0.55) {
-      const ac = PROGRESION[this._acordeActual];
+      const ac = this._acordeObj;
       if (enCompas === 0) this._metal([ac.bajo, ac.bajo * 1.5], t, 0.75, (0.10 + i * 0.05) * respiro);
       if (enCompas === 4 && capa >= 2 && i > 0.8) this._metal([ac.bajo * 2], t, 0.4, 0.07);
     }
