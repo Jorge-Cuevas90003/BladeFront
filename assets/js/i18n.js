@@ -50,6 +50,7 @@
         menu: '☰ Menú', victoria: 'VICTORIA', derrota: 'DERROTA',
       },
       rol: {
+        titulo_pestana: 'BladeFront · Arena del Vacío',
         lema: 'Arena del Vacío · Computer Science 8',
         seccion_red: 'En red · con tus compañeros',
         seccion_solo: 'Un solo jugador · sin red',
@@ -105,6 +106,7 @@
       },
       servidor: {
         titulo: 'BladeFront · Servidor',
+        titulo_pestana: 'BladeFront · Vista del servidor',
         subtitulo: 'Vista global de solo lectura · sin controles de juego',
         conectando: 'Conectando…',
         iniciar_partida: 'Iniciar partida',
@@ -124,6 +126,7 @@
       },
       captura: {
         titulo: 'Captura la Bandera', subtitulo: 'Arena del Vacío · PRFC v3',
+        titulo_pestana: 'Captura la Bandera · Arena del Vacío',
         nombre_guerra: 'Nombre de guerra',
         modo_label: 'Modo',
         modo_practica_t: 'Práctica', modo_practica_d: 'Motor local + bots. Sin red ni bridge.',
@@ -167,6 +170,7 @@
       },
       jug: {
         titulo: 'Modo Juggernaut', subtitulo: 'CTF corrupto · three.js · Proyecto 1',
+        titulo_pestana: 'Modo Juggernaut — CTF Corrupto',
         spec_titulo: 'Estado de partida', dificultad_label: 'Dificultad IA',
         dt_portador: 'Portador', dt_dominio: 'Dominio', dt_cazadores: 'Cazadores', dt_fps: 'FPS',
         cazadores_valor: '11 templarios',
@@ -196,6 +200,7 @@
         menu: '☰ Menu', victoria: 'VICTORY', derrota: 'DEFEAT',
       },
       rol: {
+        titulo_pestana: 'BladeFront · Arena of the Void',
         lema: 'Arena of the Void · Computer Science 8',
         seccion_red: 'Online · with your teammates',
         seccion_solo: 'Single player · offline',
@@ -251,6 +256,7 @@
       },
       servidor: {
         titulo: 'BladeFront · Server',
+        titulo_pestana: 'BladeFront · Server view',
         subtitulo: 'Read-only global view · no game controls',
         conectando: 'Connecting…',
         iniciar_partida: 'Start match', jugar_de_nuevo: 'Play again', cambiar_config: 'Change configuration',
@@ -267,6 +273,7 @@
       },
       captura: {
         titulo: 'Capture the Flag', subtitulo: 'Arena of the Void · PRFC v3',
+        titulo_pestana: 'Capture the Flag · Arena of the Void',
         nombre_guerra: 'War name',
         modo_label: 'Mode',
         modo_practica_t: 'Practice', modo_practica_d: 'Local engine + bots. No network, no bridge.',
@@ -310,6 +317,7 @@
       },
       jug: {
         titulo: 'Juggernaut Mode', subtitulo: 'Corrupted CTF · three.js · Project 1',
+        titulo_pestana: 'Juggernaut Mode — Corrupted CTF',
         spec_titulo: 'Match status', dificultad_label: 'AI difficulty',
         dt_portador: 'Carrier', dt_dominio: 'Domination', dt_cazadores: 'Hunters', dt_fps: 'FPS',
         cazadores_valor: '11 knights',
@@ -339,6 +347,7 @@
         menu: '☰ Menu', victoria: 'VITÓRIA', derrota: 'DERROTA',
       },
       rol: {
+        titulo_pestana: 'BladeFront · Arena do Vazio',
         lema: 'Arena do Vazio · Computer Science 8',
         seccion_red: 'Online · com seus colegas',
         seccion_solo: 'Um jogador · sem rede',
@@ -394,6 +403,7 @@
       },
       servidor: {
         titulo: 'BladeFront · Servidor',
+        titulo_pestana: 'BladeFront · Vista do servidor',
         subtitulo: 'Vista global somente leitura · sem controles de jogo',
         conectando: 'Conectando…',
         iniciar_partida: 'Iniciar partida', jugar_de_nuevo: 'Jogar de novo', cambiar_config: 'Trocar configuração',
@@ -410,6 +420,7 @@
       },
       captura: {
         titulo: 'Capture a Bandeira', subtitulo: 'Arena do Vazio · PRFC v3',
+        titulo_pestana: 'Capture a Bandeira · Arena do Vazio',
         nombre_guerra: 'Nome de guerra',
         modo_label: 'Modo',
         modo_practica_t: 'Prática', modo_practica_d: 'Motor local + bots. Sem rede nem bridge.',
@@ -453,6 +464,7 @@
       },
       jug: {
         titulo: 'Modo Juggernaut', subtitulo: 'CTF corrompido · three.js · Projeto 1',
+        titulo_pestana: 'Modo Juggernaut — CTF Corrompido',
         spec_titulo: 'Estado da partida', dificultad_label: 'Dificuldade da IA',
         dt_portador: 'Portador', dt_dominio: 'Domínio', dt_cazadores: 'Caçadores', dt_fps: 'FPS',
         cazadores_valor: '11 templários',
@@ -482,6 +494,7 @@
         menu: '☰ メニュー', victoria: '勝利', derrota: '敗北',
       },
       rol: {
+        titulo_pestana: 'BladeFront · 虚無のアリーナ',
         lema: '虚無のアリーナ · Computer Science 8',
         seccion_red: 'オンライン · 仲間と一緒に',
         seccion_solo: 'シングルプレイ · オフライン',
@@ -537,6 +550,7 @@
       },
       servidor: {
         titulo: 'BladeFront · サーバー',
+        titulo_pestana: 'BladeFront · サーバービュー',
         subtitulo: '読み取り専用の全体表示 · ゲーム操作なし',
         conectando: '接続中…',
         iniciar_partida: '試合を開始', jugar_de_nuevo: 'もう一度プレイ', cambiar_config: '設定を変更',
@@ -553,6 +567,7 @@
       },
       captura: {
         titulo: 'キャプチャー・ザ・フラッグ', subtitulo: '虚無のアリーナ · PRFC v3',
+        titulo_pestana: 'キャプチャー・ザ・フラッグ · 虚無のアリーナ',
         nombre_guerra: '戦士名',
         modo_label: 'モード',
         modo_practica_t: '練習', modo_practica_d: 'ローカルエンジン + ボット。ネットワーク・ブリッジなし。',
@@ -596,6 +611,7 @@
       },
       jug: {
         titulo: 'ジャガーノート・モード', subtitulo: '堕落したCTF · three.js · プロジェクト1',
+        titulo_pestana: 'ジャガーノート・モード — 堕落したCTF',
         spec_titulo: '試合の状態', dificultad_label: 'AI難易度',
         dt_portador: '保持者', dt_dominio: '支配', dt_cazadores: 'ハンター', dt_fps: 'FPS',
         cazadores_valor: '騎士11人',
@@ -706,6 +722,7 @@
       b.type = 'button';
       b.textContent = ETIQUETAS[lang];
       b.dataset.lang = lang;
+      b.lang = lang; // el lector de pantalla pronuncia la etiqueta con las reglas de SU idioma, no el activo
       b.setAttribute('aria-pressed', String(lang === idiomaActual));
       b.addEventListener('click', () => setLang(lang));
       el.appendChild(b);
