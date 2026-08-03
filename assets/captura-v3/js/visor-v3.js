@@ -301,12 +301,12 @@ function limpiarKnights() {
 //  HUD
 // ---------------------------------------------------------------------------
 const $ = (id) => document.getElementById(id);
-const NOMBRE_ESTADO_BANDERA = {
-  [ESTADO_BANDERA.AVAILABLE]: 'LIBRE',
-  [ESTADO_BANDERA.CARRIED]: 'EN JUEGO',
-  [ESTADO_BANDERA.DROPPED]: 'CAÍDA',
-  [ESTADO_BANDERA.OUTSIDE]: 'EXTRAÍDA',
-};
+const nombreEstadoBandera = () => ({
+  [ESTADO_BANDERA.AVAILABLE]: window.i18n.t('common.bandera.libre'),
+  [ESTADO_BANDERA.CARRIED]: window.i18n.t('common.bandera.en_juego'),
+  [ESTADO_BANDERA.DROPPED]: window.i18n.t('common.bandera.caida'),
+  [ESTADO_BANDERA.OUTSIDE]: window.i18n.t('common.bandera.extraida'),
+});
 
 function aviso(txt) {
   const ul = $('feed');
@@ -344,24 +344,24 @@ on(TIPOS.JOIN_ACCEPTED, (m) => {
   miId = m.playerId;
   const s = $('salaServidor');
   if (s) s.textContent = cliente.modo === 'red'
-    ? `${$('host').value || 'servidor'}:${$('puerto').value || ''} · eres #${m.playerId}`
-    : 'partida local';
+    ? `${$('host').value || 'servidor'}:${$('puerto').value || ''} · ${window.i18n.t('captura.sala_eres', { id: m.playerId })}`
+    : window.i18n.t('captura.sala_local');
   $('iYo').textContent = `#${m.playerId}`;
-  $('iConn').textContent = cliente.modo === 'local' ? 'Local' : 'Conectado';
+  $('iConn').textContent = cliente.modo === 'local' ? window.i18n.t('common.conexion.local') : window.i18n.t('common.conexion.conectado');
 });
 
 on(TIPOS.JOIN_REJECTED, (m) => {
   const razones = {
-    1: 'la partida ya empezó', 2: 'la partida está llena',
-    3: 'nombre inválido', 4: 'versión de protocolo incompatible',
+    1: window.i18n.t('captura.motivo_1'), 2: window.i18n.t('captura.motivo_2'),
+    3: window.i18n.t('captura.motivo_3'), 4: window.i18n.t('captura.motivo_4'),
   };
-  bandera('Rechazado: ' + (razones[m.reason] ?? m.reason));
-  $('iConn').textContent = 'Rechazado';
+  bandera(window.i18n.t('captura.aviso_rechazado', { motivo: razones[m.reason] ?? m.reason }));
+  $('iConn').textContent = window.i18n.t('common.conexion.rechazado');
 });
 
 on(TIPOS.LOBBY_STATE, (m) => {
   $('iJugadores').textContent = m.players.length;
-  aviso(`Sala: ${m.players.length} jugador(es)`);
+  aviso(window.i18n.t('captura.aviso_sala', { n: m.players.length }));
   pintarSala(m.players);
 });
 
@@ -378,11 +378,11 @@ function pintarSala(jugadores) {
   const ul = $('salaJugadores');
   ul.innerHTML = jugadores.map((p) => {
     const etiquetas = [];
-    if (p.playerId === miId) etiquetas.push('<span class="tag tu">TÚ</span>');
+    if (p.playerId === miId) etiquetas.push(`<span class="tag tu">${window.i18n.t('captura.sala_tu_tag')}</span>`);
     return `<li><span>${p.name}</span><span>${etiquetas.join(' ')}</span></li>`;
-  }).join('') || '<li><span>nadie todavía…</span><span></span></li>';
+  }).join('') || `<li><span>${window.i18n.t('captura.sala_nadie')}</span><span></span></li>`;
 
-  $('salaAviso').textContent = 'Esperando a que el servidor inicie la partida…';
+  $('salaAviso').textContent = window.i18n.t('captura.sala_esperando_inicio');
   // Precargar modelos 3D y compilar WebGL shaders durante la espera
   for (const p of jugadores) {
     const k = asegurarKnight(p.playerId);
@@ -403,8 +403,8 @@ on(0x7d, () => {   // HOST_INFO: el servidor dice quién manda
 
 on(TIPOS.GAME_COUNTDOWN, (m) => {
   console.log('%c[JUEGO]%c ⏳ Conteo regresivo: ' + m.secondsRemaining + 's...', 'background: #ec4899; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;', 'color: inherit');
-  bandera(`Comienza en ${m.secondsRemaining}…`);
-  $('salaAviso').textContent = `Comienza en ${m.secondsRemaining}…`;
+  bandera(window.i18n.t('captura.comienza_en', { s: m.secondsRemaining }));
+  $('salaAviso').textContent = window.i18n.t('captura.comienza_en', { s: m.secondsRemaining });
   try { renderer.compile(scene, camera); } catch {}
 });
 
@@ -432,13 +432,13 @@ on(TIPOS.GAME_STARTED, (m) => {
   // caso el servidor descarta el INPUT previo porque la partida aún no había
   // empezado; reenviarlo aquí evita que solo se mueva la predicción local.
   recalcularDireccion(true);
-  bandera('¡A la arena!');
-  aviso(`Partida iniciada · ${m.players.length} caballeros`);
+  bandera(window.i18n.t('captura.banda_a_la_arena'));
+  aviso(window.i18n.t('captura.aviso_partida_iniciada', { n: m.players.length }));
 });
 
 on(TIPOS.GAME_STATE, (m) => {
   $('iTick').textContent = m.tick;
-  $('iBandera').textContent = NOMBRE_ESTADO_BANDERA[m.flagStatus] ?? '—';
+  $('iBandera').textContent = nombreEstadoBandera()[m.flagStatus] ?? '—';
   $('iPortador').textContent = m.flagCarrierId ? cliente.nombreDe(m.flagCarrierId) : '—';
   $('iJugadores').textContent = m.players.length;
 
@@ -484,37 +484,55 @@ on(TIPOS.FLAG_PICKED_UP, (m) => {
   console.log('%c[BANDERA]%c 🚩 Bandera tomada por: ' + cliente.nombreDe(m.playerId) + ' (#' + m.playerId + ')', 'background: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;', 'color: inherit');
   const k = knights.get(m.playerId);
   if (k) k.accion = 0.55;
-  aviso(`${cliente.nombreDe(m.playerId)} toma la bandera`);
-  if (m.playerId === miId) bandera('¡Tienes la bandera! Sal del círculo');
+  aviso(window.i18n.t('captura.aviso_toma_bandera', { name: cliente.nombreDe(m.playerId) }));
+  if (m.playerId === miId) bandera(window.i18n.t('captura.banda_tienes_bandera'));
 });
 
 on(TIPOS.FLAG_STOLEN, (m) => {
   console.log('%c[BANDERA]%c ⚔️ Bandera ROBADA por ' + cliente.nombreDe(m.newCarrierId) + ' a ' + cliente.nombreDe(m.previousCarrierId), 'background: #dc2626; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;', 'color: inherit');
   const k = knights.get(m.previousCarrierId);
   if (k) k.accion = 0.45;
-  aviso(`${cliente.nombreDe(m.newCarrierId)} se la roba a ${cliente.nombreDe(m.previousCarrierId)}`);
-  if (m.newCarrierId === miId) bandera('¡Se la robaste!');
-  else if (m.previousCarrierId === miId) bandera('¡Te robaron la bandera!');
+  aviso(window.i18n.t('captura.aviso_roba_bandera', { name: cliente.nombreDe(m.newCarrierId), otro: cliente.nombreDe(m.previousCarrierId) }));
+  if (m.newCarrierId === miId) bandera(window.i18n.t('captura.banda_se_la_robaste'));
+  else if (m.previousCarrierId === miId) bandera(window.i18n.t('captura.banda_te_robaron'));
 });
 
 on(TIPOS.PLAYER_DISCONNECTED, (m) => {
   console.log('%c[RED]%c 🚪 Jugador desconectado: #' + m.playerId, 'background: #64748b; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;', 'color: inherit');
-  aviso(`${cliente.nombreDe(m.playerId)} abandona`);
+  aviso(window.i18n.t('captura.aviso_abandona', { name: cliente.nombreDe(m.playerId) }));
   quitarKnight(m.playerId);
 });
+
+let ultimoResultado = null;
+
+function pintarResultado() {
+  if (!ultimoResultado) return;
+  const gane = ultimoResultado.winnerId === miId;
+  $('finTitulo').textContent = gane ? window.i18n.t('common.victoria') : window.i18n.t('common.derrota');
+  $('finEmblema').textContent = gane ? '👑' : '⚔️';
+}
 
 on(TIPOS.GAME_OVER, (m) => {
   console.log('%c[JUEGO]%c 🏆 ¡PARTIDA FINALIZADA! Ganador: ' + m.winnerName + ' (ID #' + m.winnerId + ')', 'background: #eab308; color: black; padding: 2px 6px; border-radius: 4px; font-weight: bold;', 'color: inherit', m);
   terminada = true;
   const gane = m.winnerId === miId;
-  bandera(gane ? '¡VICTORIA!' : `Gana ${m.winnerName}`);
-  aviso(`Fin · gana ${m.winnerName}`);
-  $('finTitulo').textContent = gane ? 'VICTORIA' : 'DERROTA';
-  $('finEmblema').textContent = gane ? '👑' : '⚔️';
+  ultimoResultado = m;
+  bandera(gane ? window.i18n.t('captura.victoria_exclam') : window.i18n.t('captura.gana_x', { name: m.winnerName }));
+  aviso(window.i18n.t('captura.fin_gana_x', { name: m.winnerName }));
+  pintarResultado();
   $('finGanador').textContent = m.winnerName || `#${m.winnerId}`;
   $('finId').textContent = `#${m.winnerId}`;
   $('finTick').textContent = cliente.estado?.tick ?? '—';
   $('modalFin')?.classList.remove('oculto');
+});
+
+// Retraduce lo ya pintado por eventos de red (el modal de resultado y el
+// estado de bandera) cuando el idioma cambia en caliente — data-i18n ya
+// cubre el resto del DOM automáticamente.
+window.i18n.onChange(() => {
+  pintarResultado();
+  const ultimo = cliente.estado;
+  if (ultimo) $('iBandera').textContent = nombreEstadoBandera()[ultimo.flagStatus] ?? '—';
 });
 
 on(TIPOS.ERROR, (m) => {
@@ -527,16 +545,16 @@ on(TIPOS.ERROR, (m) => {
   // el jugador ve "Error: se perdió la conexión" justo encima del cartel de
   // victoria y parece que se ha roto algo.
   if (terminada || m.code === ERRORES.GAME_FINISHED) {
-    $('iConn').textContent = 'Partida cerrada';
-    aviso('La partida ha terminado');
+    $('iConn').textContent = window.i18n.t('common.conexion.cerrada');
+    aviso(window.i18n.t('captura.partida_terminada'));
     // Si el modal de resultado no llegó a salir (por ejemplo, porque el
     // anfitrión canceló), al menos que quede claro por qué se cortó.
-    if (!terminada) bandera(m.description || 'La partida ha terminado');
+    if (!terminada) bandera(m.description || window.i18n.t('captura.partida_terminada'));
     return;
   }
-  aviso('Error: ' + (m.description || m.code));
-  $('iConn').textContent = 'Error';
-  bandera(m.description || 'Error de red');
+  aviso(window.i18n.t('captura.error_prefijo', { msg: m.description || m.code }));
+  $('iConn').textContent = window.i18n.t('common.conexion.error');
+  bandera(m.description || window.i18n.t('captura.error_red'));
 });
 
 // ---------------------------------------------------------------------------
@@ -796,14 +814,14 @@ function entrar() {
     const bots = Math.max(0, Math.min(20, Number($('bots').value) || 0));
     const inmunidad = Number($('inmunidad').value) || 0;
     cliente.iniciarLocal({ nombre, bots, params: { protectionTimeMs: inmunidad } });
-    aviso(`Modo local · ${bots} bots · inmunidad ${inmunidad} ms`);
+    aviso(window.i18n.t('captura.aviso_modo_local', { bots, ms: inmunidad }));
   } else {
     const url = ($('url').value || 'ws://localhost:8146').trim();
     const host = ($('host').value || '').trim();
     const port = Number($('puerto').value) || 0;
-    $('iConn').textContent = 'Conectando…';
+    $('iConn').textContent = window.i18n.t('common.conexion.conectando');
     cliente.conectar({ url, nombre, host: host || undefined, port: port || undefined });
-    aviso(`Conectando por ${url}`);
+    aviso(window.i18n.t('captura.aviso_conectando_por', { url }));
   }
 }
 
@@ -891,7 +909,9 @@ function pintarServidores() {
     const esSinServicio = s.sinServicio || s.state === 'SIN_SERVICIO';
     const lleno = s.playerCount >= s.maximumPlayers;
     const cls = esSinServicio ? 'sin-servicio' : (lleno ? 'llena' : (s.state === ESTADO_PARTIDA.WAITING ? 'abierta' : 'jugando'));
-    const txt = esSinServicio ? 'SIN SERVICIO EN 5000' : (lleno ? 'LLENA' : (s.state === ESTADO_PARTIDA.WAITING ? 'ABIERTA' : 'EN JUEGO'));
+    const txt = esSinServicio ? window.i18n.t('captura.srv_sin_servicio')
+      : (lleno ? window.i18n.t('captura.srv_llena')
+        : (s.state === ESTADO_PARTIDA.WAITING ? window.i18n.t('captura.srv_abierta') : window.i18n.t('captura.srv_en_juego')));
     const via = s.via === 'sin-servicio'
       ? '<span class="via" title="Compañero activo en Radmin VPN (sin servicio en puerto 5000)">◌</span>'
       : (s.via === 'directo'
@@ -932,16 +952,16 @@ async function sondearServidores() {
     servidoresVistos = new Map(servidores.map((s) => [`${s.host}:${s.tcpPort}`, s]));
     estado.className = 'buscando';
     estado.textContent = servidores.length
-      ? `${servidores.length} encontrada${servidores.length > 1 ? 's' : ''}`
-      : 'buscando…';
+      ? window.i18n.t('captura.srv_encontradas', { n: servidores.length })
+      : window.i18n.t('captura.buscando');
     pintarServidores();
     pintarExploracion(exploracion, avisos);
   } catch {
     servidoresVistos.clear();
     estado.className = 'sinbridge';
-    estado.textContent = 'bridge no responde';
+    estado.textContent = window.i18n.t('captura.srv_sin_bridge');
     $('listaServidores').innerHTML =
-      '<li class="vacio">Arranca el bridge: node red/v3/bridge-v3.js</li>';
+      `<li class="vacio">${window.i18n.t('captura.srv_arranca_bridge')}</li>`;
     $('avisoBusqueda').style.display = 'none';
     $('exploracion').style.display = 'none';
   } finally {

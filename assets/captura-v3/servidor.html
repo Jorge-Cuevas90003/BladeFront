@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BladeFront · Vista del servidor</title>
+  <script src="/assets/js/i18n.js"></script>
   <style>
     :root { color-scheme:dark; --oro:#ffb638; --cian:#8cecff; --fondo:#05080d; }
     * { box-sizing:border-box; }
@@ -12,6 +13,11 @@
     header { padding:16px 22px; border-bottom:1px solid #263443; background:rgba(5,8,13,.92);
       display:flex; gap:20px; align-items:center; justify-content:space-between; }
     .acciones { display:flex; gap:16px; align-items:center; }
+    #idiomas { display:flex; gap:2px; border:1px solid #263443; }
+    #idiomas button { background:none; border:0; cursor:pointer; color:#5c6a75; font:700 9px/1 system-ui,sans-serif;
+      letter-spacing:.1em; padding:7px 9px; transition:color .2s,background .2s; }
+    #idiomas button:hover { color:#e8edf2; background:rgba(255,182,56,.08); }
+    #idiomas button[aria-pressed="true"] { color:var(--oro); background:rgba(255,182,56,.14); }
     .empezar { color:#171109; border:1px solid var(--oro); padding:9px 13px; background:var(--oro);
       text-transform:uppercase; font-size:10px; font-weight:800; letter-spacing:.1em; cursor:pointer; }
     .empezar:disabled { opacity:.35; cursor:not-allowed; }
@@ -47,47 +53,56 @@
 </head>
 <body>
   <header>
-    <div><h1>BladeFront · Servidor</h1><div class="solo">Vista global de solo lectura · sin controles de juego</div></div>
+    <div><h1 data-i18n="servidor.titulo">BladeFront · Servidor</h1><div class="solo" data-i18n="servidor.subtitulo">Vista global de solo lectura · sin controles de juego</div></div>
     <div class="acciones">
-      <strong id="conexion">Conectando…</strong>
-      <button class="empezar" id="empezar" disabled>Iniciar partida</button>
-      <button class="cambiar" id="cambiarRol">Cambiar configuración</button>
+      <div id="idiomas"></div>
+      <strong id="conexion" data-i18n="servidor.conectando">Conectando…</strong>
+      <button class="empezar" id="empezar" disabled data-i18n="servidor.iniciar_partida">Iniciar partida</button>
+      <button class="cambiar" id="cambiarRol" data-i18n="servidor.cambiar_config">Cambiar configuración</button>
     </div>
   </header>
   <main>
     <section class="arena">
       <div id="app3d"></div>
       <div class="resultado oculto" id="resultado">
-        <div><small>Ganador de la partida</small><strong id="ganador">—</strong></div>
+        <div><small data-i18n="servidor.ganador_partida">Ganador de la partida</small><strong id="ganador">—</strong></div>
       </div>
     </section>
     <aside class="datos">
       <dl>
-        <dt>Servidor</dt><dd id="nombre">—</dd>
-        <dt>Estado</dt><dd id="estado">—</dd>
-        <dt>Tick</dt><dd id="tick">—</dd>
-        <dt>Jugadores</dt><dd id="cantidad">0</dd>
-        <dt>Bandera</dt><dd id="bandera">—</dd>
+        <dt data-i18n="servidor.dt_servidor">Servidor</dt><dd id="nombre">—</dd>
+        <dt data-i18n="servidor.dt_estado">Estado</dt><dd id="estado">—</dd>
+        <dt data-i18n="servidor.dt_tick">Tick</dt><dd id="tick">—</dd>
+        <dt data-i18n="servidor.dt_jugadores">Jugadores</dt><dd id="cantidad">0</dd>
+        <dt data-i18n="servidor.dt_bandera">Bandera</dt><dd id="bandera">—</dd>
       </dl>
-      <h2>Todos los jugadores</h2>
-      <ul id="jugadores"><li>Nadie conectado</li></ul>
-      <footer>Esta pantalla no se registra como jugador, no envía entradas y solo consulta el servidor mediante 127.0.0.1.</footer>
+      <h2 data-i18n="servidor.todos_jugadores">Todos los jugadores</h2>
+      <ul id="jugadores"><li data-i18n="servidor.nadie_conectado">Nadie conectado</li></ul>
+      <footer data-i18n="servidor.pie_nota">Esta pantalla no se registra como jugador, no envía entradas y solo consulta el servidor mediante 127.0.0.1.</footer>
     </aside>
   </main>
   <script>
     const $ = (id) => document.getElementById(id);
+    window.i18n.mountSwitcher($('idiomas'));
     const endpoint = new URLSearchParams(location.search).get('estado') || 'http://127.0.0.1:8147/estado';
-    const estados = {1:'ESPERANDO',2:'INICIANDO',3:'EN PARTIDA',4:'FINALIZADA',5:'CANCELADA'};
-    const banderas = {1:'LIBRE',2:'LLEVADA',3:'CAÍDA',4:'FUERA'};
+    const estados = () => ({
+      1: window.i18n.t('servidor.estados.esperando'), 2: window.i18n.t('servidor.estados.iniciando'),
+      3: window.i18n.t('servidor.estados.en_partida'), 4: window.i18n.t('servidor.estados.finalizada'),
+      5: window.i18n.t('servidor.estados.cancelada'),
+    });
+    const banderas = () => ({
+      1: window.i18n.t('servidor.banderas.libre'), 2: window.i18n.t('servidor.banderas.llevada'),
+      3: window.i18n.t('servidor.banderas.caida'), 4: window.i18n.t('servidor.banderas.fuera'),
+    });
     let consultando = false;
     let ultimoEstado = null;
 
     function presentar(s) {
       $('nombre').textContent=s.serverName;
-      $('estado').textContent=estados[s.state] ?? s.state;
+      $('estado').textContent=estados()[s.state] ?? s.state;
       $('tick').textContent=s.tick;
       $('cantidad').textContent=s.players.length;
-      $('bandera').textContent=banderas[s.flag.status] ?? s.flag.status;
+      $('bandera').textContent=banderas()[s.flag.status] ?? s.flag.status;
       if(s.winner) {
         $('ganador').textContent=`${s.winner.name} · #${s.winner.playerId}`;
         $('resultado').classList.remove('oculto');
@@ -96,7 +111,7 @@
       }
       ultimoEstado=s;
       const puedeIniciar=(s.state===1 || s.state===4) && s.players.length>0;
-      $('empezar').textContent=s.state===4 ? 'Jugar de nuevo' : 'Iniciar partida';
+      $('empezar').textContent=s.state===4 ? window.i18n.t('servidor.jugar_de_nuevo') : window.i18n.t('servidor.iniciar_partida');
       $('empezar').disabled=!puedeIniciar;
       $('jugadores').replaceChildren(...(s.players.length
         ? s.players.map((p) => {
@@ -104,11 +119,11 @@
             const nombre=document.createElement('span');
             const id=document.createElement('b');
             nombre.textContent=p.name;
-            id.textContent=`#${p.playerId}${p.hasFlag?' · bandera':''}`;
+            id.textContent=`#${p.playerId}${p.hasFlag?' · '+window.i18n.t('servidor.bandera_jugador'):''}`;
             li.append(nombre,id);
             return li;
           })
-        : [Object.assign(document.createElement('li'),{textContent:'Nadie conectado'})]));
+        : [Object.assign(document.createElement('li'),{textContent:window.i18n.t('servidor.nadie_conectado')})]));
       window.__presentarServidor3D?.(s);
     }
 
@@ -119,15 +134,16 @@
         const r=await fetch(endpoint,{cache:'no-store'});
         if(!r.ok) throw new Error(`HTTP ${r.status}`);
         presentar(await r.json());
-        $('conexion').textContent='Servidor activo';
+        $('conexion').textContent=window.i18n.t('servidor.activo');
         $('conexion').className='ok';
       } catch(e) {
-        $('conexion').textContent='Servidor no disponible';
+        $('conexion').textContent=window.i18n.t('servidor.no_disponible');
         $('conexion').className='error';
       } finally { consultando=false; }
     }
     actualizar();
     setInterval(actualizar,100);
+    window.i18n.onChange(() => { if (ultimoEstado) presentar(ultimoEstado); });
     $('empezar').addEventListener('click',async()=>{
       if(!ultimoEstado || ![1,4].includes(ultimoEstado.state) || ultimoEstado.players.length===0) return;
       $('empezar').disabled=true;
@@ -138,7 +154,7 @@
           throw new Error(d.error || `HTTP ${r.status}`);
         }
       } catch(e) {
-        alert(`No se pudo iniciar la partida: ${e.message}`);
+        alert(window.i18n.t('servidor.error_iniciar', { msg: e.message }));
       }
       actualizar();
     });
@@ -150,7 +166,7 @@
         if(!r.ok) throw new Error(d.error||`HTTP ${r.status}`);
         location.replace(d.destino);
       }catch(e){
-        alert(`No se pudo cambiar la configuración: ${e.message}`);
+        alert(window.i18n.t('servidor.error_cambiar', { msg: e.message }));
         $('cambiarRol').disabled=false;
       }
     });

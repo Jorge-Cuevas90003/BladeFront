@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Rajdhani:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="/assets/js/i18n.js"></script>
   <style>
     :root {
       --oro: #ffb638;
@@ -40,6 +41,16 @@
     .corner.tr { top: 18px; right: 18px; border-top-width: 1px; border-right-width: 1px; }
     .corner.bl { bottom: 18px; left: 18px; border-bottom-width: 1px; border-left-width: 1px; }
     .corner.br { bottom: 18px; right: 18px; border-bottom-width: 1px; border-right-width: 1px; }
+
+    #idiomas { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 5;
+      display: flex; gap: 2px; background: rgba(12, 10, 7, 0.55); border: 1px solid var(--line);
+      backdrop-filter: blur(6px); clip-path: polygon(7px 0, 100% 0, 100% 100%, 0 100%, 0 7px);
+      opacity: 0; animation: reveal 0.9s ease 0.5s forwards; }
+    #idiomas button { background: none; border: 0; cursor: pointer; color: var(--dim);
+      font-family: 'Rajdhani', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+      padding: 7px 9px; transition: color 0.2s, background 0.2s; }
+    #idiomas button:hover { color: var(--steel); background: rgba(255,182,56,.08); }
+    #idiomas button[aria-pressed="true"] { color: var(--oro); background: rgba(255,182,56,.14); }
 
     .hud {
       position: fixed; z-index: 4; pointer-events: none; color: var(--steel);
@@ -186,44 +197,46 @@
   <i class="corner tl"></i><i class="corner tr"></i>
   <i class="corner bl"></i><i class="corner br"></i>
 
+  <div id="idiomas"></div>
+
   <div class="hud title">
-    <h1>Modo Juggernaut</h1>
-    <p>CTF corrupto &middot; three.js &middot; Proyecto 1</p>
+    <h1 data-i18n="jug.titulo">Modo Juggernaut</h1>
+    <p data-i18n="jug.subtitulo">CTF corrupto &middot; three.js &middot; Proyecto 1</p>
     <span class="laser"></span>
   </div>
 
   <div class="hud spec">
-    <h2>Estado de partida</h2>
+    <h2 data-i18n="jug.spec_titulo">Estado de partida</h2>
     <div class="nivel">
-      <label for="dificultad">Dificultad IA</label>
+      <label for="dificultad" data-i18n="jug.dificultad_label">Dificultad IA</label>
       <select id="dificultad">
-        <option value="bajo">Bajo</option>
-        <option value="medio" selected>Medio</option>
-        <option value="alto">Alto</option>
+        <option value="bajo" data-i18n="common.dificultad.bajo">Bajo</option>
+        <option value="medio" selected data-i18n="common.dificultad.medio">Medio</option>
+        <option value="alto" data-i18n="common.dificultad.alto">Alto</option>
       </select>
     </div>
     <dl>
-      <dt>Portador</dt><dd id="holder">LIBRE</dd>
-      <dt>Dominio</dt><dd id="best">&mdash;</dd>
-      <dt>Cazadores</dt><dd>11 templarios</dd>
-      <dt>FPS</dt><dd id="fps">&mdash;</dd>
+      <dt data-i18n="jug.dt_portador">Portador</dt><dd id="holder" data-i18n="jug.libre">LIBRE</dd>
+      <dt data-i18n="jug.dt_dominio">Dominio</dt><dd id="best">&mdash;</dd>
+      <dt data-i18n="jug.dt_cazadores">Cazadores</dt><dd data-i18n="jug.cazadores_valor">11 templarios</dd>
+      <dt data-i18n="jug.dt_fps">FPS</dt><dd id="fps">&mdash;</dd>
     </dl>
     <ul id="feed"></ul>
   </div>
 
-  <div class="hud hint">
+  <div class="hud hint" data-i18n="jug.hint_html" data-i18n-html>
     Controlas a <b>J&#8209;1</b> &middot; <b>WASD</b> mover &middot; <b>Espacio/F</b> placaje / slam &middot; <b>Shift/Q</b> rodada &middot; <b>C</b> ceder a la IA &middot; <b>M</b> sonido &middot; <b>P</b> pausa &middot; <b>Dominio 45s</b> gana
   </div>
 
   <div id="win">
-    <h2>Fin de la ronda</h2>
+    <h2 data-i18n="jug.win_titulo">Fin de la ronda</h2>
     <div id="winner"></div>
-    <p>Pulsa <b>R</b> para otra ronda</p>
-    <a class="volver" href="/assets/captura-v3/rol.html">&#8592; Volver al menú</a>
+    <p data-i18n="jug.win_reiniciar_html" data-i18n-html>Pulsa <b>R</b> para otra ronda</p>
+    <a class="volver" href="/assets/captura-v3/rol.html" data-i18n="jug.volver_menu">&#8592; Volver al menú</a>
   </div>
   <div class="acciones">
-    <a id="alMenu" href="/assets/captura-v3/rol.html">&#8592; Menú</a>
-    <button id="shot">Capturar PNG</button>
+    <a id="alMenu" href="/assets/captura-v3/rol.html" data-i18n="jug.menu_link">&#8592; Menú</a>
+    <button id="shot" data-i18n="jug.capturar_png">Capturar PNG</button>
   </div>
 
   <script type="importmap">
@@ -236,6 +249,7 @@
   </script>
   <script type="module" src="./js/main.js"></script>
   <script>
+    window.i18n.mountSwitcher(document.getElementById('idiomas'));
     requestAnimationFrame(() => document.getElementById('fade').classList.add('out'));
   </script>
 </body>

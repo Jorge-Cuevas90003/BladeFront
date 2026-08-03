@@ -311,12 +311,12 @@ composer.addPass(grainPass);
 const feed = document.getElementById('feed');
 const holderLabel = document.getElementById('holder');
 const FEED_TEXT = {
-  FLAG_CAPTURED: (d) => `⚑ FLAG_CAPTURED → ${d.playerId}`,
-  JUGGERNAUT_BORN: (d) => `☠ ${d.playerId} es el JUGGERNAUT`,
-  FLAG_DROPPED: (d) => `⚑ FLAG_DROPPED: ${d.by} placó a ${d.from}`,
-  TACKLE_DASH: (d) => `→ ${d.playerId} lanza un placaje`,
-  GROUND_SLAM: (d) => (d.phase === 'impact' ? `✹ GROUND_SLAM de ${d.playerId}` : null),
-  RING_OUT: (d) => `↓ ${d.playerId} cayó al abismo`,
+  FLAG_CAPTURED: (d) => window.i18n.t('jug.feed.flag_captured', { id: d.playerId }),
+  JUGGERNAUT_BORN: (d) => window.i18n.t('jug.feed.juggernaut_born', { id: d.playerId }),
+  FLAG_DROPPED: (d) => window.i18n.t('jug.feed.flag_dropped', { by: d.by, from: d.from }),
+  TACKLE_DASH: (d) => window.i18n.t('jug.feed.tackle_dash', { id: d.playerId }),
+  GROUND_SLAM: (d) => (d.phase === 'impact' ? window.i18n.t('jug.feed.ground_slam', { id: d.playerId }) : null),
+  RING_OUT: (d) => window.i18n.t('jug.feed.ring_out', { id: d.playerId }),
 };
 for (const [type, fmt] of Object.entries(FEED_TEXT)) {
   NetworkBus.addEventListener(type, (e) => {
@@ -466,7 +466,7 @@ renderer.setAnimationLoop(() => {
   }
   if (hudT >= 0.25) {
     hudT = 0;
-    holderLabel.textContent = mode.holder ? mode.holder.id : 'LIBRE';
+    holderLabel.textContent = mode.holder ? mode.holder.id : window.i18n.t('jug.libre');
     const b = mode.bestDominio();
     document.getElementById('best').textContent =
       b ? `${b[0]} · ${b[1].toFixed(0)}s / ${WIN_DOMINIO}s` : '—';
@@ -475,7 +475,7 @@ renderer.setAnimationLoop(() => {
     if (!gameOver && b && b[1] >= WIN_DOMINIO) {
       gameOver = true;
       document.getElementById('winner').textContent =
-        b[0] === 'J-1' ? '¡Dominas el Vacío!' : `${b[0]} domina el Vacío`;
+        b[0] === 'J-1' ? window.i18n.t('jug.dominas') : window.i18n.t('jug.domina_otro', { name: b[0] });
       document.getElementById('win').classList.add('show');
     }
   }

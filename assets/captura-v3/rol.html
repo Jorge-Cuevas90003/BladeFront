@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BladeFront · Arena del Vacío</title>
+  <script src="/assets/js/i18n.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -167,6 +168,24 @@
       from { opacity: 0; transform: translateY(16px); filter: blur(5px); }
       to   { opacity: 1; transform: none; filter: blur(0); }
     }
+
+    /* ── Selector de idioma: discreto, arriba a la derecha ─────────────── */
+    #idiomas {
+      position: fixed; top: 22px; right: 22px; z-index: 10;
+      display: flex; gap: 2px;
+      background: rgba(10,16,24,.7); border: 1px solid var(--linea);
+      backdrop-filter: blur(6px);
+      clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%, 0 8px);
+    }
+    #idiomas button {
+      background: none; border: 0; cursor: pointer;
+      color: var(--tenue); font-family: var(--tec);
+      font-size: 10px; font-weight: 700; letter-spacing: .1em;
+      padding: 8px 10px; transition: color .2s ease, background .2s ease;
+    }
+    #idiomas button:hover { color: var(--acero); background: rgba(217,164,65,.08); }
+    #idiomas button[aria-pressed="true"] { color: var(--oro-vivo); background: rgba(217,164,65,.14); }
+    @media (max-width: 720px) { #idiomas { top: 12px; right: 12px; } }
 
     /* ── Rótulo de sección: numeral romano + regla ────────────────────────
        El numeral es lo que convierte una lista de botones en las entradas de
@@ -420,6 +439,7 @@
 </head>
 <body>
   <div class="cenizas" aria-hidden="true"></div>
+  <div id="idiomas"></div>
 
   <main class="codice">
     <header class="cabecera">
@@ -430,30 +450,30 @@
       </svg>
       <h1 class="titulo">BladeFront</h1>
       <div class="filo"></div>
-      <p class="lema">Arena del Vacío · Computer Science 8</p>
+      <p class="lema" data-i18n="rol.lema">Arena del Vacío · Computer Science 8</p>
     </header>
 
     <section aria-labelledby="rotulo-red">
       <div class="seccion" style="--reta:.42s">
         <span class="num">I</span>
-        <span class="rotulo" id="rotulo-red">En red · con tus compañeros</span>
+        <span class="rotulo" id="rotulo-red" data-i18n="rol.seccion_red">En red · con tus compañeros</span>
         <span class="regla"></span>
       </div>
       <div class="fila">
         <button class="puerta" data-rol="servidor" style="--reta:.5s">
           <span class="glifo" aria-hidden="true">◉</span>
-          <span class="marca">Captura la Bandera</span>
-          <h2>Servidor</h2>
-          <p>Aloja la partida y muestra a todos los jugadores desde arriba. Esta computadora no participa ni controla un personaje: da la salida cuando ya entraron todos.</p>
-          <span class="pie">Alojar la arena <span class="flecha">→</span></span>
+          <span class="marca" data-i18n="rol.servidor.marca">Captura la Bandera</span>
+          <h2 data-i18n="rol.servidor.h2">Servidor</h2>
+          <p data-i18n="rol.servidor.p">Aloja la partida y muestra a todos los jugadores desde arriba. Esta computadora no participa ni controla un personaje: da la salida cuando ya entraron todos.</p>
+          <span class="pie"><span data-i18n="rol.servidor.pie">Alojar la arena</span> <span class="flecha">→</span></span>
         </button>
 
         <button class="puerta" data-rol="cliente" style="--reta:.58s">
           <span class="glifo" aria-hidden="true">⚔</span>
-          <span class="marca">Captura la Bandera</span>
-          <h2>Cliente</h2>
-          <p>Busca partidas en la red y entra a jugar como templario. Esta computadora no aloja un servidor propio; solo necesita que alguien más lo haya levantado.</p>
-          <span class="pie">Entrar a la arena <span class="flecha">→</span></span>
+          <span class="marca" data-i18n="rol.cliente.marca">Captura la Bandera</span>
+          <h2 data-i18n="rol.cliente.h2">Cliente</h2>
+          <p data-i18n="rol.cliente.p">Busca partidas en la red y entra a jugar como templario. Esta computadora no aloja un servidor propio; solo necesita que alguien más lo haya levantado.</p>
+          <span class="pie"><span data-i18n="rol.cliente.pie">Entrar a la arena</span> <span class="flecha">→</span></span>
         </button>
       </div>
     </section>
@@ -463,16 +483,16 @@
     <section aria-labelledby="rotulo-solo">
       <div class="seccion" style="--reta:.66s">
         <span class="num">II</span>
-        <span class="rotulo" id="rotulo-solo">Un solo jugador · sin red</span>
+        <span class="rotulo" id="rotulo-solo" data-i18n="rol.seccion_solo">Un solo jugador · sin red</span>
         <span class="regla"></span>
       </div>
       <div class="fila una">
         <a class="puerta corrupta" href="/assets/modo-juggernaut/" style="--reta:.72s">
           <span class="glifo" aria-hidden="true">☠</span>
-          <span class="marca">El juego original</span>
-          <h2>Modo Juggernaut</h2>
-          <p>Once templarios contra un jefe monstruoso sobre una isla que flota en el abismo. Quien toca el estandarte se corrompe. No necesita servidor, bridge ni compañeros: se juega al instante.</p>
-          <span class="pie">Descender al vacío <span class="flecha">→</span></span>
+          <span class="marca" data-i18n="rol.juggernaut.marca">El juego original</span>
+          <h2 data-i18n="rol.juggernaut.h2">Modo Juggernaut</h2>
+          <p data-i18n="rol.juggernaut.p">Once templarios contra un jefe monstruoso sobre una isla que flota en el abismo. Quien toca el estandarte se corrompe. No necesita servidor, bridge ni compañeros: se juega al instante.</p>
+          <span class="pie"><span data-i18n="rol.juggernaut.pie">Descender al vacío</span> <span class="flecha">→</span></span>
         </a>
       </div>
     </section>
@@ -480,41 +500,41 @@
     <p id="estado" role="status" aria-live="polite"></p>
 
     <div class="pergamino">
-      <button class="abrir" id="abrirAyuda" aria-haspopup="dialog">Cómo se juega</button>
+      <button class="abrir" id="abrirAyuda" aria-haspopup="dialog" data-i18n="rol.como_se_juega">Cómo se juega</button>
     </div>
   </main>
 
   <div id="ayuda" role="dialog" aria-modal="true" aria-labelledby="tituloAyuda">
     <article class="hoja">
-      <h2 id="tituloAyuda">Cómo se juega</h2>
-      <p class="intro">
+      <h2 id="tituloAyuda" data-i18n="rol.ayuda.titulo">Cómo se juega</h2>
+      <p class="intro" data-i18n="rol.ayuda.intro">
         Dos juegos sobre la misma arena y los mismos caballeros, con reglas
         distintas. Uno se juega solo; el otro, contra las implementaciones de
         los demás equipos del curso.
       </p>
 
       <section class="capitulo corrupto">
-        <h3><span class="rombo">◆</span> Modo Juggernaut <span class="regla"></span></h3>
-        <p>
+        <h3><span class="rombo">◆</span> <span data-i18n="rol.ayuda.cap1.titulo">Modo Juggernaut</span> <span class="regla"></span></h3>
+        <p data-i18n="rol.ayuda.cap1.p1" data-i18n-html>
           Quien toca el Ciber-Estandarte del centro se corrompe al instante en el
           <em>Ejecutor del Vacío</em>, un jefe enorme. Los otros once tienen que
           derribarlo a placajes antes de que acumule <em>45 segundos de Dominio</em>.
           Si los acumula, gana la ronda.
         </p>
-        <p>
+        <p data-i18n="rol.ayuda.cap1.p2" data-i18n-html>
           Todo pasa sobre una isla flotando en un abismo, así que <em>caerse del
           borde también es perder</em>. Un placaje bien puesto manda por los aires:
           conviene pelear lejos del filo.
         </p>
         <table class="mandos">
-          <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td>Moverse, relativo a la cámara</td></tr>
-          <tr><td><kbd>Espacio</kbd> / <kbd>F</kbd></td><td>Placaje — o <em>Ground Slam</em> si eres el Juggernaut</td></tr>
-          <tr><td><kbd>Shift</kbd> / <kbd>Q</kbd></td><td>Esquiva: voltereta o deslizamiento</td></tr>
-          <tr><td><kbd>C</kbd></td><td>Ceder o retomar el control de tu templario a la IA</td></tr>
-          <tr><td><kbd>P</kbd> <kbd>M</kbd> <kbd>R</kbd></td><td>Pausa · silenciar la música · reiniciar al terminar</td></tr>
-          <tr><td>Ratón</td><td>Orbitar y acercar la cámara</td></tr>
+          <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td data-i18n="rol.ayuda.cap1.mover">Moverse, relativo a la cámara</td></tr>
+          <tr><td><kbd>Espacio</kbd> / <kbd>F</kbd></td><td data-i18n="rol.ayuda.cap1.placaje" data-i18n-html>Placaje — o <em>Ground Slam</em> si eres el Juggernaut</td></tr>
+          <tr><td><kbd>Shift</kbd> / <kbd>Q</kbd></td><td data-i18n="rol.ayuda.cap1.esquiva">Esquiva: voltereta o deslizamiento</td></tr>
+          <tr><td><kbd>C</kbd></td><td data-i18n="rol.ayuda.cap1.ceder">Ceder o retomar el control de tu templario a la IA</td></tr>
+          <tr><td><kbd>P</kbd> <kbd>M</kbd> <kbd>R</kbd></td><td data-i18n="rol.ayuda.cap1.pausa">Pausa · silenciar la música · reiniciar al terminar</td></tr>
+          <tr><td data-i18n="rol.ayuda.cap1.raton_lbl">Ratón</td><td data-i18n="rol.ayuda.cap1.raton">Orbitar y acercar la cámara</td></tr>
         </table>
-        <p>
+        <p data-i18n="rol.ayuda.cap1.p3" data-i18n-html>
           La <em>dificultad de la IA</em> se elige arriba a la derecha durante la
           partida y se puede cambiar sin perder la ronda que llevas. Afecta a los
           rivales, no a ti: tu templario corre igual en los tres niveles.
@@ -522,38 +542,41 @@
       </section>
 
       <section class="capitulo">
-        <h3><span class="rombo">◆</span> Captura la Bandera <span class="regla"></span></h3>
-        <p>
+        <h3><span class="rombo">◆</span> <span data-i18n="rol.ayuda.cap2.titulo">Captura la Bandera</span> <span class="regla"></span></h3>
+        <p data-i18n="rol.ayuda.cap2.p1" data-i18n-html>
           Todos los equipos del curso hablan el mismo protocolo, así que se juega
           entre implementaciones distintas. Hay <em>una sola bandera</em> en el
           centro del círculo: tómala y <em>sal del círculo dorado</em> con ella
           para ganar.
         </p>
-        <p>
+        <p data-i18n="rol.ayuda.cap2.p2" data-i18n-html>
           A quien la lleva se la puede <em>robar</em> cualquiera que se le acerque,
           así que correr en línea recta hacia el borde casi nunca funciona.
         </p>
         <table class="mandos">
-          <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / flechas</td><td>Moverse, relativo a la cámara</td></tr>
-          <tr><td><kbd>E</kbd></td><td>Tomar la bandera, o robársela a quien la lleve</td></tr>
-          <tr><td><kbd>M</kbd></td><td>Vista 2D con los datos crudos del protocolo</td></tr>
+          <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / flechas</td><td data-i18n="rol.ayuda.cap2.mover">Moverse, relativo a la cámara</td></tr>
+          <tr><td><kbd>E</kbd></td><td data-i18n="rol.ayuda.cap2.tomar">Tomar la bandera, o robársela a quien la lleve</td></tr>
+          <tr><td><kbd>M</kbd></td><td data-i18n="rol.ayuda.cap2.vista2d">Vista 2D con los datos crudos del protocolo</td></tr>
         </table>
       </section>
 
       <section class="capitulo">
-        <h3><span class="rombo">◆</span> Montar una partida en red <span class="regla"></span></h3>
+        <h3><span class="rombo">◆</span> <span data-i18n="rol.ayuda.cap3.titulo">Montar una partida en red</span> <span class="regla"></span></h3>
         <table class="mandos">
-          <tr><td>Una computadora</td><td>Elige <em>Servidor</em>: aloja la partida y no juega. Desde su pantalla se da la salida cuando ya entraron todos.</td></tr>
-          <tr><td>Las demás</td><td>Eligen <em>Cliente</em>. Buscan la partida en la red solas; si no aparece, se puede escribir la IP a mano.</td></tr>
-          <tr><td>Radmin VPN</td><td>Tiene que estar encendido en todas las máquinas para que se vean entre sí.</td></tr>
+          <tr><td data-i18n="rol.ayuda.cap3.una_pc_t">Una computadora</td><td data-i18n="rol.ayuda.cap3.una_pc_d" data-i18n-html>Elige <em>Servidor</em>: aloja la partida y no juega. Desde su pantalla se da la salida cuando ya entraron todos.</td></tr>
+          <tr><td data-i18n="rol.ayuda.cap3.demas_t">Las demás</td><td data-i18n="rol.ayuda.cap3.demas_d" data-i18n-html>Eligen <em>Cliente</em>. Buscan la partida en la red solas; si no aparece, se puede escribir la IP a mano.</td></tr>
+          <tr><td data-i18n="rol.ayuda.cap3.radmin_t">Radmin VPN</td><td data-i18n="rol.ayuda.cap3.radmin_d">Tiene que estar encendido en todas las máquinas para que se vean entre sí.</td></tr>
         </table>
       </section>
 
-      <button class="cerrar" id="cerrarAyuda">Cerrar el códice</button>
+      <button class="cerrar" id="cerrarAyuda" data-i18n="rol.ayuda.cerrar">Cerrar el códice</button>
     </article>
   </div>
 
   <script>
+    // ── Idioma ───────────────────────────────────────────────────────────
+    window.i18n.mountSwitcher(document.getElementById('idiomas'));
+
     // ── Ceniza dorada ────────────────────────────────────────────────────
     // Generada aquí y no escrita a mano en el HTML: son solo posiciones y
     // retardos, y repetir catorce <span> casi idénticos en el marcado no
@@ -576,7 +599,7 @@
     for (const puerta of puertas) puerta.addEventListener('click', async () => {
       puertas.forEach((p) => { p.disabled = true; });
       puerta.classList.add('cargando');
-      puerta.querySelector('.pie').innerHTML = 'Configurando<span class="flecha">…</span>';
+      puerta.querySelector('.pie').innerHTML = window.i18n.t('rol.configurando') + '<span class="flecha">…</span>';
       estado.textContent = '';
       try {
         const r = await fetch('/__rol', {
@@ -592,8 +615,8 @@
         puertas.forEach((p) => { p.disabled = false; });
         puerta.classList.remove('cargando');
         puerta.querySelector('.pie').innerHTML =
-          (puerta.dataset.rol === 'servidor' ? 'Alojar la arena ' : 'Entrar a la arena ')
-          + '<span class="flecha">→</span>';
+          window.i18n.t(puerta.dataset.rol === 'servidor' ? 'rol.servidor.pie' : 'rol.cliente.pie')
+          + ' <span class="flecha">→</span>';
       }
     });
 
